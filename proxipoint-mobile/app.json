@@ -20,7 +20,13 @@
           "isAndroidForegroundServiceEnabled": true
         }
       ],
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-notifications",
+        {
+          "color": "#2563eb"
+        }
+      ]
     ],
     "ios": {
       "bundleIdentifier": "com.proxipoint.mobile",

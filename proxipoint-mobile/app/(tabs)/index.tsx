@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useLocation } from '../../src/hooks/useLocation';
+import { useLocalSearchParams } from 'expo-router';
+import { useRadarSession } from '../../src/hooks/RadarSession';
 import {
   boundsForActivePins,
   fitLeafletBounds,
+  focusLeafletOnTarget,
   installMarkerTransitionStyles,
+  parseFocusTarget,
+  type FocusTarget,
 } from '../../src/lib/mapCamera';
 import { RADIUS_PRESETS, type ProximityAlert } from '../../src/types/telemetry';
 import type { DeviceFix } from '../../src/hooks/useLocation';
@@ -50,21 +54,31 @@ function pinIcon(L: LeafletNamespace, color: string, label?: string) {
 }
 
 export default function RadarScreen() {
-  const [radiusMeters, setRadiusMeters] = useState<number>(100);
-  const { coords, alerts, status, transport } = useLocation(radiusMeters);
+  const { coords, alerts, status, transport, radiusMeters, setRadiusMeters, callsign, profileLoading } =
+    useRadarSession();
+  const params = useLocalSearchParams<{
+    focusLat?: string | string[];
+    focusLon?: string | string[];
+    focusId?: string | string[];
+  }>();
+  const focus = useMemo(
+    () => parseFocusTarget(params),
+    [params.focusId, params.focusLat, params.focusLon],
+  );
 
   return (
     <View style={styles.root}>
       {Platform.OS === 'web' ? (
-        <WebRadar coords={coords} alerts={alerts} radiusMeters={radiusMeters} />
+        <WebRadar coords={coords} alerts={alerts} radiusMeters={radiusMeters} focus={focus} />
       ) : (
-        <NativeRadar coords={coords} alerts={alerts} radiusMeters={radiusMeters} />
+        <NativeRadar coords={coords} alerts={alerts} radiusMeters={radiusMeters} focus={focus} />
       )}
       <View style={styles.topBar} pointerEvents="none">
         <Text style={styles.brand}>PROXIPOINT</Text>
-        <Text style={styles.meta}>
-          {status === 'denied' ? 'Demo fix' : status} · {transport} · {alerts.length} alert
-          {alerts.length === 1 ? '' : 's'}
+        <Text style={styles.meta} accessibilityLabel="Active callsign">
+          {profileLoading ? 'Loading callsign' : callsign} · {status === 'denied' ? 'Demo fix' : status} · {transport} ·{' '}
+          {alerts.length} alert{alerts.length === 1 ? '' : 's'}
+          {focus ? ` · focus ${focus.id || 'target'}` : ''}
         </Text>
       </View>
       <View style={styles.panel}>
@@ -94,10 +108,12 @@ function WebRadar({
   coords,
   alerts,
   radiusMeters,
+  focus,
 }: {
   coords: DeviceFix | null;
   alerts: ProximityAlert[];
   radiusMeters: number;
+  focus: FocusTarget | null;
 }) {
   const mapNode = useRef<HTMLElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -188,11 +204,16 @@ function WebRadar({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!mapReady || !map || !coords || alerts.length === 0) return;
+    if (!mapReady || !map || !coords) return;
+    if (focus) {
+      focusLeafletOnTarget(map, focus);
+      return;
+    }
+    if (alerts.length === 0) return;
     const bounds = boundsForActivePins({ lat: coords.lat, lon: coords.lon }, alerts);
     if (!bounds) return;
     fitLeafletBounds(map, bounds);
-  }, [alerts, coords, mapReady]);
+  }, [alerts, coords, focus, mapReady]);
 
   return (
     <View style={styles.map}>
@@ -210,10 +231,12 @@ function NativeRadar({
   coords,
   alerts,
   radiusMeters,
+  focus,
 }: {
   coords: DeviceFix | null;
   alerts: ProximityAlert[];
   radiusMeters: number;
+  focus: FocusTarget | null;
 }) {
   return (
     <View style={styles.native}>
@@ -221,6 +244,11 @@ function NativeRadar({
       <Text style={styles.meta}>
         {coords ? `${coords.lat.toFixed(5)}, ${coords.lon.toFixed(5)}` : 'Waiting for GPS'}
       </Text>
+      {focus ? (
+        <Text style={styles.meta}>
+          Focused on {focus.id || 'target'} · {focus.latitude.toFixed(5)}, {focus.longitude.toFixed(5)}
+        </Text>
+      ) : null}
       {alerts.map((alert) => (
         <Text key={alert.id} style={styles.alertRow}>
           {alert.label} · {Math.round(alert.distanceMeters)}m

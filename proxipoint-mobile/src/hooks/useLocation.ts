@@ -1,12 +1,16 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Location from 'expo-location';
+import { mergeActiveAlerts, toProximityAlertEvent } from '../lib/alertFeed';
+import { shouldPublishTelemetry } from '../lib/trackingPolicy';
 import { useLocationJitterFilter } from './useLocationTracker';
+import { recordAlertHistory } from '../services/alertHistory';
+import { notifyProximityBreach } from '../services/notifications';
 import { postTelemetryPing } from '../services/telemetryApi';
 import { TelemetrySocket } from '../services/telemetrySocket';
 import { setTrackingConfig } from '../services/trackingConfig';
 import { registerBackgroundLocationTracking } from '../tasks/backgroundLocation';
-import { DEVICE_USER_ID, type LocationPingPayload, type ProximityAlert } from '../types/telemetry';
+import type { ActiveContact, LocationPingPayload, ProximityAlert } from '../types/telemetry';
 
 export interface DeviceFix {
   lat: number;
@@ -15,6 +19,11 @@ export interface DeviceFix {
   speed: number | null;
   heading: number | null;
   timestamp: number;
+}
+
+export interface LocationOptions {
+  userId: string;
+  telemetryEnabled: boolean;
 }
 
 export type LocationStatus = 'idle' | 'watching' | 'denied' | 'error';
@@ -31,9 +40,9 @@ function toFix(position: Location.LocationObject): DeviceFix {
   };
 }
 
-function toPayload(fix: DeviceFix, radiusMeters: number): LocationPingPayload {
+function toPayload(fix: DeviceFix, userId: string, radiusMeters: number): LocationPingPayload {
   return {
-    userId: DEVICE_USER_ID,
+    userId,
     latitude: fix.lat,
     longitude: fix.lon,
     accuracy: fix.accuracy,
@@ -44,29 +53,53 @@ function toPayload(fix: DeviceFix, radiusMeters: number): LocationPingPayload {
   };
 }
 
-export function useLocation(radiusMeters: number) {
+export function useLocation(radiusMeters: number, options: LocationOptions) {
+  const { userId, telemetryEnabled } = options;
   const { shouldEmitPing } = useLocationJitterFilter();
   const [coords, setCoords] = useState<DeviceFix | null>(null);
-  const [alerts, setAlerts] = useState<ProximityAlert[]>([]);
+  const [alerts, setAlerts] = useState<ActiveContact[]>([]);
   const [status, setStatus] = useState<LocationStatus>('idle');
   const [transport, setTransport] = useState<TelemetryTransport>('none');
 
   const radiusRef = useRef(radiusMeters);
+  const userIdRef = useRef(userId);
+  const enabledRef = useRef(telemetryEnabled);
   const fixRef = useRef<DeviceFix | null>(null);
+  const alertsRef = useRef<ActiveContact[]>([]);
   const appActiveRef = useRef(true);
   const socketRef = useRef<TelemetrySocket | null>(null);
   const publishRef = useRef<(fix: DeviceFix) => Promise<void>>(async () => {});
+  const acceptRef = useRef<(incoming: ProximityAlert[]) => void>(() => {});
 
   radiusRef.current = radiusMeters;
+  userIdRef.current = userId;
+  enabledRef.current = telemetryEnabled;
+
+  acceptRef.current = (incoming) => {
+    const merged = mergeActiveAlerts(alertsRef.current, incoming);
+    alertsRef.current = merged.alerts;
+    setAlerts(merged.alerts);
+    for (const contact of merged.entered) {
+      void notifyProximityBreach(toProximityAlertEvent(contact));
+      void recordAlertHistory({
+        targetEntityId: contact.id,
+        targetName: contact.label,
+        distanceMeters: contact.distanceMeters,
+        latitude: contact.latitude,
+        longitude: contact.longitude,
+        seenAt: contact.observedAt,
+      });
+    }
+  };
 
   useEffect(() => {
-    setTrackingConfig({ userId: DEVICE_USER_ID, radiusMeters });
-  }, [radiusMeters]);
+    setTrackingConfig({ userId, radiusMeters, telemetryEnabled });
+  }, [radiusMeters, telemetryEnabled, userId]);
 
   useEffect(() => {
     const socket = new TelemetrySocket();
     socketRef.current = socket;
-    socket.start(setAlerts);
+    socket.start((incoming) => acceptRef.current(incoming));
     return () => {
       socket.stop();
       socketRef.current = null;
@@ -82,7 +115,11 @@ export function useLocation(radiusMeters: number) {
 
   useEffect(() => {
     publishRef.current = async (fix: DeviceFix) => {
-      const payload = toPayload(fix, radiusRef.current);
+      const payload = toPayload(fix, userIdRef.current, radiusRef.current);
+      if (!shouldPublishTelemetry(payload.userId, enabledRef.current)) {
+        setTransport('none');
+        return;
+      }
       const socket = socketRef.current;
       const foregroundSocket = appActiveRef.current && socket?.isConnected();
       if (foregroundSocket && socket) {
@@ -95,18 +132,21 @@ export function useLocation(radiusMeters: number) {
         }
       }
       const nextAlerts = await postTelemetryPing(payload);
-      setAlerts(nextAlerts);
+      acceptRef.current(nextAlerts);
       setTransport('http');
     };
   }, []);
 
   useEffect(() => {
     const fix = fixRef.current;
-    if (!fix) return;
+    if (!fix || !telemetryEnabled || !userId.trim()) {
+      if (!telemetryEnabled) setTransport('none');
+      return;
+    }
     void publishRef.current(fix).catch((err) => {
       console.warn('Radius change telemetry failed:', err);
     });
-  }, [radiusMeters]);
+  }, [radiusMeters, telemetryEnabled, userId]);
 
   useEffect(() => {
     let watch: Location.LocationSubscription | null = null;

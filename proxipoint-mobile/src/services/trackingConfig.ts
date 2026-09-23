@@ -1,6 +1,7 @@
 export interface TrackingConfig {
   userId: string;
   radiusMeters: number;
+  telemetryEnabled: boolean;
 }
 
 const globalConfig = globalThis as typeof globalThis & {
@@ -8,8 +9,9 @@ const globalConfig = globalThis as typeof globalThis & {
 };
 
 const fallback: TrackingConfig = {
-  userId: 'dev-device-01',
+  userId: '',
   radiusMeters: 100,
+  telemetryEnabled: false,
 };
 
 export function setTrackingConfig(next: TrackingConfig) {
