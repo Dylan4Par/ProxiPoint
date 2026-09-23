@@ -4,6 +4,7 @@ import type { Circle, Map as LeafletMap, Marker } from 'leaflet';
 
 import { DARK_RASTER_TILES } from '@/constants/mapStyle';
 import type { MapCoordinate, MapTarget } from '@/src/types/map';
+import '../styles/leaflet.css';
 
 type LeafletNamespace = typeof import('leaflet');
 
@@ -62,11 +63,15 @@ export default function ProximityMap({ user, radiusMeters, target }: ProximityMa
     (async () => {
       try {
         const loaded = await import('leaflet');
-        await import('leaflet/dist/leaflet.css');
         if (disposed) return;
-        const L = loaded.default;
+        const candidate = loaded.default as Partial<LeafletNamespace> | undefined;
+        const L =
+          candidate && typeof candidate.map === 'function'
+            ? (candidate as LeafletNamespace)
+            : (loaded as unknown as LeafletNamespace);
         const parent = document.getElementById('proximity-map-host');
         if (!parent) {
+          console.error('proximity map host missing');
           setFailed(true);
           return;
         }
@@ -84,7 +89,8 @@ export default function ProximityMap({ user, radiusMeters, target }: ProximityMa
         setMapReady(true);
         frame = requestAnimationFrame(() => map.invalidateSize());
         window.addEventListener('resize', onResize);
-      } catch {
+      } catch (error) {
+        console.error('proximity map failed', error);
         if (!disposed) setFailed(true);
       }
     })();
