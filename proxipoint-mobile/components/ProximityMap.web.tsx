@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import type { Circle, Map as LeafletMap, Marker } from 'leaflet';
 
 import { TILE_LAYER_URL } from '@/constants/mapStyle';
+import { useLeafletDarkTheme } from '@/src/hooks/useLeafletDarkTheme';
 import type { MapCoordinate, MapTarget } from '@/src/types/map';
 import '../styles/leaflet.css';
 
@@ -44,6 +45,7 @@ function pinIcon(L: LeafletNamespace, color: string, label: string) {
 }
 
 export default function ProximityMap({ user, radiusMeters, targets }: ProximityMapProps) {
+  useLeafletDarkTheme();
   const [failed, setFailed] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const userRef = useRef(user);
