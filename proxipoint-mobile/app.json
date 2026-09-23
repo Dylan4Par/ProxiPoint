@@ -19,12 +19,16 @@
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
-      ]
+      ],
+      "expo-asset"
     ],
     "ios": {
       "bundleIdentifier": "com.proxipoint.mobile",
       "infoPlist": {
-        "UIBackgroundModes": ["location", "fetch"],
+        "UIBackgroundModes": [
+          "location",
+          "fetch"
+        ],
         "NSLocationWhenInUseUsageDescription": "Allow ProxiPoint to use your location for the radar.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow ProxiPoint to monitor proximity alerts in the background.",
         "NSLocationAlwaysUsageDescription": "Allow ProxiPoint to monitor proximity alerts in the background."

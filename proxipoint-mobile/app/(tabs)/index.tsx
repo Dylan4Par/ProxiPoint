@@ -119,10 +119,9 @@ function WebRadar({
       ensureLeafletCss();
       installMarkerTransitionStyles();
       const map = L.map(node, { zoomControl: false, attributionControl: true }).setView([37.7749, -122.4194], 16);
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
-        subdomains: 'abcd',
-        maxZoom: 20,
+      L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors',
+        maxZoom: 19,
       }).addTo(map);
       map.invalidateSize();
       mapRef.current = map;
