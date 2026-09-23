@@ -7,6 +7,7 @@ export default function SettingsScreen() {
   const { callsign, setCallsign, isTelemetryEnabled, setIsTelemetryEnabled, loading } = useDeviceProfile();
   const { entries, clearAlertHistory } = useAlertHistory();
   const [inputVal, setInputVal] = useState(callsign);
+  const [savedMessage, setSavedMessage] = useState('');
 
   useEffect(() => {
     if (!loading) setInputVal(callsign);
@@ -16,7 +17,9 @@ export default function SettingsScreen() {
     const next = inputVal.trim();
     if (!next) return;
     await setCallsign(next);
-    Alert.alert('Settings Saved', `Callsign updated to "${next}".`);
+    const message = `Callsign updated to "${next}".`;
+    setSavedMessage(message);
+    if (Platform.OS !== 'web') Alert.alert('Settings Saved', message);
   };
 
   const handleClearHistory = () => {
@@ -61,6 +64,7 @@ export default function SettingsScreen() {
         >
           <Text style={styles.saveBtnText}>Update Callsign</Text>
         </Pressable>
+        {savedMessage ? <Text style={styles.savedText}>{savedMessage}</Text> : null}
       </View>
 
       <View style={styles.sectionRow}>
@@ -135,6 +139,7 @@ const styles = StyleSheet.create({
   saveBtn: { backgroundColor: '#2563eb', paddingVertical: 10, borderRadius: 6, alignItems: 'center' },
   saveBtnDisabled: { opacity: 0.5 },
   saveBtnText: { color: '#ffffff', fontWeight: '600', fontSize: 13 },
+  savedText: { color: '#86efac', fontSize: 12, marginTop: 10 },
   clearBtn: {
     marginTop: 12,
     paddingVertical: 10,
