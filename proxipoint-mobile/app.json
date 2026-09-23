@@ -1,0 +1,51 @@
+{
+  "expo": {
+    "name": "ProxiPoint",
+    "slug": "proxipoint",
+    "scheme": "proxipoint",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-router",
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Allow ProxiPoint to monitor proximity alerts in the background.",
+          "locationAlwaysPermission": "Allow ProxiPoint to monitor proximity alerts in the background.",
+          "locationWhenInUsePermission": "Allow ProxiPoint to use your location for the radar.",
+          "isIosBackgroundLocationEnabled": true,
+          "isAndroidBackgroundLocationEnabled": true,
+          "isAndroidForegroundServiceEnabled": true
+        }
+      ]
+    ],
+    "ios": {
+      "bundleIdentifier": "com.proxipoint.mobile",
+      "infoPlist": {
+        "UIBackgroundModes": ["location", "fetch"],
+        "NSLocationWhenInUseUsageDescription": "Allow ProxiPoint to use your location for the radar.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow ProxiPoint to monitor proximity alerts in the background.",
+        "NSLocationAlwaysUsageDescription": "Allow ProxiPoint to monitor proximity alerts in the background."
+      }
+    },
+    "android": {
+      "package": "com.proxipoint.mobile",
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_BACKGROUND_LOCATION",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_LOCATION"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
