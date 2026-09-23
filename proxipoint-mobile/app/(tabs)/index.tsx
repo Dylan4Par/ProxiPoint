@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Location from 'expo-location';
 
 import ProximityMap from '@/components/ProximityMap';
 import { ERIE_LATITUDE, ERIE_LONGITUDE, telemetryEndpoint } from '@/constants/telemetry';
 import { useProximitySocket } from '../../src/hooks/useProximitySocket';
+import type { MapTarget } from '../../src/types/map';
 
 const WS_ENDPOINT = telemetryEndpoint();
 const MOCK_USER_ID = 'dev-device-01';
@@ -17,7 +18,7 @@ export default function LiveMapScreen() {
   const [pingNote, setPingNote] = useState<string | null>(null);
   const [currentCoords, setCurrentCoords] = useState({ lat: ERIE_LATITUDE, lon: ERIE_LONGITUDE });
 
-  const { status, lastAlert, sendLocationPing } = useProximitySocket({
+  const { status, alerts, sendLocationPing } = useProximitySocket({
     url: WS_ENDPOINT,
     userId: MOCK_USER_ID,
   });
@@ -79,21 +80,33 @@ export default function LiveMapScreen() {
     setPingNote(sent ? null : 'Socket not open — mock ping was not sent');
   };
 
-  const radiusMeters = lastAlert?.thresholdMeters ?? DEFAULT_RADIUS_METERS;
-  const target = lastAlert
-    ? {
-        lat: lastAlert.latitude,
-        lon: lastAlert.longitude,
-        name: lastAlert.targetName || 'Target',
-      }
-    : null;
+  const activeAlerts = useMemo(
+    () => Array.from(alerts.values()).sort((a, b) => a.distanceMeters - b.distanceMeters),
+    [alerts],
+  );
+  const radiusMeters =
+    activeAlerts.reduce((widest, alert) => Math.max(widest, alert.thresholdMeters), 0) ||
+    DEFAULT_RADIUS_METERS;
+  const targets = useMemo<MapTarget[]>(
+    () =>
+      activeAlerts.map((alert) => ({
+        id: alert.targetEntityId,
+        lat: alert.latitude,
+        lon: alert.longitude,
+        name: alert.targetName || 'Target',
+      })),
+    [activeAlerts],
+  );
+  const nearest = activeAlerts[0];
   const statusColor =
     status === 'connected' ? '#16a34a' : status === 'connecting' || status === 'reconnecting' ? '#d97706' : '#dc2626';
-  const distanceLabel = lastAlert ? `${lastAlert.distanceMeters.toFixed(1)} m` : '—';
+  const distanceLabel = nearest
+    ? `${nearest.distanceMeters.toFixed(1)} m${activeAlerts.length > 1 ? ` · ${activeAlerts.length} active` : ''}`
+    : '—';
 
   return (
     <View style={styles.container}>
-      <ProximityMap user={currentCoords} radiusMeters={radiusMeters} target={target} />
+      <ProximityMap user={currentCoords} radiusMeters={radiusMeters} targets={targets} />
 
       <View style={styles.hudPanel}>
         <Pressable
@@ -109,7 +122,7 @@ export default function LiveMapScreen() {
             <Text style={styles.chevron}>{hudOpen ? '▾' : '▸'}</Text>
           </View>
         </Pressable>
-        <Text style={styles.distanceText}>Last distance {distanceLabel}</Text>
+        <Text style={styles.distanceText}>Nearest distance {distanceLabel}</Text>
 
         {hudOpen ? (
           <View>
@@ -120,16 +133,16 @@ export default function LiveMapScreen() {
               Geofence {radiusMeters.toFixed(0)} m · GPS{' '}
               {gpsPermission === null ? 'checking' : gpsPermission ? 'granted' : 'unavailable'}
             </Text>
-            {lastAlert ? (
-              <View style={styles.alertBanner}>
+            {activeAlerts.map((alert) => (
+              <View key={alert.targetEntityId} style={styles.alertBanner}>
                 <Text style={styles.alertHeading}>PROXIMITY DETECTED</Text>
-                <Text style={styles.alertDetail}>{lastAlert.targetName || 'Target'}</Text>
+                <Text style={styles.alertDetail}>{alert.targetName || 'Target'}</Text>
                 <Text style={styles.alertSub}>
-                  {lastAlert.distanceMeters.toFixed(1)}m away
-                  {lastAlert.message ? ` (${lastAlert.message})` : ''}
+                  {alert.distanceMeters.toFixed(1)}m away
+                  {alert.message ? ` (${alert.message})` : ''}
                 </Text>
               </View>
-            ) : null}
+            ))}
             {pingNote ? <Text style={styles.note}>{pingNote}</Text> : null}
             <View style={styles.buttonRow}>
               <Pressable

@@ -7,6 +7,9 @@ import {
   ServerMessage,
 } from '../types/telemetry';
 
+const ALERT_TTL_MS = 15000;
+const ALERT_SWEEP_MS = 3000;
+
 interface UseProximitySocketOptions {
   url: string;
   userId: string;
@@ -41,7 +44,7 @@ export function useProximitySocket({
   maxReconnectAttempts = 5,
 }: UseProximitySocketOptions) {
   const [status, setStatus] = useState<ConnectionStatus>('disconnected');
-  const [lastAlert, setLastAlert] = useState<ProximityAlertEvent | null>(null);
+  const [alerts, setAlerts] = useState<Map<string, ProximityAlertEvent>>(() => new Map());
   const [lastSentPing, setLastSentPing] = useState<LocationPingPayload | null>(null);
 
   const socketRef = useRef<WebSocket | null>(null);
@@ -55,6 +58,26 @@ export function useProximitySocket({
     enabledRef.current = enabled;
     maxReconnectAttemptsRef.current = maxReconnectAttempts;
   }, [enabled, maxReconnectAttempts]);
+
+  useEffect(() => {
+    const sweepInterval = setInterval(() => {
+      const now = Date.now();
+      setAlerts((prev) => {
+        let changed = false;
+        const next = new Map(prev);
+        for (const [id, alert] of next.entries()) {
+          const alertTime = new Date(alert.triggeredAt).getTime();
+          if (!Number.isFinite(alertTime) || now - alertTime > ALERT_TTL_MS) {
+            next.delete(id);
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+    }, ALERT_SWEEP_MS);
+
+    return () => clearInterval(sweepInterval);
+  }, []);
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimeoutRef.current) {
@@ -130,7 +153,8 @@ export function useProximitySocket({
       try {
         const message = JSON.parse(String(event.data)) as ServerMessage;
         if (message.type === 'proximity_alert' && isProximityAlertEvent(message.payload)) {
-          setLastAlert(message.payload);
+          const newAlert = message.payload;
+          setAlerts((prev) => new Map(prev).set(newAlert.targetEntityId, newAlert));
         }
       } catch {
         // Ignore non-JSON or malformed frames.
@@ -211,7 +235,7 @@ export function useProximitySocket({
 
   return {
     status,
-    lastAlert,
+    alerts,
     lastSentPing,
     sendLocationPing,
   };

@@ -1,21 +1,9 @@
-/** Dark CARTO basemap. No API key; attribution is required. */
-export const DARK_RASTER_TILES = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
+/**
+ * OpenStreetMap standard raster tiles for the Leaflet web map.
+ * CARTO `dark_all` and `rastertiles/voyager` both paint an
+ * "API KEY REQUIRED" watermark. These tiles do not. Attribution is required.
+ */
+export const TILE_LAYER_URL = 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png';
 
-export const DARK_RASTER_STYLE = {
-  version: 8 as const,
-  sources: {
-    carto: {
-      type: 'raster' as const,
-      tiles: ['https://basemaps.cartocdn.com/dark_all/{z}/{x}/{y}@2x.png'],
-      tileSize: 256,
-      attribution: '© OpenStreetMap © CARTO',
-    },
-  },
-  layers: [
-    {
-      id: 'carto',
-      type: 'raster' as const,
-      source: 'carto',
-    },
-  ],
-};
+/** Keyless dark vector style for the native MapLibre map. */
+export const NATIVE_MAP_STYLE = 'https://tiles.openfreemap.org/styles/dark';

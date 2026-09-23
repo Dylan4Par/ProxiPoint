@@ -1,14 +1,14 @@
 import { Camera, GeoJSONSource, Layer, Map, Marker } from '@maplibre/maplibre-react-native';
 import { StyleSheet, Text, View } from 'react-native';
 
-import { DARK_RASTER_STYLE } from '@/constants/mapStyle';
+import { NATIVE_MAP_STYLE } from '@/constants/mapStyle';
 import { circlePolygon } from '@/src/geo/circle';
 import type { MapCoordinate, MapTarget } from '@/src/types/map';
 
 type ProximityMapProps = {
   user: MapCoordinate;
   radiusMeters: number;
-  target: MapTarget | null;
+  targets: MapTarget[];
 };
 
 function Pin({ color, label }: { color: string; label: string }) {
@@ -22,18 +22,21 @@ function Pin({ color, label }: { color: string; label: string }) {
   );
 }
 
-export default function ProximityMap({ user, radiusMeters, target }: ProximityMapProps) {
+export default function ProximityMap({ user, radiusMeters, targets }: ProximityMapProps) {
   const fence = circlePolygon(user.lat, user.lon, radiusMeters);
-  const center: [number, number] = target
-    ? [(user.lon + target.lon) / 2, (user.lat + target.lat) / 2]
-    : [user.lon, user.lat];
+  const focus = [user, ...targets];
+  const center: [number, number] = [
+    focus.reduce((sum, point) => sum + point.lon, 0) / focus.length,
+    focus.reduce((sum, point) => sum + point.lat, 0) / focus.length,
+  ];
+  const zoom = targets.length > 1 ? 13.5 : targets.length === 1 ? 14.5 : 15;
 
   return (
-    <Map mapStyle={DARK_RASTER_STYLE} style={StyleSheet.absoluteFill} logo={false} compass={false}>
+    <Map mapStyle={NATIVE_MAP_STYLE} style={StyleSheet.absoluteFill} logo={false} compass={false}>
       <Camera
         initialViewState={{ center: [user.lon, user.lat], zoom: 15 }}
         center={center}
-        zoom={target ? 14.5 : 15}
+        zoom={zoom}
         duration={600}
       />
       <GeoJSONSource id="geofence" data={fence}>
@@ -53,11 +56,11 @@ export default function ProximityMap({ user, radiusMeters, target }: ProximityMa
       <Marker id="user" lngLat={[user.lon, user.lat]} anchor="center">
         <Pin color="#38bdf8" label="You" />
       </Marker>
-      {target ? (
-        <Marker id="target" lngLat={[target.lon, target.lat]} anchor="center">
+      {targets.map((target) => (
+        <Marker key={target.id} id={target.id} lngLat={[target.lon, target.lat]} anchor="center">
           <Pin color="#facc15" label={target.name} />
         </Marker>
-      ) : null}
+      ))}
     </Map>
   );
 }
