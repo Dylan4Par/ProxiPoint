@@ -22,6 +22,19 @@ export interface ProximityAlert {
   distanceMeters: number;
 }
 
+export interface ActiveContact extends ProximityAlert {
+  observedAt: number;
+}
+
+export interface ProximityAlertEvent {
+  targetEntityId: string;
+  targetName?: string;
+  distanceMeters: number;
+  latitude: number;
+  longitude: number;
+  message?: string;
+}
+
 export interface ProximityAlertPacket {
   type: 'proximity_alerts';
   alerts: ProximityAlert[];
@@ -31,4 +44,3 @@ export const RADIUS_PRESETS = [50, 100, 250, 500] as const;
 export type RadiusPreset = (typeof RADIUS_PRESETS)[number];
 
 export const DEFAULT_RADIUS_METERS: RadiusPreset = 100;
-export const DEVICE_USER_ID = 'dev-device-01';

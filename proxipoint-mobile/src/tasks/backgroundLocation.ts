@@ -1,6 +1,7 @@
 import * as Location from 'expo-location';
 import * as TaskManager from 'expo-task-manager';
 import { Platform } from 'react-native';
+import { shouldPublishTelemetry } from '../lib/trackingPolicy';
 import { postTelemetryPing } from '../services/telemetryApi';
 import { getTrackingConfig } from '../services/trackingConfig';
 import type { LocationPingPayload } from '../types/telemetry';
@@ -31,6 +32,9 @@ TaskManager.defineTask(BACKGROUND_TRACKING_TASK, async ({ data, error }) => {
   const { locations } = data as { locations: Location.LocationObject[] };
   const latest = locations[locations.length - 1];
   if (!latest) return;
+
+  const config = getTrackingConfig();
+  if (!shouldPublishTelemetry(config.userId, config.telemetryEnabled)) return;
 
   try {
     await postTelemetryPing(buildBackgroundPing(latest));

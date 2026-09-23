@@ -10,6 +10,9 @@ Expo app with a radar HUD:
 - The blue geofence matches the selected radius. Leaflet `fitBounds` (and the MapLibre helper) keep active pins in frame.
 - Location updates are emitted after a 3 meter move or a 10 second heartbeat.
 - Background updates use `expo-task-manager` and post to `POST /api/v1/telemetry/ping` when the WebSocket is unavailable.
+- The Alerts tab lists active contacts nearest-first. Choosing one returns to the radar and centers the camera on that target.
+- A generated callsign is stored on device and sent as `userId`. Settings can rename it, pause telemetry, and clear alert history.
+- New contacts raise a local notification, with a 60 second cooldown per target. Notifications are skipped on web.
 
 ```bash
 cd proxipoint-mobile

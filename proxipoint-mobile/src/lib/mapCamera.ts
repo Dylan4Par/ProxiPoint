@@ -22,6 +22,18 @@ export interface BoundsMap {
   fitBounds(bounds: [[number, number], [number, number]], options?: FitBoundsOptions): void;
 }
 
+export interface FocusTarget {
+  id: string;
+  latitude: number;
+  longitude: number;
+}
+
+export interface FocusMap {
+  setView(center: [number, number], zoom: number, options?: { animate?: boolean }): void;
+}
+
+export const FOCUS_ZOOM = 17;
+
 export const MARKER_TRANSITION_CSS = `
   .leaflet-marker-icon {
     transition: transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);
@@ -71,6 +83,31 @@ export function fitLeafletBounds(map: BoundsMap, bounds: LatLngBounds) {
     ],
     { animate: true, duration: 0.5 },
   );
+}
+
+export function parseFocusTarget(params: {
+  focusLat?: string | string[];
+  focusLon?: string | string[];
+  focusId?: string | string[];
+}): FocusTarget | null {
+  const lat = Number(firstParam(params.focusLat));
+  const lon = Number(firstParam(params.focusLon));
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  return {
+    id: firstParam(params.focusId) ?? '',
+    latitude: lat,
+    longitude: lon,
+  };
+}
+
+export function focusLeafletOnTarget(map: FocusMap, target: FocusTarget, zoom = FOCUS_ZOOM) {
+  map.setView([target.latitude, target.longitude], zoom, { animate: true });
+}
+
+function firstParam(value: string | string[] | undefined): string | undefined {
+  if (Array.isArray(value)) return value[0];
+  return value;
 }
 
 // MapLibre's LngLat order is longitude, latitude and duration is milliseconds.

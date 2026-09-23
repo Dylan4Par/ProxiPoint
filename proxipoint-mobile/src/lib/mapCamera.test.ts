@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  FOCUS_ZOOM,
   MARKER_TRANSITION_CSS,
   boundsForActivePins,
   fitLeafletBounds,
   fitMapLibreBounds,
+  focusLeafletOnTarget,
+  parseFocusTarget,
 } from './mapCamera';
 import type { ProximityAlert } from '../types/telemetry';
 
@@ -42,6 +45,34 @@ test('leaflet fitBounds animates a padded frame around the user and targets', ()
       options: { animate: true, duration: 0.5 },
     },
   ]);
+});
+
+test('route params center the camera on the selected target', () => {
+  const target = parseFocusTarget({ focusLat: '37.7752', focusLon: '-122.4194', focusId: 'alpha' });
+  assert.deepEqual(target, { id: 'alpha', latitude: 37.7752, longitude: -122.4194 });
+
+  const calls: unknown[] = [];
+  focusLeafletOnTarget(
+    {
+      setView(center, zoom, options) {
+        calls.push({ center, zoom, options });
+      },
+    },
+    target!,
+  );
+  assert.deepEqual(calls, [
+    {
+      center: [37.7752, -122.4194],
+      zoom: FOCUS_ZOOM,
+      options: { animate: true },
+    },
+  ]);
+});
+
+test('incomplete or invalid focus params do not move the camera', () => {
+  assert.equal(parseFocusTarget({ focusLat: '37.7' }), null);
+  assert.equal(parseFocusTarget({ focusLat: 'nope', focusLon: '1' }), null);
+  assert.equal(parseFocusTarget({ focusLat: '91', focusLon: '0' }), null);
 });
 
 test('maplibre fitBounds uses lng/lat order and a millisecond duration', () => {
