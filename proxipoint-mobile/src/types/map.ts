@@ -4,5 +4,6 @@ export type MapCoordinate = {
 };
 
 export type MapTarget = MapCoordinate & {
+  id: string;
   name: string;
 };

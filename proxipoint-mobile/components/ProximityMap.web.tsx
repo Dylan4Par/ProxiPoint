@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import type { Circle, Map as LeafletMap, Marker } from 'leaflet';
 
-import { DARK_RASTER_TILES } from '@/constants/mapStyle';
+import { TILE_LAYER_URL } from '@/constants/mapStyle';
 import type { MapCoordinate, MapTarget } from '@/src/types/map';
 import '../styles/leaflet.css';
 
@@ -11,7 +11,7 @@ type LeafletNamespace = typeof import('leaflet');
 type ProximityMapProps = {
   user: MapCoordinate;
   radiusMeters: number;
-  target: MapTarget | null;
+  targets: MapTarget[];
 };
 
 function escapeHtml(value: string) {
@@ -43,14 +43,14 @@ function pinIcon(L: LeafletNamespace, color: string, label: string) {
   });
 }
 
-export default function ProximityMap({ user, radiusMeters, target }: ProximityMapProps) {
+export default function ProximityMap({ user, radiusMeters, targets }: ProximityMapProps) {
   const [failed, setFailed] = useState(false);
   const [mapReady, setMapReady] = useState(false);
   const userRef = useRef(user);
   const leafletRef = useRef<LeafletNamespace | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const userMarkerRef = useRef<Marker | null>(null);
-  const targetMarkerRef = useRef<Marker | null>(null);
+  const targetMarkersRef = useRef<Map<string, Marker>>(new Map());
   const circleRef = useRef<Circle | null>(null);
   const fittedKeyRef = useRef<string | null>(null);
   userRef.current = user;
@@ -79,10 +79,10 @@ export default function ProximityMap({ user, radiusMeters, target }: ProximityMa
           [userRef.current.lat, userRef.current.lon],
           15,
         );
-        L.tileLayer(DARK_RASTER_TILES, {
-          attribution: '&copy; OpenStreetMap &copy; CARTO',
-          subdomains: 'abcd',
-          maxZoom: 20,
+        L.tileLayer(TILE_LAYER_URL, {
+          attribution: '&copy; OpenStreetMap contributors',
+          subdomains: 'abc',
+          maxZoom: 19,
         }).addTo(map);
         leafletRef.current = L;
         mapRef.current = map;
@@ -103,7 +103,7 @@ export default function ProximityMap({ user, radiusMeters, target }: ProximityMa
       mapRef.current = null;
       leafletRef.current = null;
       userMarkerRef.current = null;
-      targetMarkerRef.current = null;
+      targetMarkersRef.current.clear();
       circleRef.current = null;
       fittedKeyRef.current = null;
       setMapReady(false);
@@ -139,39 +139,56 @@ export default function ProximityMap({ user, radiusMeters, target }: ProximityMa
       circleRef.current.setRadius(radiusMeters);
     }
 
-    if (target) {
-      const targetLatLng = L.latLng(target.lat, target.lon);
-      const icon = pinIcon(L, '#facc15', target.name);
-      if (!targetMarkerRef.current) {
-        targetMarkerRef.current = L.marker(targetLatLng, {
-          icon,
-          interactive: false,
-          zIndexOffset: 600,
-        }).addTo(map);
-      } else {
-        targetMarkerRef.current.setLatLng(targetLatLng);
-        targetMarkerRef.current.setIcon(icon);
+    const liveIds = new Set(targets.map((item) => item.id));
+    for (const [id, marker] of targetMarkersRef.current) {
+      if (!liveIds.has(id)) {
+        marker.remove();
+        targetMarkersRef.current.delete(id);
       }
+    }
 
-      const fitKey = `${target.lat.toFixed(5)},${target.lon.toFixed(5)}`;
+    for (const item of targets) {
+      const targetLatLng = L.latLng(item.lat, item.lon);
+      const icon = pinIcon(L, '#facc15', item.name);
+      const existing = targetMarkersRef.current.get(item.id);
+      if (!existing) {
+        targetMarkersRef.current.set(
+          item.id,
+          L.marker(targetLatLng, {
+            icon,
+            interactive: false,
+            zIndexOffset: 600,
+          }).addTo(map),
+        );
+      } else {
+        existing.setLatLng(targetLatLng);
+        existing.setIcon(icon);
+      }
+    }
+
+    if (targets.length > 0) {
+      const fitKey = targets
+        .map((item) => `${item.id}:${item.lat.toFixed(5)},${item.lon.toFixed(5)}`)
+        .sort()
+        .join('|');
       if (fittedKeyRef.current !== fitKey) {
         fittedKeyRef.current = fitKey;
-        map.fitBounds(L.latLngBounds(userLatLng, targetLatLng).pad(0.8), {
+        const bounds = L.latLngBounds([
+          userLatLng,
+          ...targets.map((item) => L.latLng(item.lat, item.lon)),
+        ]);
+        map.fitBounds(bounds.pad(0.8), {
           paddingTopLeft: [32, 32],
           paddingBottomRight: [32, 200],
           maxZoom: 16,
           animate: true,
         });
       }
-    } else if (targetMarkerRef.current) {
-      targetMarkerRef.current.remove();
-      targetMarkerRef.current = null;
+    } else {
       fittedKeyRef.current = null;
       map.panTo(userLatLng);
-    } else {
-      map.panTo(userLatLng);
     }
-  }, [failed, mapReady, radiusMeters, target, user.lat, user.lon]);
+  }, [failed, mapReady, radiusMeters, targets, user.lat, user.lon]);
 
   if (failed) {
     return (
@@ -182,12 +199,12 @@ export default function ProximityMap({ user, radiusMeters, target }: ProximityMa
           <View style={styles.userDot} />
           <Text style={styles.userLabel}>You</Text>
         </View>
-        {target ? (
-          <View style={styles.targetPin}>
+        {targets.map((item, index) => (
+          <View key={item.id} style={[styles.targetPin, { top: `${30 + index * 10}%` }]}>
             <View style={styles.targetDot} />
-            <Text style={styles.targetLabel}>{target.name}</Text>
+            <Text style={styles.targetLabel}>{item.name}</Text>
           </View>
-        ) : null}
+        ))}
       </View>
     );
   }
