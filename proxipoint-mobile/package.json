@@ -6,13 +6,18 @@
   "scripts": {
     "start": "expo start",
     "web": "expo start --web",
-    "test": "tsx --test src/lib/*.test.ts"
+    "build:android:dev": "expo run:android",
+    "build:ios:dev": "expo run:ios",
+    "test": "tsx --test src/lib/*.test.ts",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "1.23.1",
     "expo": "~52.0.47",
     "expo-asset": "~11.0.5",
     "expo-constants": "~17.0.8",
+    "expo-dev-client": "~5.0.20",
     "expo-linking": "~7.0.5",
     "expo-location": "~18.0.10",
     "expo-notifications": "~0.29.14",

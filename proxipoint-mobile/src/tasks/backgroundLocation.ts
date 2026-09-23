@@ -14,8 +14,21 @@ import { postTelemetryPing } from '../services/telemetryApi';
 import { getTrackingConfig, hasTrackingConfig } from '../services/trackingConfig';
 import { DISCOVERY_RADIUS_METERS, type LocationPingPayload } from '../types/telemetry';
 
-export const BACKGROUND_TRACKING_TASK = 'PROXIPOINT_BACKGROUND_GEO';
+export const BACKGROUND_LOCATION_TASK = 'PROXIPOINT_BACKGROUND_LOCATION_TASK';
+export const BACKGROUND_TRACKING_TASK = BACKGROUND_LOCATION_TASK;
 const TELEMETRY_QUEUE_KEY = '@proxipoint_telemetry_queue';
+
+const backgroundLocationOptions: Location.LocationTaskOptions = {
+  accuracy: Location.Accuracy.High,
+  timeInterval: 2000,
+  distanceInterval: 1,
+  showsBackgroundLocationIndicator: true, // Required for iOS status bar pill
+  foregroundService: {
+    notificationTitle: 'ProxiPoint Active',
+    notificationBody: 'Broadcasting telemetry and monitoring proximity alerts.',
+    notificationColor: '#2563eb',
+  },
+};
 
 export function buildBackgroundPing(latest: Location.LocationObject, userId: string): LocationPingPayload {
   return {
@@ -30,7 +43,7 @@ export function buildBackgroundPing(latest: Location.LocationObject, userId: str
   };
 }
 
-TaskManager.defineTask(BACKGROUND_TRACKING_TASK, async ({ data, error }) => {
+TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
   if (error) {
     console.error('Background task error:', error);
     return;
@@ -66,30 +79,34 @@ TaskManager.defineTask(BACKGROUND_TRACKING_TASK, async ({ data, error }) => {
   }
 });
 
+export async function registerBackgroundLocationAsync() {
+  const isRegistered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_LOCATION_TASK);
+  if (isRegistered) return true;
+
+  const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
+  if (bgStatus !== 'granted') {
+    console.warn('Background location permission denied');
+    return false;
+  }
+
+  await Location.startLocationUpdatesAsync(BACKGROUND_LOCATION_TASK, backgroundLocationOptions);
+  return true;
+}
+
+export async function checkBackgroundTaskStatus(): Promise<boolean> {
+  return await TaskManager.isTaskRegisteredAsync(BACKGROUND_LOCATION_TASK);
+}
+
 export async function syncBackgroundLocationTracking(enabled: boolean) {
   if (Platform.OS === 'web') return;
 
   try {
-    const registered = await TaskManager.isTaskRegisteredAsync(BACKGROUND_TRACKING_TASK);
     if (!enabled) {
-      if (registered) await Location.stopLocationUpdatesAsync(BACKGROUND_TRACKING_TASK);
+      const registered = await checkBackgroundTaskStatus();
+      if (registered) await Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK);
       return;
     }
-    if (registered) return;
-
-    const { status: bgStatus } = await Location.requestBackgroundPermissionsAsync();
-    if (bgStatus !== 'granted') return;
-
-    await Location.startLocationUpdatesAsync(BACKGROUND_TRACKING_TASK, {
-      accuracy: Location.Accuracy.Balanced,
-      timeInterval: 5000,
-      distanceInterval: 5,
-      showsBackgroundLocationIndicator: true,
-      foregroundService: {
-        notificationTitle: 'ProxiPoint Active',
-        notificationBody: 'Monitoring real-time proximity alerts nearby.',
-      },
-    });
+    await registerBackgroundLocationAsync();
   } catch (err) {
     console.warn('Background location sync failed:', err);
   }

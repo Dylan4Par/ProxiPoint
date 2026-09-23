@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRadarSession } from '../../src/hooks/RadarSession';
+import { BACKGROUND_LOCATION_TASK, checkBackgroundTaskStatus } from '../../src/tasks/backgroundLocation';
 import { partitionContactsByRadius } from '../../src/lib/alertFeed';
 import {
   boundsForActivePins,
@@ -119,25 +120,79 @@ export default function RadarScreen() {
           {focus ? ` · focus ${focus.id || 'target'} · ${focus.latitude.toFixed(5)}, ${focus.longitude.toFixed(5)}` : ''}
         </Text>
       </View>
-      <View style={styles.panel}>
-        <Text style={styles.panelLabel}>Geofence radius</Text>
-        <View style={styles.pills}>
-          {RADIUS_PRESETS.map((preset) => {
-            const selected = preset === radiusMeters;
-            return (
-              <Pressable
-                key={preset}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                onPress={() => setRadiusMeters(preset)}
-                style={[styles.pill, selected && styles.pillSelected]}
-              >
-                <Text style={[styles.pillText, selected && styles.pillTextSelected]}>{preset}m</Text>
-              </Pressable>
-            );
-          })}
+      <View style={styles.dock}>
+        <BackgroundTaskIndicator />
+        <View style={styles.panel}>
+          <Text style={styles.panelLabel}>Geofence radius</Text>
+          <View style={styles.pills}>
+            {RADIUS_PRESETS.map((preset) => {
+              const selected = preset === radiusMeters;
+              return (
+                <Pressable
+                  key={preset}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  onPress={() => setRadiusMeters(preset)}
+                  style={[styles.pill, selected && styles.pillSelected]}
+                >
+                  <Text style={[styles.pillText, selected && styles.pillTextSelected]}>{preset}m</Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </View>
+    </View>
+  );
+}
+
+function BackgroundTaskIndicator() {
+  const [registered, setRegistered] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const refresh = async () => {
+      try {
+        const isRegistered = await checkBackgroundTaskStatus();
+        if (!cancelled) setRegistered(isRegistered);
+        return true;
+      } catch (err) {
+        console.warn('Background task status check failed:', err);
+        if (!cancelled) setRegistered(false);
+        return false;
+      }
+    };
+
+    let timer: ReturnType<typeof setInterval> | undefined;
+    void (async () => {
+      const available = await refresh();
+      if (!available || cancelled) return;
+      timer = setInterval(() => {
+        void refresh();
+      }, 3000);
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearInterval(timer);
+    };
+  }, []);
+
+  const label = registered === null ? 'Checking…' : registered ? 'Registered' : 'Not registered';
+
+  return (
+    <View style={styles.taskCard} accessibilityLabel="Background task registration">
+      <Text style={styles.panelLabel}>Background location task</Text>
+      <Text
+        style={[
+          styles.taskStatus,
+          registered === true && styles.taskOn,
+          registered === false && styles.taskOff,
+        ]}
+      >
+        {BACKGROUND_LOCATION_TASK} · {label}
+      </Text>
     </View>
   );
 }
@@ -370,12 +425,29 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
   meta: { color: '#93a4bd', marginTop: 4, fontSize: 13 },
-  panel: {
+  dock: {
     position: 'absolute',
     left: 16,
     right: 16,
     bottom: 24,
     zIndex: 1000,
+    gap: 10,
+  },
+  taskCard: {
+    backgroundColor: 'rgba(7, 11, 18, 0.88)',
+    borderRadius: 16,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.35)',
+  },
+  taskStatus: {
+    color: '#e2e8f0',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  taskOn: { color: '#86efac' },
+  taskOff: { color: '#fca5a5' },
+  panel: {
     backgroundColor: 'rgba(7, 11, 18, 0.88)',
     borderRadius: 16,
     padding: 14,

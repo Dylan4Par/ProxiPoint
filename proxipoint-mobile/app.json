@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "ProxiPoint",
-    "slug": "proxipoint",
+    "slug": "proxipoint-mobile",
     "scheme": "proxipoint",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,12 +9,13 @@
     "newArchEnabled": true,
     "plugins": [
       "expo-router",
+      "expo-dev-client",
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow ProxiPoint to monitor proximity alerts in the background.",
-          "locationAlwaysPermission": "Allow ProxiPoint to monitor proximity alerts in the background.",
-          "locationWhenInUsePermission": "Allow ProxiPoint to use your location for the radar.",
+          "locationAlwaysAndWhenInUsePermission": "Allow ProxiPoint to detect proximity alerts while running in the background.",
+          "locationAlwaysPermission": "ProxiPoint continuously streams proximity telemetry in the background.",
+          "locationWhenInUsePermission": "ProxiPoint requires location access to alert you to nearby events and peers.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
@@ -29,25 +30,27 @@
       ]
     ],
     "ios": {
-      "bundleIdentifier": "com.proxipoint.mobile",
+      "supportsTablet": true,
+      "bundleIdentifier": "com.callsignsolutions.proxipoint",
       "infoPlist": {
         "UIBackgroundModes": [
           "location",
           "fetch"
         ],
-        "NSLocationWhenInUseUsageDescription": "Allow ProxiPoint to use your location for the radar.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Allow ProxiPoint to monitor proximity alerts in the background.",
-        "NSLocationAlwaysUsageDescription": "Allow ProxiPoint to monitor proximity alerts in the background."
+        "NSLocationWhenInUseUsageDescription": "ProxiPoint requires location access to alert you to nearby events and peers.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "ProxiPoint tracks your proximity to designated event targets even when the screen is locked.",
+        "NSLocationAlwaysUsageDescription": "ProxiPoint continuously streams proximity telemetry in the background."
       }
     },
     "android": {
-      "package": "com.proxipoint.mobile",
+      "package": "com.callsignsolutions.proxipoint",
       "permissions": [
-        "ACCESS_COARSE_LOCATION",
         "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
         "ACCESS_BACKGROUND_LOCATION",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_LOCATION"
+        "FOREGROUND_SERVICE_LOCATION",
+        "INTERNET"
       ]
     },
     "web": {
