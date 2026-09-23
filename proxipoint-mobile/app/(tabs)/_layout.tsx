@@ -20,7 +20,8 @@ export default function TabLayout() {
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Diagnostics',
+          title: 'Radar',
+          headerShown: false,
           tabBarIcon: ({ color }) => (
             <SymbolView
               name={{

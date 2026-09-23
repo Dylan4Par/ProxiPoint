@@ -3,6 +3,7 @@ package ingest
 import (
 	"log"
 	"net/http"
+	"time"
 
 	"github.com/gorilla/websocket"
 
@@ -56,15 +57,29 @@ func handleTelemetry(logger *log.Logger, w http.ResponseWriter, r *http.Request)
 			continue
 		}
 
+		logger.Printf("raw frame received: %s", string(raw))
 		logger.Printf(
 			"ingested telemetry struct: %+v latitude=%.4f longitude=%.4f",
 			ping,
 			ping.Latitude,
 			ping.Longitude,
 		)
-		_ = conn.WriteJSON(map[string]string{
+
+		if ping.Kind == "ping" {
+			alert := telemetry.SimulatedProximityAlert(time.Now())
+			if err := conn.WriteJSON(alert); err != nil {
+				logger.Printf("ws write error: %v", err)
+				return
+			}
+			continue
+		}
+
+		if err := conn.WriteJSON(map[string]string{
 			"status": "ingested",
 			"label":  ping.Label,
-		})
+		}); err != nil {
+			logger.Printf("ws write error: %v", err)
+			return
+		}
 	}
 }

@@ -7,10 +7,12 @@ import (
 	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/ingest"
 )
 
+// listenAddr binds every interface so phones on the same LAN can reach the ingest socket.
+const listenAddr = "0.0.0.0:8080"
+
 func main() {
-	addr := ":8080"
-	log.Printf("telemetry ingest listening on %s (ws://127.0.0.1:8080/ws/telemetry)", addr)
-	if err := http.ListenAndServe(addr, ingest.NewMux(nil)); err != nil {
-		log.Fatal(err)
+	log.Printf("overwatchcore telemetry service listening on %s", listenAddr)
+	if err := http.ListenAndServe(listenAddr, ingest.NewMux(nil)); err != nil {
+		log.Fatalf("server fatal error: %v", err)
 	}
 }
