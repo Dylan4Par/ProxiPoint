@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
+  contactsEnteringRadius,
   formatRelativeTime,
   mergeActiveAlerts,
+  partitionContactsByRadius,
   sortAlertsByDistance,
   toProximityAlertEvent,
 } from './alertFeed';
-import type { ActiveContact, ProximityAlert } from '../types/telemetry';
+import { DISCOVERY_RADIUS_METERS, RADIUS_PRESETS, type ActiveContact, type ProximityAlert } from '../types/telemetry';
 
 const far: ProximityAlert = {
   id: 'delta',
@@ -51,6 +53,66 @@ test('new targets are marked entered and repeat pings keep the original time', (
   const alpha = second.alerts.find((alert) => alert.id === 'alpha') as ActiveContact;
   assert.equal(alpha.observedAt, 5_000);
   assert.equal(alpha.distanceMeters, 22);
+});
+
+test('100m keeps alpha and bravo active and parks charlie and delta', () => {
+  const contacts = [
+    { ...far, id: 'charlie', label: 'Charlie', distanceMeters: 199.8 },
+    { ...near, distanceMeters: 30 },
+    { ...far, distanceMeters: 419.5 },
+    { ...near, id: 'bravo', label: 'Bravo', distanceMeters: 79.9 },
+  ];
+  const split = partitionContactsByRadius(contacts, 100);
+  assert.deepEqual(
+    split.inRange.map((contact) => contact.id),
+    ['alpha', 'bravo'],
+  );
+  assert.deepEqual(
+    split.outOfRange.map((contact) => contact.id),
+    ['charlie', 'delta'],
+  );
+});
+
+test('widening the shared radius pulls the next contact back into range', () => {
+  const contacts = [
+    { ...near, distanceMeters: 30 },
+    { ...near, id: 'bravo', label: 'Bravo', distanceMeters: 79.9 },
+    { ...far, id: 'charlie', label: 'Charlie', distanceMeters: 199.8 },
+    { ...far, distanceMeters: 419.5 },
+  ];
+  assert.deepEqual(
+    partitionContactsByRadius(contacts, 250).inRange.map((contact) => contact.id),
+    ['alpha', 'bravo', 'charlie'],
+  );
+  assert.deepEqual(
+    partitionContactsByRadius(contacts, 50).inRange.map((contact) => contact.id),
+    ['alpha'],
+  );
+});
+
+test('notifications fire only when a contact crosses into the active radius', () => {
+  const discovered = [
+    { ...near, distanceMeters: 30 },
+    { ...near, id: 'bravo', label: 'Bravo', distanceMeters: 79.9 },
+    { ...far, id: 'charlie', label: 'Charlie', distanceMeters: 199.8 },
+  ];
+  assert.deepEqual(
+    contactsEnteringRadius([], discovered, 100).map((contact) => contact.id),
+    ['alpha', 'bravo'],
+  );
+  const inside = discovered.filter((contact) => contact.distanceMeters <= 100);
+  const closer = discovered.map((contact) =>
+    contact.id === 'charlie' ? { ...contact, distanceMeters: 90 } : contact,
+  );
+  assert.deepEqual(
+    contactsEnteringRadius(inside, closer, 100).map((contact) => contact.id),
+    ['charlie'],
+  );
+});
+
+test('discovery radius is the widest geofence preset', () => {
+  assert.equal(DISCOVERY_RADIUS_METERS, Math.max(...RADIUS_PRESETS));
+  assert.equal(DISCOVERY_RADIUS_METERS, 500);
 });
 
 test('alert events use the target id and label', () => {

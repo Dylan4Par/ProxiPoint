@@ -1,14 +1,18 @@
-import { useEffect, useState } from 'react';
-import { FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { formatRelativeTime, sortAlertsByDistance } from '../../src/lib/alertFeed';
+import { formatRelativeTime, partitionContactsByRadius } from '../../src/lib/alertFeed';
 import { useRadarSession } from '../../src/hooks/RadarSession';
 import type { ActiveContact } from '../../src/types/telemetry';
 
 export default function AlertFeedScreen() {
   const router = useRouter();
-  const { alerts, isTelemetryEnabled, profileLoading } = useRadarSession();
-  const alertList = sortAlertsByDistance(alerts);
+  const { alerts, radiusMeters, isTelemetryEnabled, profileLoading } = useRadarSession();
+  const { inRange, outOfRange } = useMemo(
+    () => partitionContactsByRadius(alerts, radiusMeters),
+    [alerts, radiusMeters],
+  );
+  const [outOfRangeOpen, setOutOfRangeOpen] = useState(true);
   const now = useNow();
 
   const handleSelectAlert = (item: ActiveContact) => {
@@ -18,59 +22,92 @@ export default function AlertFeedScreen() {
         focusLat: String(item.latitude),
         focusLon: String(item.longitude),
         focusId: item.id,
+        focusNonce: String(Date.now()),
       },
     });
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.header}>Active Radar Contacts</Text>
+      <Text style={styles.header}>Radar Contacts ({radiusMeters}m Range)</Text>
       <Text style={styles.subtext}>
-        {alertList.length} {alertList.length === 1 ? 'contact' : 'contacts'} currently in range
+        {inRange.length} in range · {outOfRange.length} out of range
       </Text>
       {!profileLoading && !isTelemetryEnabled ? (
         <Text style={styles.paused}>Telemetry broadcasting is off. New contacts pause until you enable it in Settings.</Text>
       ) : null}
 
-      {alertList.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No active contacts within your geofence.</Text>
-        </View>
-      ) : (
-        <FlatList
-          data={alertList}
-          keyExtractor={(item) => item.id}
-          style={styles.listView}
-          contentContainerStyle={styles.list}
-          renderItem={({ item }) => (
+      <ScrollView style={styles.listView} contentContainerStyle={styles.list}>
+        <Text style={styles.sectionTitle}>Active Contacts in Range</Text>
+        {inRange.length === 0 ? (
+          <Text style={styles.emptyText}>No contacts within {radiusMeters}m.</Text>
+        ) : (
+          inRange.map((item) => (
+            <ContactCard key={item.id} item={item} now={now} muted={false} onPress={() => handleSelectAlert(item)} />
+          ))
+        )}
+
+        {outOfRange.length > 0 ? (
+          <View style={styles.outOfRangeContainer}>
             <Pressable
-              style={styles.card}
               accessibilityRole="button"
-              accessibilityLabel={`Focus ${item.label || item.id} on map`}
-              onPress={() => handleSelectAlert(item)}
+              accessibilityState={{ expanded: outOfRangeOpen }}
+              onPress={() => setOutOfRangeOpen((open) => !open)}
             >
-              <View style={styles.cardHeader}>
-                <View style={styles.identity}>
-                  <View style={styles.iconBadge}>
-                    <Text style={styles.iconGlyph}>!</Text>
-                  </View>
-                  <Text style={styles.targetName}>{item.label || item.id}</Text>
-                </View>
-                <Text style={styles.distanceBadge}>{item.distanceMeters.toFixed(1)} m</Text>
-              </View>
-              <Text style={styles.messageText}>Target detected within radius</Text>
-              <View style={styles.cardFooter}>
-                <Text style={styles.coordText}>
-                  {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
-                </Text>
-                <Text style={styles.timeText}>{formatRelativeTime(item.observedAt, now)}</Text>
-                <Text style={styles.actionText}>Focus on Map →</Text>
-              </View>
+              <Text style={styles.subHeader}>
+                {outOfRangeOpen ? '▾' : '▸'} Out of Range ({outOfRange.length})
+              </Text>
             </Pressable>
-          )}
-        />
-      )}
+            {outOfRangeOpen
+              ? outOfRange.map((item) => (
+                  <ContactCard key={item.id} item={item} now={now} muted onPress={() => handleSelectAlert(item)} />
+                ))
+              : null}
+          </View>
+        ) : null}
+      </ScrollView>
     </View>
+  );
+}
+
+function ContactCard({
+  item,
+  now,
+  muted,
+  onPress,
+}: {
+  item: ActiveContact;
+  now: number;
+  muted: boolean;
+  onPress: () => void;
+}) {
+  return (
+    <Pressable
+      style={[styles.card, muted && styles.cardMuted]}
+      accessibilityRole="button"
+      accessibilityLabel={`Focus ${item.label || item.id} on map`}
+      onPress={onPress}
+    >
+      <View style={styles.cardHeader}>
+        <View style={styles.identity}>
+          <View style={styles.iconBadge}>
+            <Text style={styles.iconGlyph}>!</Text>
+          </View>
+          <Text style={[styles.targetName, muted && styles.mutedText]}>{item.label || item.id}</Text>
+        </View>
+        <Text style={[styles.distanceBadge, muted && styles.distanceBadgeMuted]}>{item.distanceMeters.toFixed(1)} m</Text>
+      </View>
+      <Text style={[styles.messageText, muted && styles.mutedText]}>
+        {muted ? 'Beyond the active geofence' : 'Target detected within radius'}
+      </Text>
+      <View style={styles.cardFooter}>
+        <Text style={styles.coordText}>
+          {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+        </Text>
+        <Text style={styles.timeText}>{formatRelativeTime(item.observedAt, now)}</Text>
+        <Text style={styles.actionText}>Focus on Map →</Text>
+      </View>
+    </Pressable>
   );
 }
 
@@ -88,8 +125,9 @@ const styles = StyleSheet.create({
   header: { fontSize: 22, fontWeight: '700', color: '#f8fafc' },
   subtext: { color: '#94a3b8', fontSize: 13, marginTop: 4, marginBottom: 16 },
   paused: { color: '#facc15', fontSize: 13, marginTop: -8, marginBottom: 16 },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  emptyText: { color: '#64748b', fontSize: 14, fontStyle: 'italic' },
+  sectionTitle: { color: '#f8fafc', fontSize: 15, fontWeight: '700', marginBottom: 10 },
+  subHeader: { fontSize: 14, fontWeight: '600', color: '#64748b', marginBottom: 8 },
+  emptyText: { color: '#64748b', fontSize: 14, fontStyle: 'italic', marginBottom: 8 },
   listView: { flex: 1 },
   list: { gap: 12, paddingBottom: 24 },
   card: {
@@ -99,6 +137,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#334155',
   },
+  cardMuted: { opacity: 0.55, backgroundColor: '#0f172a' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
   identity: { flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 },
   iconBadge: {
@@ -123,9 +162,18 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     overflow: 'hidden',
   },
+  distanceBadgeMuted: { backgroundColor: 'rgba(148, 163, 184, 0.15)', color: '#94a3b8' },
   messageText: { color: '#cbd5e1', fontSize: 13, marginTop: 6 },
+  mutedText: { color: '#94a3b8' },
   cardFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 12, gap: 8 },
   coordText: { color: '#64748b', fontSize: 11, fontFamily: 'monospace', flexShrink: 1 },
   timeText: { color: '#94a3b8', fontSize: 11 },
   actionText: { color: '#38bdf8', fontSize: 12, fontWeight: '600' },
+  outOfRangeContainer: {
+    borderTopWidth: 1,
+    borderTopColor: '#1e293b',
+    paddingTop: 12,
+    marginTop: 8,
+    gap: 12,
+  },
 });

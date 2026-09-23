@@ -12,6 +12,13 @@ test('expo-router can stringify route params through query-string', () => {
     stringify({ focusLat: '37.7', focusLon: '-122.4', focusId: 'delta' }, { sort: false }),
     'focusLat=37.7&focusLon=-122.4&focusId=delta',
   );
+  assert.equal(
+    stringify(
+      { focusId: undefined, focusLat: undefined, focusLon: undefined, focusNonce: undefined },
+      { sort: false },
+    ),
+    '',
+  );
 });
 
 function importStar(mod: Record<string, unknown>) {

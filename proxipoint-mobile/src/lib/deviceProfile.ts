@@ -1,3 +1,8 @@
+export const DEVICE_PROFILE_STORAGE = {
+  callsign: '@proxipoint_callsign',
+  trackingEnabled: '@proxipoint_tracking_enabled',
+} as const;
+
 export function generateCallsign(randomUUID: () => string = defaultUUID): string {
   const compact = randomUUID().replace(/-/g, '').slice(0, 8).toUpperCase();
   return `Ranger-${compact}`;

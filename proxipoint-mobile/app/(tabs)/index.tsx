@@ -1,13 +1,18 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useRadarSession } from '../../src/hooks/RadarSession';
+import { partitionContactsByRadius } from '../../src/lib/alertFeed';
 import {
   boundsForActivePins,
+  clearedFocusParams,
   fitLeafletBounds,
   focusLeafletOnTarget,
+  focusLockKey,
   installMarkerTransitionStyles,
   parseFocusTarget,
+  shouldCenterOnFocus,
+  shouldReleaseCameraLock,
   type FocusTarget,
 } from '../../src/lib/mapCamera';
 import { RADIUS_PRESETS, type ProximityAlert } from '../../src/types/telemetry';
@@ -21,11 +26,18 @@ type LeafletNamespace = {
   divIcon: (options: object) => object;
 };
 
+type LeafletMapEvent = { originalEvent?: Event };
+
 type LeafletMap = {
-  setView: (center: [number, number], zoom: number) => LeafletMap;
+  setView: (center: [number, number], zoom: number, options?: { animate?: boolean }) => LeafletMap;
   remove: () => void;
   invalidateSize: () => void;
   fitBounds: (bounds: [[number, number], [number, number]], options?: object) => void;
+  on: (event: string, handler: (event?: LeafletMapEvent) => void) => void;
+  off: (event: string, handler: (event?: LeafletMapEvent) => void) => void;
+  once: (event: string, handler: (event?: LeafletMapEvent) => void) => void;
+  getCenter: () => { lat: number; lng: number };
+  getZoom: () => number;
 };
 
 type LeafletMarker = {
@@ -54,31 +66,57 @@ function pinIcon(L: LeafletNamespace, color: string, label?: string) {
 }
 
 export default function RadarScreen() {
+  const router = useRouter();
   const { coords, alerts, status, transport, radiusMeters, setRadiusMeters, callsign, profileLoading } =
     useRadarSession();
   const params = useLocalSearchParams<{
     focusLat?: string | string[];
     focusLon?: string | string[];
     focusId?: string | string[];
+    focusNonce?: string | string[];
   }>();
-  const focus = useMemo(
+  const rawFocus = useMemo(
     () => parseFocusTarget(params),
-    [params.focusId, params.focusLat, params.focusLon],
+    [params.focusId, params.focusLat, params.focusLon, params.focusNonce],
   );
+  const [releasedFocusKey, setReleasedFocusKey] = useState<string | null>(null);
+  const focus =
+    rawFocus && releasedFocusKey === focusLockKey(rawFocus) ? null : rawFocus;
+  const ranged = useMemo(
+    () => partitionContactsByRadius(alerts, radiusMeters),
+    [alerts, radiusMeters],
+  );
+  const mapAlerts = useMemo(() => {
+    if (!focus) return ranged.inRange;
+    if (ranged.inRange.some((alert) => alert.id === focus.id)) return ranged.inRange;
+    const focused = alerts.find((alert) => alert.id === focus.id);
+    return focused ? [...ranged.inRange, focused] : ranged.inRange;
+  }, [alerts, focus, ranged.inRange]);
+
+  const releaseFocus = useCallback(() => {
+    if (rawFocus) setReleasedFocusKey(focusLockKey(rawFocus));
+    router.setParams(clearedFocusParams() as unknown as Record<string, string>);
+  }, [rawFocus, router]);
 
   return (
     <View style={styles.root}>
       {Platform.OS === 'web' ? (
-        <WebRadar coords={coords} alerts={alerts} radiusMeters={radiusMeters} focus={focus} />
+        <WebRadar
+          coords={coords}
+          alerts={mapAlerts}
+          radiusMeters={radiusMeters}
+          focus={focus}
+          onUserMapInteraction={releaseFocus}
+        />
       ) : (
-        <NativeRadar coords={coords} alerts={alerts} radiusMeters={radiusMeters} focus={focus} />
+        <NativeRadar coords={coords} alerts={mapAlerts} radiusMeters={radiusMeters} focus={focus} />
       )}
       <View style={styles.topBar} pointerEvents="none">
         <Text style={styles.brand}>PROXIPOINT</Text>
         <Text style={styles.meta} accessibilityLabel="Active callsign">
           {profileLoading ? 'Loading callsign' : callsign} · {status === 'denied' ? 'Demo fix' : status} · {transport} ·{' '}
-          {alerts.length} alert{alerts.length === 1 ? '' : 's'}
-          {focus ? ` · focus ${focus.id || 'target'}` : ''}
+          {ranged.inRange.length} alert{ranged.inRange.length === 1 ? '' : 's'}
+          {focus ? ` · focus ${focus.id || 'target'} · ${focus.latitude.toFixed(5)}, ${focus.longitude.toFixed(5)}` : ''}
         </Text>
       </View>
       <View style={styles.panel}>
@@ -109,11 +147,13 @@ function WebRadar({
   alerts,
   radiusMeters,
   focus,
+  onUserMapInteraction,
 }: {
   coords: DeviceFix | null;
   alerts: ProximityAlert[];
   radiusMeters: number;
   focus: FocusTarget | null;
+  onUserMapInteraction: () => void;
 }) {
   const mapNode = useRef<HTMLElement | null>(null);
   const mapRef = useRef<LeafletMap | null>(null);
@@ -122,6 +162,11 @@ function WebRadar({
   const circle = useRef<LeafletCircle | null>(null);
   const alertMarkers = useRef(new Map<string, LeafletMarker>());
   const [mapReady, setMapReady] = useState(false);
+  const cameraMode = useRef<'follow' | 'focus' | 'free'>('follow');
+  const appliedFocusKey = useRef<string | null>(null);
+  const programmaticMoves = useRef(0);
+  const onInteractRef = useRef(onUserMapInteraction);
+  onInteractRef.current = onUserMapInteraction;
 
   useEffect(() => {
     const node = mapNode.current;
@@ -134,12 +179,26 @@ function WebRadar({
       if (cancelled) return;
       ensureLeafletCss();
       installMarkerTransitionStyles();
+      const endInitialView = beginProgrammaticMove(programmaticMoves);
       const map = L.map(node, { zoomControl: false, attributionControl: true }).setView([37.7749, -122.4194], 16);
       L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '&copy; OpenStreetMap contributors',
         maxZoom: 19,
       }).addTo(map);
+      const releaseForGesture = (eventName: string) => () => {
+        if (!shouldReleaseCameraLock(eventName, programmaticMoves.current > 0)) return;
+        cameraMode.current = 'free';
+        onInteractRef.current();
+      };
+      const onDragStart = releaseForGesture('dragstart');
+      const onZoomStart = releaseForGesture('zoomstart');
+      const onMoveStart = releaseForGesture('movestart');
+      map.on('dragstart', onDragStart);
+      map.on('zoomstart', onZoomStart);
+      map.on('movestart', onMoveStart);
+      map.once('moveend', endInitialView);
       map.invalidateSize();
+      setTimeout(endInitialView, 800);
       mapRef.current = map;
       leafletRef.current = L;
       setMapReady(true);
@@ -205,14 +264,24 @@ function WebRadar({
   useEffect(() => {
     const map = mapRef.current;
     if (!mapReady || !map || !coords) return;
-    if (focus) {
-      focusLeafletOnTarget(map, focus);
+
+    if (focus && shouldCenterOnFocus(appliedFocusKey.current, focus)) {
+      appliedFocusKey.current = focusLockKey(focus);
+      cameraMode.current = 'focus';
+      moveProgrammatically(map, programmaticMoves, () => focusLeafletOnTarget(map, focus));
       return;
     }
+
+    if (!focus) {
+      if (cameraMode.current === 'focus') cameraMode.current = 'free';
+      appliedFocusKey.current = null;
+    }
+
+    if (cameraMode.current !== 'follow') return;
     if (alerts.length === 0) return;
     const bounds = boundsForActivePins({ lat: coords.lat, lon: coords.lon }, alerts);
     if (!bounds) return;
-    fitLeafletBounds(map, bounds);
+    moveProgrammatically(map, programmaticMoves, () => fitLeafletBounds(map, bounds));
   }, [alerts, coords, focus, mapReady]);
 
   return (
@@ -256,6 +325,23 @@ function NativeRadar({
       ))}
     </View>
   );
+}
+
+function beginProgrammaticMove(depth: { current: number }) {
+  depth.current += 1;
+  let ended = false;
+  return () => {
+    if (ended) return;
+    ended = true;
+    depth.current = Math.max(0, depth.current - 1);
+  };
+}
+
+function moveProgrammatically(map: LeafletMap, depth: { current: number }, move: () => void) {
+  const end = beginProgrammaticMove(depth);
+  move();
+  map.once('moveend', end);
+  setTimeout(end, 600);
 }
 
 function ensureLeafletCss() {

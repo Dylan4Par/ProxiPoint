@@ -26,6 +26,7 @@ export interface FocusTarget {
   id: string;
   latitude: number;
   longitude: number;
+  nonce?: string;
 }
 
 export interface FocusMap {
@@ -89,15 +90,47 @@ export function parseFocusTarget(params: {
   focusLat?: string | string[];
   focusLon?: string | string[];
   focusId?: string | string[];
+  focusNonce?: string | string[];
 }): FocusTarget | null {
   const lat = Number(firstParam(params.focusLat));
   const lon = Number(firstParam(params.focusLon));
   if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
   if (lat < -90 || lat > 90 || lon < -180 || lon > 180) return null;
+  const nonce = firstParam(params.focusNonce);
   return {
     id: firstParam(params.focusId) ?? '',
     latitude: lat,
     longitude: lon,
+    ...(nonce ? { nonce } : {}),
+  };
+}
+
+export function focusLockKey(target: FocusTarget): string {
+  return `${target.nonce ?? ''}::${target.id}@${target.latitude},${target.longitude}`;
+}
+
+// Each focus selection centers the camera once. Later pings reuse the key and
+// must not call setView again.
+export function shouldCenterOnFocus(appliedKey: string | null, target: FocusTarget | null): boolean {
+  if (!target) return false;
+  return appliedKey !== focusLockKey(target);
+}
+
+const USER_MAP_EVENTS = new Set(['dragstart', 'zoomstart', 'movestart']);
+
+// Leaflet fires movestart/zoomstart for setView and fitBounds as well as for
+// fingers. Programmatic moves keep the lock; a real drag or zoom releases it.
+export function shouldReleaseCameraLock(eventName: string, programmatic: boolean): boolean {
+  if (programmatic) return false;
+  return USER_MAP_EVENTS.has(eventName);
+}
+
+export function clearedFocusParams() {
+  return {
+    focusId: undefined,
+    focusLat: undefined,
+    focusLon: undefined,
+    focusNonce: undefined,
   };
 }
 

@@ -44,3 +44,9 @@ export const RADIUS_PRESETS = [50, 100, 250, 500] as const;
 export type RadiusPreset = (typeof RADIUS_PRESETS)[number];
 
 export const DEFAULT_RADIUS_METERS: RadiusPreset = 100;
+
+// Pings ask for the widest preset so the alerts tab can keep contacts that
+// sit outside the geofence the operator currently has selected.
+export const DISCOVERY_RADIUS_METERS: RadiusPreset = RADIUS_PRESETS.reduce((max, preset) =>
+  preset > max ? preset : max,
+);
