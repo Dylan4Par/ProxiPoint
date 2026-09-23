@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { generateCallsign } from '../lib/deviceProfile';
-
-const STORAGE_KEYS = {
-  CALLSIGN: '@proxipoint_callsign',
-  TRACKING_ENABLED: '@proxipoint_tracking_enabled',
-};
+import { DEVICE_PROFILE_STORAGE, generateCallsign } from '../lib/deviceProfile';
 
 type ProfileState = {
   callsign: string;
@@ -32,12 +27,12 @@ function hydrate(): Promise<void> {
   if (!hydration) {
     hydration = (async () => {
       try {
-        const storedCallsign = await AsyncStorage.getItem(STORAGE_KEYS.CALLSIGN);
-        const storedTracking = await AsyncStorage.getItem(STORAGE_KEYS.TRACKING_ENABLED);
+        const storedCallsign = await AsyncStorage.getItem(DEVICE_PROFILE_STORAGE.callsign);
+        const storedTracking = await AsyncStorage.getItem(DEVICE_PROFILE_STORAGE.trackingEnabled);
         let callsign = storedCallsign?.trim() ?? '';
         if (!callsign) {
           callsign = generateCallsign();
-          await AsyncStorage.setItem(STORAGE_KEYS.CALLSIGN, callsign);
+          await AsyncStorage.setItem(DEVICE_PROFILE_STORAGE.callsign, callsign);
         }
         emit({
           callsign,
@@ -73,12 +68,12 @@ export function useDeviceProfile() {
     const trimmed = newCallsign.trim();
     if (!trimmed) return;
     emit({ ...state, callsign: trimmed });
-    await AsyncStorage.setItem(STORAGE_KEYS.CALLSIGN, trimmed);
+    await AsyncStorage.setItem(DEVICE_PROFILE_STORAGE.callsign, trimmed);
   }, []);
 
   const setIsTelemetryEnabled = useCallback(async (enabled: boolean) => {
     emit({ ...state, isTelemetryEnabled: enabled });
-    await AsyncStorage.setItem(STORAGE_KEYS.TRACKING_ENABLED, String(enabled));
+    await AsyncStorage.setItem(DEVICE_PROFILE_STORAGE.trackingEnabled, String(enabled));
   }, []);
 
   return {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { AppState, Platform } from 'react-native';
 import * as Location from 'expo-location';
-import { mergeActiveAlerts, toProximityAlertEvent } from '../lib/alertFeed';
+import { contactsEnteringRadius, mergeActiveAlerts, toProximityAlertEvent } from '../lib/alertFeed';
 import { shouldPublishTelemetry } from '../lib/trackingPolicy';
 import { useLocationJitterFilter } from './useLocationTracker';
 import { recordAlertHistory } from '../services/alertHistory';
@@ -9,8 +9,13 @@ import { notifyProximityBreach } from '../services/notifications';
 import { postTelemetryPing } from '../services/telemetryApi';
 import { TelemetrySocket } from '../services/telemetrySocket';
 import { setTrackingConfig } from '../services/trackingConfig';
-import { registerBackgroundLocationTracking } from '../tasks/backgroundLocation';
-import type { ActiveContact, LocationPingPayload, ProximityAlert } from '../types/telemetry';
+import { syncBackgroundLocationTracking } from '../tasks/backgroundLocation';
+import {
+  DISCOVERY_RADIUS_METERS,
+  type ActiveContact,
+  type LocationPingPayload,
+  type ProximityAlert,
+} from '../types/telemetry';
 
 export interface DeviceFix {
   lat: number;
@@ -40,7 +45,7 @@ function toFix(position: Location.LocationObject): DeviceFix {
   };
 }
 
-function toPayload(fix: DeviceFix, userId: string, radiusMeters: number): LocationPingPayload {
+function toPayload(fix: DeviceFix, userId: string): LocationPingPayload {
   return {
     userId,
     latitude: fix.lat,
@@ -48,7 +53,7 @@ function toPayload(fix: DeviceFix, userId: string, radiusMeters: number): Locati
     accuracy: fix.accuracy,
     speed: fix.speed,
     heading: fix.heading,
-    radiusMeters,
+    radiusMeters: DISCOVERY_RADIUS_METERS,
     timestamp: new Date(fix.timestamp).toISOString(),
   };
 }
@@ -76,10 +81,12 @@ export function useLocation(radiusMeters: number, options: LocationOptions) {
   enabledRef.current = telemetryEnabled;
 
   acceptRef.current = (incoming) => {
-    const merged = mergeActiveAlerts(alertsRef.current, incoming);
+    const previous = alertsRef.current;
+    const merged = mergeActiveAlerts(previous, incoming);
     alertsRef.current = merged.alerts;
     setAlerts(merged.alerts);
-    for (const contact of merged.entered) {
+    const entered = contactsEnteringRadius(previous, merged.alerts, radiusRef.current);
+    for (const contact of entered) {
       void notifyProximityBreach(toProximityAlertEvent(contact));
       void recordAlertHistory({
         targetEntityId: contact.id,
@@ -115,7 +122,7 @@ export function useLocation(radiusMeters: number, options: LocationOptions) {
 
   useEffect(() => {
     publishRef.current = async (fix: DeviceFix) => {
-      const payload = toPayload(fix, userIdRef.current, radiusRef.current);
+      const payload = toPayload(fix, userIdRef.current);
       if (!shouldPublishTelemetry(payload.userId, enabledRef.current)) {
         setTransport('none');
         return;
@@ -188,9 +195,6 @@ export function useLocation(radiusMeters: number, options: LocationOptions) {
           }
         }
         setStatus('watching');
-        if (Platform.OS !== 'web') {
-          await registerBackgroundLocationTracking();
-        }
         watch = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.Balanced,
@@ -219,6 +223,12 @@ export function useLocation(radiusMeters: number, options: LocationOptions) {
       watch?.remove();
     };
   }, [shouldEmitPing]);
+
+  useEffect(() => {
+    if (Platform.OS === 'web') return;
+    const enabled = shouldPublishTelemetry(userId, telemetryEnabled);
+    void syncBackgroundLocationTracking(enabled);
+  }, [telemetryEnabled, userId]);
 
   useEffect(() => {
     const timer = setInterval(() => {
