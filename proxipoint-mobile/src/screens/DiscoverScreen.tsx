@@ -1,14 +1,19 @@
 import React from 'react';
-import { View, StyleSheet } from 'react-native';
+import { StyleSheet, StatusBar } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
+import { useProximitySocket } from '../hooks/useProximitySocket';
 import { DiscoveryMapCanvas } from '../components/discovery/DiscoveryMapCanvas';
+import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
 import { EventCardList } from '../components/discovery/EventCardList';
 import { BottomNavBar } from '../components/discovery/BottomNavBar';
 
 export const DiscoverScreen: React.FC = () => {
+  // Live duplex telemetry socket hook
+  useProximitySocket();
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <TopFilterHeader />
       <DiscoveryMapCanvas />
       <EventCardList />
@@ -20,6 +25,6 @@ export const DiscoverScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#0a1120',
+    backgroundColor: '#070b13',
   },
 });

@@ -13,6 +13,15 @@ import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 const { width, height } = Dimensions.get('window');
 const CANVAS_HEIGHT = height * 0.52;
 
+// Beacon world coordinates inside 1400x1400 world
+const BEACON_WORLD_X = 480;
+const BEACON_WORLD_Y = 480;
+const WORLD_OFFSET = 200; // top: -200, left: -200
+
+// Exact offset needed to place (BEACON_WORLD_X, BEACON_WORLD_Y) at (width / 2, CANVAS_HEIGHT / 2)
+const CENTER_OFFSET_X = width / 2 - (BEACON_WORLD_X - WORLD_OFFSET);
+const CENTER_OFFSET_Y = CANVAS_HEIGHT / 2 - (BEACON_WORLD_Y - WORLD_OFFSET);
+
 export const DiscoveryMapCanvas: React.FC = () => {
   const nodes = useDiscoveryStore((s) => s.nodes);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
@@ -21,11 +30,10 @@ export const DiscoveryMapCanvas: React.FC = () => {
 
   const nodeList = Object.values(nodes || {});
 
-  const pan = useRef(new Animated.ValueXY({ x: 0, y: 0 })).current;
-  const currentPan = useRef({ x: 0, y: 0 });
+  const pan = useRef(new Animated.ValueXY({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y })).current;
+  const currentPan = useRef({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y });
 
   const calculateBounds = (offsetX: number, offsetY: number) => {
-    // Determine the viewport boundaries against the 1400x1400 canvas world
     const minX = -offsetX - 40;
     const maxX = -offsetX + width + 40;
     const minY = -offsetY - 40;
@@ -34,8 +42,19 @@ export const DiscoveryMapCanvas: React.FC = () => {
   };
 
   useEffect(() => {
-    calculateBounds(0, 0);
+    calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
   }, []);
+
+  const handleRecenter = () => {
+    Animated.spring(pan, {
+      toValue: { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y },
+      useNativeDriver: false,
+      friction: 7,
+      tension: 40,
+    }).start();
+    currentPan.current = { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y };
+    calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
+  };
 
   const panResponder = useRef(
     PanResponder.create({
@@ -86,7 +105,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
         <View style={styles.roadDiagonal1} />
         <View style={styles.roadDiagonal2} />
 
-        {/* User Beacon Reticle (Center at 480, 480) */}
+        {/* User Beacon Reticle (Origin: 480, 480) */}
         <View style={styles.userBeaconContainer}>
           <View style={styles.userPulseRing} />
           <View style={styles.userCoreDot} />
@@ -152,20 +171,17 @@ export const DiscoveryMapCanvas: React.FC = () => {
         })}
       </Animated.View>
 
-      {/* Recenter HUD Control */}
+      {/* Pure View-based Tactical Crosshair Recenter Button */}
       <TouchableOpacity
-        style={styles.recenterBtn}
-        activeOpacity={0.8}
-        onPress={() => {
-          Animated.spring(pan, {
-            toValue: { x: 0, y: 0 },
-            useNativeDriver: false,
-          }).start();
-          currentPan.current = { x: 0, y: 0 };
-          calculateBounds(0, 0);
-        }}
+        style={styles.crosshairBtn}
+        activeOpacity={0.7}
+        onPress={handleRecenter}
       >
-        <Text style={styles.recenterText}>🎯 RECENTER</Text>
+        <View style={styles.crosshairCircleOuter}>
+          <View style={styles.crosshairCircleInner} />
+          <View style={styles.crosshairLineV} />
+          <View style={styles.crosshairLineH} />
+        </View>
       </TouchableOpacity>
     </View>
   );
@@ -182,8 +198,8 @@ const styles = StyleSheet.create({
     width: 1400,
     height: 1400,
     position: 'absolute',
-    top: -200,
-    left: -200,
+    top: -WORLD_OFFSET,
+    left: -WORLD_OFFSET,
   },
   gridLineH1: { position: 'absolute', top: 300, left: 0, right: 0, height: 1, backgroundColor: '#1e293b' },
   gridLineH2: { position: 'absolute', top: 600, left: 0, right: 0, height: 1, backgroundColor: '#1e293b' },
@@ -211,8 +227,8 @@ const styles = StyleSheet.create({
   },
   userBeaconContainer: {
     position: 'absolute',
-    top: 480,
-    left: 480,
+    top: BEACON_WORLD_Y,
+    left: BEACON_WORLD_X,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5,
@@ -328,21 +344,53 @@ const styles = StyleSheet.create({
   pinTipSelected: {
     borderTopColor: '#38bdf8',
   },
-  recenterBtn: {
+  crosshairBtn: {
     position: 'absolute',
     top: 14,
     right: 14,
-    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: '#334155',
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: 'rgba(15, 23, 42, 0.92)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(56, 189, 248, 0.4)',
+    alignItems: 'center',
+    justifyContent: 'center',
     zIndex: 20,
+    elevation: 4,
+    shadowColor: '#38bdf8',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
   },
-  recenterText: {
-    color: '#38bdf8',
-    fontSize: 10,
-    fontWeight: '700',
+  crosshairCircleOuter: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    borderWidth: 2,
+    borderColor: '#38bdf8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
+  crosshairCircleInner: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: '#38bdf8',
+  },
+  crosshairLineV: {
+    position: 'absolute',
+    width: 2,
+    height: 24,
+    backgroundColor: '#38bdf8',
+    borderRadius: 1,
+  },
+  crosshairLineH: {
+    position: 'absolute',
+    width: 24,
+    height: 2,
+    backgroundColor: '#38bdf8',
+    borderRadius: 1,
   },
 });

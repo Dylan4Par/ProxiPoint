@@ -1,85 +1,139 @@
-import { useEffect, useRef } from 'react';
-import { useProximityStore } from '../stores/useProximityStore';
-import { ProximityAlertPacket } from '../types/proximity';
-interface SocketConfig {
-  baseUrl?: string;
-  tenantId: string;
-  userId: string;
-  apiKey?: string;
+import { useEffect, useRef, useCallback } from 'react';
+import { useDiscoveryStore } from '../stores/useDiscoveryStore';
+
+const HEARTBEAT_INTERVAL_MS = 5000;
+const RECONNECT_DELAY_MS = 3000;
+
+export interface LocationPingPayload {
+  type: 'location_ping';
+  device_id: string;
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  battery_pct: number;
+  status: 'online' | 'standby' | 'offline';
 }
-export function useProximitySocket({
-  baseUrl = 'ws://10.0.2.2:8080/api/v1/ingest', // Android Emulator default
-  tenantId,
-  userId,
-  apiKey = '',
-}: SocketConfig) {
+
+export interface InboundProximityAlert {
+  type: 'proximity_alerts';
+  timestamp: string;
+  nodes: Array<{
+    id: string;
+    distance_meters: number;
+    latitude: number;
+    longitude: number;
+    status: 'online' | 'standby' | 'offline';
+    title?: string;
+    category?: string;
+    host?: string;
+    attendees_count?: number;
+    battery_pct?: number;
+  }>;
+}
+
+export const useProximitySocket = () => {
   const socketRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const setConnected = useProximityStore((s) => s.setConnected);
-  const setAlerts = useProximityStore((s) => s.setAlerts);
-  const myLocation = useProximityStore((s) => s.myLocation);
-  const activeRadiusMeters = useProximityStore((s) => s.activeRadiusMeters);
-  useEffect(() => {
-    let unmounted = false;
-    function connect() {
-      const authParam = apiKey ? `?apiKey=${encodeURIComponent(apiKey)}` : '';
-      const wsUrl = `${baseUrl}/${tenantId}/ws${authParam}`;
-      console.log(`[WS] Connecting to ${wsUrl}`);
-      const ws = new WebSocket(wsUrl);
-      socketRef.current = ws;
-      ws.onopen = () => {
-        if (!unmounted) {
-          console.log('[WS] Connected successfully');
-          setConnected(true);
-        }
-      };
-      ws.onmessage = (event) => {
-        try {
-          const packet: ProximityAlertPacket = JSON.parse(event.data);
-          if (packet.type === 'proximity_alerts') {
-            setAlerts(packet.alerts || []);
-          }
-        } catch (err) {
-          console.warn('[WS] Parse error:', err);
-        }
-      };
-      ws.onclose = () => {
-        if (!unmounted) {
-          console.log('[WS] Connection closed. Reconnecting in 3s...');
-          setConnected(false);
-          reconnectTimeoutRef.current = setTimeout(connect, 3000);
-        }
-      };
-      ws.onerror = (err) => {
-        console.warn('[WS] Error encountered:', err);
-      };
-    }
-    connect();
-    return () => {
-      unmounted = true;
-      if (reconnectTimeoutRef.current) clearTimeout(reconnectTimeoutRef.current);
-      if (socketRef.current) socketRef.current.close();
-    };
-  }, [baseUrl, tenantId, apiKey, setConnected, setAlerts]);
-  // Outbound telemetry push on location or radius changes
-  useEffect(() => {
-    if (
-      !socketRef.current ||
-      socketRef.current.readyState !== WebSocket.OPEN ||
-      !myLocation
-    ) {
+  const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const tenantId = useDiscoveryStore((state) => state.tenantId);
+  const deviceId = useDiscoveryStore((state) => state.deviceId);
+  const wsEndpoint = useDiscoveryStore((state) => state.wsEndpoint);
+  const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
+  const searchRadiusMeters = useDiscoveryStore((state) => state.searchRadiusMeters);
+  const batteryPct = useDiscoveryStore((state) => state.batteryPct);
+  const setSocketConnected = useDiscoveryStore((state) => state.setSocketConnected);
+
+  const sendLocationPing = useCallback(() => {
+    if (!socketRef.current || socketRef.current.readyState !== WebSocket.OPEN) {
       return;
     }
-    const payload = {
+
+    const payload: LocationPingPayload = {
       type: 'location_ping',
-      payload: {
-        userId,
-        latitude: myLocation.latitude,
-        longitude: myLocation.longitude,
-        radiusMeters: activeRadiusMeters,
-        timestamp: new Date().toISOString(),
-      },
+      device_id: deviceId,
+      latitude: selfCoordinates.latitude,
+      longitude: selfCoordinates.longitude,
+      radius_meters: searchRadiusMeters,
+      battery_pct: batteryPct,
+      status: 'online',
     };
+
     socketRef.current.send(JSON.stringify(payload));
-  }, [myLocation, activeRadiusMeters, userId]);
-}
+  }, [deviceId, selfCoordinates, searchRadiusMeters, batteryPct]);
+
+  const connect = useCallback(() => {
+    if (socketRef.current) {
+      socketRef.current.close();
+    }
+
+    const normalizedBase = wsEndpoint.endsWith('/') ? wsEndpoint.slice(0, -1) : wsEndpoint;
+    const socketUrl = `${normalizedBase}/${tenantId}/ws`;
+
+    const ws = new WebSocket(socketUrl);
+    socketRef.current = ws;
+
+    ws.onopen = () => {
+      setSocketConnected(true);
+      sendLocationPing();
+
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+      }
+      heartbeatTimerRef.current = setInterval(sendLocationPing, HEARTBEAT_INTERVAL_MS);
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const payload = JSON.parse(event.data);
+        if (payload.type === 'proximity_alerts' && Array.isArray(payload.nodes)) {
+          // Update store directly, bypassing intermediate state vars
+          useDiscoveryStore.getState().syncProximityNodes(payload.nodes, payload.timestamp);
+        }
+      } catch {
+        // Drop malformed frame silently to maintain frame-rate
+      }
+    };
+
+    ws.onclose = () => {
+      setSocketConnected(false);
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+      }
+      // Reconnect after delay
+      reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY_MS);
+    };
+
+    ws.onerror = () => {
+      ws.close();
+    };
+  }, [tenantId, wsEndpoint, setSocketConnected, sendLocationPing]);
+
+  // Transmit immediate update whenever coordinates shift (map pan recents, etc.)
+  useEffect(() => {
+    sendLocationPing();
+  }, [sendLocationPing]);
+
+  // Manage socket connection lifecycle
+  useEffect(() => {
+    connect();
+
+    return () => {
+      // Cleanup on unmount
+      if (heartbeatTimerRef.current) {
+        clearInterval(heartbeatTimerRef.current);
+      }
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+      if (socketRef.current) {
+        socketRef.current.close();
+      }
+    };
+  }, [connect]);
+
+  return {
+    reconnect: connect,
+    sendPing: sendLocationPing,
+  };
+};
