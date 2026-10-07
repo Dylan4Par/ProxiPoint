@@ -10,6 +10,16 @@ import {
 } from 'react-native';
 import { MAX_BEACON_CHANNELS, toggleChannel } from '../../lib/beaconDrop';
 import { isSameVerifiedQuery, type VerifiedAddress } from '../../lib/addressVerify';
+import {
+  MAX_DURATION_MINUTES,
+  MIN_DURATION_MINUTES,
+  clampDuration,
+  clampStart,
+  earliestStart,
+  formatDuration,
+  formatStartLabel,
+  type BeaconVisibility,
+} from '../../lib/beaconSchedule';
 import { readCurrentPosition, verifyAddressQuery, verifyCoordinates } from '../../services/addressVerify';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
@@ -20,6 +30,9 @@ export const DropPointSheet: React.FC = () => {
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   const dropBeacon = useDiscoveryStore((s) => s.dropBeacon);
   const setSelfCoordinates = useDiscoveryStore((s) => s.setSelfCoordinates);
+  const previewPin = useDiscoveryStore((s) => s.previewPin);
+  const placePreviewPin = useDiscoveryStore((s) => s.placePreviewPin);
+  const clearPreviewPin = useDiscoveryStore((s) => s.clearPreviewPin);
 
   const [place, setPlace] = useState('');
   const [channels, setChannels] = useState<string[]>([]);
@@ -29,6 +42,11 @@ export const DropPointSheet: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'checking' | 'verified'>('idle');
   const [error, setError] = useState('');
   const [locating, setLocating] = useState(false);
+  const [visibility, setVisibility] = useState<BeaconVisibility>('public');
+  const [startsAt, setStartsAt] = useState(() => earliestStart(new Date()));
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [scheduleNote, setScheduleNote] = useState('');
+  const [trackWidth, setTrackWidth] = useState(1);
   const requestId = useRef(0);
   const wasOpen = useRef(false);
 
@@ -46,6 +64,10 @@ export const DropPointSheet: React.FC = () => {
       setStatus('idle');
       setError('');
       setLocating(false);
+      setVisibility('public');
+      setStartsAt(earliestStart(new Date()));
+      setDurationMinutes(60);
+      setScheduleNote('');
       requestId.current += 1;
     }
     wasOpen.current = open;
@@ -108,6 +130,7 @@ export const DropPointSheet: React.FC = () => {
       };
       const next = result ?? fallback;
       setSelfCoordinates({ latitude: next.latitude, longitude: next.longitude });
+      placePreviewPin({ latitude: next.latitude, longitude: next.longitude });
       setAddress(next.label);
       setVerified({ ...next, query: next.label });
       setStatus('verified');
@@ -139,6 +162,27 @@ export const DropPointSheet: React.FC = () => {
     setStatus('idle');
     setError('');
     setLocating(false);
+    clearPreviewPin();
+  };
+
+  const changeStart = (deltaMinutes: number) => {
+    const next = clampStart(new Date(startsAt.getTime() + deltaMinutes * 60 * 1000), new Date());
+    setStartsAt(next.start);
+    if (next.limit === 'month') setScheduleNote('Scheduling stays within one month of now.');
+    else if (next.limit === 'past') setScheduleNote('The start time stays at the next open slot.');
+    else setScheduleNote('');
+  };
+
+  const changeDuration = (minutes: number) => {
+    const next = clampDuration(minutes);
+    setDurationMinutes(next.minutes);
+    setScheduleNote(next.limit === 'duration' ? 'Duration runs from 15 minutes to 24 hours, in 15 minute steps.' : '');
+  };
+
+  const setDurationFromTrack = (locationX: number) => {
+    const ratio = Math.min(1, Math.max(0, locationX / Math.max(trackWidth, 1)));
+    const raw = MIN_DURATION_MINUTES + ratio * (MAX_DURATION_MINUTES - MIN_DURATION_MINUTES);
+    changeDuration(raw);
   };
 
   const onDrop = () => {
@@ -149,13 +193,19 @@ export const DropPointSheet: React.FC = () => {
       addressLabel: verified.label,
       latitude: verified.latitude,
       longitude: verified.longitude,
+      visibility,
+      startsAt: startsAt.toISOString(),
+      durationMinutes,
     });
   };
+
+  const endsAt = new Date(startsAt.getTime() + durationMinutes * 60 * 1000);
+  const startLabel = formatStartLabel(startsAt, new Date());
 
   if (!open) return null;
 
   return (
-    <View style={styles.sheet}>
+    <View style={[styles.sheet, previewPin ? styles.sheetPeek : null]}>
       <View style={styles.grabber} />
       <View style={styles.titleRow}>
         <View style={styles.titleCopy}>
@@ -178,6 +228,26 @@ export const DropPointSheet: React.FC = () => {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator
       >
+        <View style={styles.visibilityTrack} accessibilityRole="tablist">
+          <View style={[styles.visibilityThumb, visibility === 'public' && styles.visibilityThumbPublic]} />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityState={{ selected: visibility === 'private' }}
+            style={styles.visibilityHalf}
+            onPress={() => setVisibility('private')}
+          >
+            <Text style={[styles.visibilityText, visibility === 'private' && styles.visibilityTextSelected]}>Private</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityState={{ selected: visibility === 'public' }}
+            style={styles.visibilityHalf}
+            onPress={() => setVisibility('public')}
+          >
+            <Text style={[styles.visibilityText, visibility === 'public' && styles.visibilityTextSelected]}>Public</Text>
+          </TouchableOpacity>
+        </View>
+
         <Text style={styles.subtitle}>
           Publish a live beacon at a verified address or your current position. It joins the map and opens in the card sheet.
         </Text>
@@ -258,7 +328,60 @@ export const DropPointSheet: React.FC = () => {
         {addressVerified && verified ? (
           <Text style={styles.verifiedText}>Verified · {verified.label}</Text>
         ) : null}
+        {previewPin ? (
+          <Text style={styles.verifiedText}>Pin placed on the map at your current position.</Text>
+        ) : null}
         {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <Text style={styles.fieldLabel}>STARTS</Text>
+        <View style={styles.stepperRow}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous day" style={styles.stepperBtn} onPress={() => changeStart(-24 * 60)}>
+            <Text style={styles.stepperBtnText}>− day</Text>
+          </TouchableOpacity>
+          <Text style={styles.stepperValue}>{startLabel}</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next day" style={styles.stepperBtn} onPress={() => changeStart(24 * 60)}>
+            <Text style={styles.stepperBtnText}>+ day</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={styles.stepperRow}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="15 minutes earlier" style={styles.stepperBtn} onPress={() => changeStart(-15)}>
+            <Text style={styles.stepperBtnText}>− 15m</Text>
+          </TouchableOpacity>
+          <Text style={styles.stepperHint}>15 min steps</Text>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="15 minutes later" style={styles.stepperBtn} onPress={() => changeStart(15)}>
+            <Text style={styles.stepperBtnText}>+ 15m</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.channelHeading}>
+          <Text style={styles.fieldLabel}>DURATION</Text>
+          <Text style={styles.channelCount}>{formatDuration(durationMinutes)}</Text>
+        </View>
+        <View style={styles.stepperRow}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Shorten duration" style={styles.stepperBtn} onPress={() => changeDuration(durationMinutes - 15)}>
+            <Text style={styles.stepperBtnText}>− 15m</Text>
+          </TouchableOpacity>
+          <View
+            accessibilityRole="adjustable"
+            accessibilityLabel="Duration"
+            style={styles.durationTrack}
+            onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
+            onStartShouldSetResponder={() => true}
+            onResponderRelease={(event) => setDurationFromTrack(event.nativeEvent.locationX)}
+          >
+            <View
+              style={[
+                styles.durationFill,
+                { width: `${((durationMinutes - MIN_DURATION_MINUTES) / (MAX_DURATION_MINUTES - MIN_DURATION_MINUTES)) * 100}%` },
+              ]}
+            />
+          </View>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Lengthen duration" style={styles.stepperBtn} onPress={() => changeDuration(durationMinutes + 15)}>
+            <Text style={styles.stepperBtnText}>+ 15m</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.stepperHint}>Ends {formatStartLabel(endsAt, new Date())}. Up to 24 hours, within one month.</Text>
+        {scheduleNote ? <Text style={styles.limitNote}>{scheduleNote}</Text> : null}
       </ScrollView>
 
       <TouchableOpacity
@@ -288,6 +411,101 @@ const styles = StyleSheet.create({
     borderColor: '#1e293b',
     zIndex: 30,
     paddingTop: 8,
+  },
+  sheetPeek: {
+    top: '50%',
+  },
+  visibilityTrack: {
+    marginTop: 14,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: '#0d1526',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    flexDirection: 'row',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  visibilityThumb: {
+    position: 'absolute',
+    top: 3,
+    bottom: 3,
+    left: 3,
+    width: '48%',
+    borderRadius: 18,
+    backgroundColor: '#22d3ee',
+  },
+  visibilityThumbPublic: {
+    left: '50%',
+  },
+  visibilityHalf: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  visibilityText: {
+    color: '#94a3b8',
+    fontSize: 14,
+    fontWeight: '800',
+  },
+  visibilityTextSelected: {
+    color: '#082f49',
+  },
+  stepperRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  stepperBtn: {
+    minWidth: 64,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#155e75',
+    backgroundColor: '#0b1524',
+    minHeight: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
+  stepperBtnText: {
+    color: '#67e8f9',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  stepperValue: {
+    flex: 1,
+    color: '#f8fafc',
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  stepperHint: {
+    flex: 1,
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 10,
+  },
+  durationTrack: {
+    flex: 1,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#0d1526',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  durationFill: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    backgroundColor: '#22d3ee',
+    borderRadius: 14,
   },
   grabber: {
     width: 42,

@@ -9,6 +9,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { presentAssignedTag } from '../../lib/beaconDrop';
+import { formatDuration, formatStartLabel } from '../../lib/beaconSchedule';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 
 const EXPANDED_HEIGHT = 360;
@@ -83,6 +84,15 @@ export const EventCardList: React.FC = () => {
         <Text style={styles.tagText}>{tagFor(item)}</Text>
         <Text style={styles.titleText}>{item.title}</Text>
         <Text style={styles.hostText} numberOfLines={2}>{item.venue}</Text>
+        {item.startsAt ? (
+          <Text style={styles.scheduleText} numberOfLines={1}>
+            {item.visibility === 'private' ? 'Private' : 'Public'}
+            {' · '}
+            {formatStartLabel(new Date(item.startsAt), new Date())}
+            {' · '}
+            {formatDuration(item.durationMinutes ?? 60)}
+          </Text>
+        ) : null}
 
         <View style={styles.statusRow}>
           <View style={styles.badgeRow}>
@@ -245,6 +255,13 @@ const styles = StyleSheet.create({
     color: '#64748b',
     fontSize: 11,
     marginTop: 2,
+    marginBottom: 4,
+  },
+  scheduleText: {
+    color: '#67e8f9',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 4,
     marginBottom: 8,
   },
   statusRow: {

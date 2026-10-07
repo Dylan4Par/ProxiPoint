@@ -30,6 +30,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
   const setViewportBounds = useDiscoveryStore((s) => s.setViewportBounds);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   const activeTab = useDiscoveryStore((s) => s.activeTab);
+  const previewPin = useDiscoveryStore((s) => s.previewPin);
 
   const nodeList = Object.values(nodes || {}).filter((node) => {
     if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
@@ -70,6 +71,20 @@ export const DiscoveryMapCanvas: React.FC = () => {
     currentPan.current = { x: nextX, y: nextY };
     calculateBounds(nextX, nextY);
   }, [selectedNodeId]);
+
+  useEffect(() => {
+    if (!previewPin) return;
+    const nextX = width / 2 - (previewPin.x - WORLD_OFFSET);
+    const nextY = CANVAS_HEIGHT / 2 - (previewPin.y - WORLD_OFFSET);
+    Animated.spring(pan, {
+      toValue: { x: nextX, y: nextY },
+      useNativeDriver: false,
+      friction: 7,
+      tension: 40,
+    }).start();
+    currentPan.current = { x: nextX, y: nextY };
+    calculateBounds(nextX, nextY);
+  }, [previewPin]);
 
   const handleRecenter = () => {
     Animated.spring(pan, {
@@ -130,6 +145,18 @@ export const DiscoveryMapCanvas: React.FC = () => {
         {/* Diagonal Arteries */}
         <View style={styles.roadDiagonal1} />
         <View style={styles.roadDiagonal2} />
+
+        {previewPin ? (
+          <View style={[styles.previewPin, { top: previewPin.y - 28, left: previewPin.x - 14 }]}>
+            <View style={styles.previewPinLabel}>
+              <Text style={styles.previewPinLabelText}>Here</Text>
+            </View>
+            <View style={styles.previewPinHead}>
+              <View style={styles.previewPinDot} />
+            </View>
+            <View style={styles.previewPinTip} />
+          </View>
+        ) : null}
 
         {/* User Beacon Reticle (Origin: 480, 480) */}
         <View style={styles.userBeaconContainer}>
@@ -255,6 +282,51 @@ const styles = StyleSheet.create({
     height: 800,
     backgroundColor: '#172554',
     transform: [{ rotate: '-40deg' }],
+  },
+  previewPin: {
+    position: 'absolute',
+    alignItems: 'center',
+    zIndex: 8,
+    width: 28,
+  },
+  previewPinLabel: {
+    backgroundColor: '#22d3ee',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
+  previewPinLabelText: {
+    color: '#082f49',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  previewPinHead: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#f97316',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewPinDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ffffff',
+  },
+  previewPinTip: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#f97316',
+    marginTop: -1,
   },
   userBeaconContainer: {
     position: 'absolute',

@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { assignedTags, eventMatchesMapFilter } from '../lib/beaconDrop';
+import { beaconWindowStatus, clampDuration, clampStart, type BeaconVisibility } from '../lib/beaconSchedule';
 import { calculateDistanceMeters } from '../lib/locationFilter';
 
 export interface InboundProximityNode {
@@ -34,6 +35,16 @@ export interface DiscoveryNode {
   batteryPct?: number;
   x: number;
   y: number;
+  visibility?: BeaconVisibility;
+  startsAt?: string;
+  durationMinutes?: number;
+}
+
+export interface PreviewPin {
+  latitude: number;
+  longitude: number;
+  x: number;
+  y: number;
 }
 
 export interface ViewportBounds {
@@ -61,6 +72,7 @@ export interface DiscoveryState {
   selectedTag: string;
   tags: string[];
   dropSheetOpen: boolean;
+  previewPin: PreviewPin | null;
 
   // Setters & Actions
   setSocketConnected: (connected: boolean) => void;
@@ -71,6 +83,8 @@ export interface DiscoveryState {
   setActiveTab: (tab: 'Nearby' | 'RSVPd') => void;
   setSelectedTag: (tag: string) => void;
   setDropSheetOpen: (open: boolean) => void;
+  placePreviewPin: (coords: { latitude: number; longitude: number }) => void;
+  clearPreviewPin: () => void;
   dropBeacon: (draft: DropBeaconDraft) => void;
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
@@ -108,6 +122,9 @@ export interface DropBeaconDraft {
   addressLabel: string;
   latitude: number;
   longitude: number;
+  visibility: BeaconVisibility;
+  startsAt: string;
+  durationMinutes: number;
 }
 const VENUE_POOL = [
   'Central Park Plaza',
@@ -219,6 +236,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   selectedTag: 'All',
   tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
   dropSheetOpen: false,
+  previewPin: null,
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
@@ -227,7 +245,23 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   setSelectedEventId: (id) => set({ selectedNodeId: id, selectedEventId: id }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
-  setDropSheetOpen: (dropSheetOpen) => set({ dropSheetOpen }),
+  setDropSheetOpen: (dropSheetOpen) =>
+    set(dropSheetOpen ? { dropSheetOpen } : { dropSheetOpen, previewPin: null }),
+  clearPreviewPin: () => set({ previewPin: null }),
+  placePreviewPin: (coords) =>
+    set((state) => {
+      if (!Number.isFinite(coords.latitude) || !Number.isFinite(coords.longitude)) return state;
+      const { latitude: selfLat, longitude: selfLon } = state.selfCoordinates;
+      let { x, y } = toCanvasCoordinates(coords.latitude, coords.longitude, selfLat, selfLon);
+      const distanceMeters = calculateDistanceMeters(selfLat, selfLon, coords.latitude, coords.longitude);
+      if (distanceMeters < 25) {
+        x += 36;
+        y -= 28;
+      }
+      return {
+        previewPin: { latitude: coords.latitude, longitude: coords.longitude, x, y },
+      };
+    }),
 
   dropBeacon: (draft) =>
     set((state) => {
@@ -247,6 +281,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         y -= 28;
       }
       const etaMinutes = Math.max(1, Math.round(distanceMeters / 80));
+      const now = new Date();
+      const scheduled = clampStart(new Date(draft.startsAt), now);
+      const duration = clampDuration(draft.durationMinutes);
+      const windowStatus = beaconWindowStatus(scheduled.start, now);
       const node: DiscoveryNode = {
         id,
         tag: tags[0],
@@ -256,8 +294,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         latitude: draft.latitude,
         longitude: draft.longitude,
         distanceMeters,
-        status: 'LIVE NOW',
-        statusColor: '#10b981',
+        status: windowStatus.status,
+        statusColor: windowStatus.statusColor,
         eta: distanceMeters > 1000 ? `${Math.max(1, Math.round(etaMinutes / 4))} min drive` : `${etaMinutes} min walk`,
         etaMode: distanceMeters > 1000 ? 'drive' : 'walk',
         attendeeCount: 1,
@@ -265,6 +303,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         radii: [250, 500],
         x,
         y,
+        visibility: draft.visibility === 'private' ? 'private' : 'public',
+        startsAt: scheduled.start.toISOString(),
+        durationMinutes: duration.minutes,
       };
 
       const selectedTag =
@@ -276,6 +317,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         selectedEventId: id,
         selectedTag,
         dropSheetOpen: false,
+        previewPin: null,
       };
     }),
 
