@@ -36,6 +36,9 @@ func main() {
 	mux.HandleFunc("/api/v1/tags/autocomplete", tags.HandleAutocomplete(tagSvc))
 	mux.HandleFunc("/api/v1/events", events.HandleCreate(assigner))
 	mux.HandleFunc("/api/v1/events/{id}", events.HandleByID(assigner))
+	adminTags := tags.NewAdminTagHandler(tagSvc)
+	mux.HandleFunc("/api/v1/admin/tags/duplicates", adminTags.DetectDuplicates)
+	mux.HandleFunc("/api/v1/admin/tags/merge", adminTags.Merge)
 
 	server := &http.Server{
 		Addr:              addr,
