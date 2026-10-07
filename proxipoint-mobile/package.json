@@ -8,7 +8,7 @@
     "web": "expo start --web",
     "build:android:dev": "expo run:android",
     "build:ios:dev": "expo run:ios",
-    "test": "tsx --test src/lib/*.test.ts",
+    "test": "tsx --test src/lib/*.test.ts src/stores/*.test.ts",
     "android": "expo run:android",
     "ios": "expo run:ios"
   },
@@ -34,6 +34,7 @@
     "react-native-screens": "~4.4.0",
     "react-native-svg": "^15.15.5",
     "react-native-web": "~0.19.13",
+    "react-native-webview": "13.12.5",
     "zustand": "^5.0.15"
   },
   "devDependencies": {
