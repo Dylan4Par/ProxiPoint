@@ -45,6 +45,9 @@ export const EventCardList: React.FC = () => {
       eta: '--',
       venue: 'Pan map to scan',
       isRsvpd: false,
+      startsAt: undefined,
+      durationMinutes: undefined,
+      visibility: undefined,
     };
 
   const animateDrawer = (toExpanded: boolean) => {
@@ -149,6 +152,15 @@ export const EventCardList: React.FC = () => {
             <Text numberOfLines={1} style={styles.collapsedTitle}>
               {selectedNode.title}
             </Text>
+            {selectedNode.startsAt ? (
+              <Text numberOfLines={1} style={styles.collapsedSchedule}>
+                {selectedNode.visibility === 'private' ? 'Private' : 'Public'}
+                {' · '}
+                {formatStartLabel(new Date(selectedNode.startsAt), new Date())}
+                {' · '}
+                {formatDuration(selectedNode.durationMinutes ?? 60)}
+              </Text>
+            ) : null}
           </View>
           <Text style={styles.chevronToggle}>{isExpanded ? '▾' : '▴'}</Text>
         </TouchableOpacity>
@@ -217,6 +229,12 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '700',
     marginTop: 1,
+  },
+  collapsedSchedule: {
+    color: '#67e8f9',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
   },
   chevronToggle: {
     color: '#94a3b8',

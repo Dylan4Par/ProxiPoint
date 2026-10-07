@@ -222,6 +222,7 @@ export const DropPointSheet: React.FC = () => {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.scrollWrap}>
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
@@ -343,6 +344,7 @@ export const DropPointSheet: React.FC = () => {
             <Text style={styles.stepperBtnText}>+ day</Text>
           </TouchableOpacity>
         </View>
+        {scheduleNote ? <Text style={styles.limitNote}>{scheduleNote}</Text> : null}
         <View style={styles.stepperRow}>
           <TouchableOpacity accessibilityRole="button" accessibilityLabel="15 minutes earlier" style={styles.stepperBtn} onPress={() => changeStart(-15)}>
             <Text style={styles.stepperBtnText}>− 15m</Text>
@@ -380,9 +382,9 @@ export const DropPointSheet: React.FC = () => {
             <Text style={styles.stepperBtnText}>+ 15m</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.stepperHint}>Ends {formatStartLabel(endsAt, new Date())}. Up to 24 hours, within one month.</Text>
-        {scheduleNote ? <Text style={styles.limitNote}>{scheduleNote}</Text> : null}
+        <Text style={styles.endsText}>Ends {formatStartLabel(endsAt, new Date())}. Up to 24 hours, within one month.</Text>
       </ScrollView>
+      </View>
 
       <TouchableOpacity
         accessibilityRole="button"
@@ -487,7 +489,13 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
-    marginBottom: 10,
+  },
+  endsText: {
+    color: '#64748b',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+    marginBottom: 12,
   },
   durationTrack: {
     flex: 1,
@@ -548,12 +556,17 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
   },
+  scrollWrap: {
+    flex: 1,
+    minHeight: 0,
+    overflow: 'hidden',
+  },
   scroll: {
     flex: 1,
   },
   scrollContent: {
     paddingHorizontal: 18,
-    paddingBottom: 16,
+    paddingBottom: 28,
   },
   subtitle: {
     color: '#64748b',
@@ -672,6 +685,8 @@ const styles = StyleSheet.create({
     minHeight: 48,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
+    zIndex: 2,
   },
   dropBtnDisabled: {
     opacity: 0.4,
