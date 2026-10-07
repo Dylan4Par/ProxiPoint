@@ -14,6 +14,24 @@ import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 const { width, height } = Dimensions.get('window');
 const CANVAS_HEIGHT = height * 0.52;
+const PAN_SLOP_PX = 4;
+
+function exceedsPanSlop(gestureState: { dx: number; dy: number }): boolean {
+  return Math.abs(gestureState.dx) > PAN_SLOP_PX || Math.abs(gestureState.dy) > PAN_SLOP_PX;
+}
+
+function responderTestId(event: { nativeEvent?: { target?: unknown } }): string {
+  const target = event.nativeEvent?.target as {
+    closest?: (selector: string) => { getAttribute?: (name: string) => string | null } | null;
+  } | null;
+  const tagged = target?.closest?.('[data-testid]');
+  return tagged?.getAttribute?.('data-testid') ?? '';
+}
+
+function isPinOrRecenterTarget(event: { nativeEvent?: { target?: unknown } }): boolean {
+  const testId = responderTestId(event);
+  return testId === 'discovery-recenter' || testId.startsWith('discovery-pin-');
+}
 
 // Beacon world coordinates inside 1400x1400 world
 const BEACON_WORLD_X = 480;
@@ -84,13 +102,24 @@ export const DiscoveryMapCanvas: React.FC = () => {
     moveTo(BEACON_WORLD_X, BEACON_WORLD_Y);
   };
 
+  const commitPan = (gestureState: { dx: number; dy: number }) => {
+    currentPan.current.x += gestureState.dx;
+    currentPan.current.y += gestureState.dy;
+    pan.flattenOffset();
+    calculateBounds(currentPan.current.x, currentPan.current.y);
+  };
+
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4;
-      },
-      onPanResponderGrant: () => {
+      // Empty map space claims the press immediately so the browser does not
+      // start a text selection. Pins and the recenter button keep their taps.
+      onStartShouldSetPanResponderCapture: (event) => !isPinOrRecenterTarget(event),
+      onMoveShouldSetPanResponder: (_, gestureState) => exceedsPanSlop(gestureState),
+      // A drag that begins on a pin or a radius ring still pans the map.
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => exceedsPanSlop(gestureState),
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (event) => {
+        event.preventDefault?.();
         pan.stopAnimation((value: { x: number; y: number }) => {
           if (Number.isFinite(value?.x) && Number.isFinite(value?.y)) {
             currentPan.current = { x: value.x, y: value.y };
@@ -108,10 +137,10 @@ export const DiscoveryMapCanvas: React.FC = () => {
         },
       }),
       onPanResponderRelease: (_, gestureState) => {
-        currentPan.current.x += gestureState.dx;
-        currentPan.current.y += gestureState.dy;
-        pan.flattenOffset();
-        calculateBounds(currentPan.current.x, currentPan.current.y);
+        commitPan(gestureState);
+      },
+      onPanResponderTerminate: (_, gestureState) => {
+        commitPan(gestureState);
       },
     })
   ).current;
@@ -130,6 +159,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
       {...panResponder.panHandlers}
     >
       <Animated.View
+        pointerEvents="none"
         style={[
           styles.interactiveWorld,
           {
@@ -177,33 +207,22 @@ export const DiscoveryMapCanvas: React.FC = () => {
           return (
             <View
               key={item.id}
-              pointerEvents="box-none"
+              pointerEvents="none"
               style={[
                 styles.nodeCluster,
                 { top: posY - 75, left: posX - 75 },
               ]}
             >
-              {/* Outer Tactical Ring */}
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.ring500m,
-                  isSelected && styles.ringSelected,
-                ]}
-              >
-                <Text style={styles.ringLabelTop}>500m</Text>
-              </View>
-
-              {/* Inner Tactical Ring */}
-              <View
-                pointerEvents="none"
-                style={[
-                  styles.ring250m,
-                  isSelected && styles.ringInnerSelected,
-                ]}
-              >
-                <Text style={styles.ringLabelInner}>250m</Text>
-              </View>
+              {isSelected ? (
+                <>
+                  <View style={[styles.ring500m, styles.ringSelected]}>
+                    <Text style={styles.ringLabelTop}>500m</Text>
+                  </View>
+                  <View style={[styles.ring250m, styles.ringInnerSelected]}>
+                    <Text style={styles.ringLabelInner}>250m</Text>
+                  </View>
+                </>
+              ) : null}
 
               <View pointerEvents="none" style={styles.pinTagPill}>
                 <Text style={styles.pinTagText}>{shownTag}</Text>
@@ -238,6 +257,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
 
       {/* Pure View-based Tactical Crosshair Recenter Button */}
       <TouchableOpacity
+        testID="discovery-recenter"
         style={styles.crosshairBtn}
         activeOpacity={0.7}
         onPress={handleRecenter}
@@ -258,6 +278,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a1120',
     overflow: 'hidden',
     position: 'relative',
+    userSelect: 'none',
+    touchAction: 'none',
   },
   interactiveWorld: {
     width: 1400,
@@ -435,6 +457,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 6,
     padding: 6,
+    pointerEvents: 'auto',
   },
   pinHead: {
     width: 22,
