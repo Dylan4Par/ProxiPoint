@@ -214,14 +214,9 @@ export const DiscoveryMapCanvas: React.FC = () => {
               ]}
             >
               {isSelected ? (
-                <>
-                  <View style={[styles.ring500m, styles.ringSelected]}>
-                    <Text style={styles.ringLabelTop}>500m</Text>
-                  </View>
-                  <View style={[styles.ring250m, styles.ringInnerSelected]}>
-                    <Text style={styles.ringLabelInner}>250m</Text>
-                  </View>
-                </>
+                <View style={[styles.ring500m, styles.ringSelected]}>
+                  <Text style={styles.ringLabelTop}>500m</Text>
+                </View>
               ) : null}
 
               <View pointerEvents="none" style={styles.pinTagPill}>
@@ -405,20 +400,6 @@ const styles = StyleSheet.create({
     borderColor: '#38bdf8',
     borderWidth: 1.5,
   },
-  ring250m: {
-    position: 'absolute',
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    borderWidth: 1.5,
-    borderColor: 'rgba(6, 182, 212, 0.65)',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  ringInnerSelected: {
-    borderColor: '#22d3ee',
-    borderWidth: 2,
-  },
   ringLabelTop: {
     color: '#22d3ee',
     fontSize: 8,
@@ -427,17 +408,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     marginTop: -6,
   },
-  ringLabelInner: {
-    color: '#38bdf8',
-    fontSize: 7,
-    fontWeight: '700',
-    backgroundColor: '#0a1120',
-    paddingHorizontal: 2,
-    marginTop: -5,
-  },
   pinTagPill: {
     position: 'absolute',
-    bottom: 14,
+    top: 90,
     alignSelf: 'center',
     backgroundColor: '#0a1120',
     borderRadius: 8,
