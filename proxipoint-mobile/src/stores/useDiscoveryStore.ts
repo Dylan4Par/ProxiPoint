@@ -70,6 +70,7 @@ export interface DiscoveryState {
   nodes: Record<string, DiscoveryNode>;
   selectedNodeId: string | null;
   selectedEventId: string;
+  mapFocusToken: number;
   activeTab: 'Nearby' | 'RSVPd';
   selectedTag: string;
   tags: string[];
@@ -236,6 +237,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   nodes: INITIAL_SEED_NODES,
   selectedNodeId: 'event-1',
   selectedEventId: 'event-1',
+  mapFocusToken: 0,
   activeTab: 'Nearby',
   selectedTag: 'All',
   tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
@@ -245,8 +247,18 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
   setViewportBounds: (bounds) => set({ viewportBounds: bounds }),
-  setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEventId: id || 'event-1' }),
-  setSelectedEventId: (id) => set({ selectedNodeId: id, selectedEventId: id }),
+  setSelectedNodeId: (id) =>
+    set((state) => ({
+      selectedNodeId: id,
+      selectedEventId: id || 'event-1',
+      mapFocusToken: state.mapFocusToken + 1,
+    })),
+  setSelectedEventId: (id) =>
+    set((state) => ({
+      selectedNodeId: id,
+      selectedEventId: id,
+      mapFocusToken: state.mapFocusToken + 1,
+    })),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
   setDropSheetOpen: (dropSheetOpen) =>
@@ -321,6 +333,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         nodes: { ...state.nodes, [id]: node },
         selectedNodeId: id,
         selectedEventId: id,
+        mapFocusToken: state.mapFocusToken + 1,
         selectedTag,
         dropSheetOpen: false,
         previewPin: null,

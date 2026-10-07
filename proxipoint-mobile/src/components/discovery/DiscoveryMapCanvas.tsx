@@ -9,6 +9,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { eventMatchesMapFilter, presentAssignedTag } from '../../lib/beaconDrop';
+import { focusOffsetForPoint } from '../../lib/discoveryFocus';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 const { width, height } = Dimensions.get('window');
@@ -26,6 +27,7 @@ const CENTER_OFFSET_Y = CANVAS_HEIGHT / 2 - (BEACON_WORLD_Y - WORLD_OFFSET);
 export const DiscoveryMapCanvas: React.FC = () => {
   const nodes = useDiscoveryStore((s) => s.nodes);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
+  const mapFocusToken = useDiscoveryStore((s) => s.mapFocusToken);
   const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
   const setViewportBounds = useDiscoveryStore((s) => s.setViewportBounds);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
@@ -39,13 +41,27 @@ export const DiscoveryMapCanvas: React.FC = () => {
 
   const pan = useRef(new Animated.ValueXY({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y })).current;
   const currentPan = useRef({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y });
+  const canvasSize = useRef({ width, height: CANVAS_HEIGHT });
 
   const calculateBounds = (offsetX: number, offsetY: number) => {
     const minX = -offsetX - 40;
-    const maxX = -offsetX + width + 40;
+    const maxX = -offsetX + canvasSize.current.width + 40;
     const minY = -offsetY - 40;
-    const maxY = -offsetY + CANVAS_HEIGHT + 40;
+    const maxY = -offsetY + canvasSize.current.height + 40;
     setViewportBounds({ minX, maxX, minY, maxY });
+  };
+
+  const moveTo = (pointX: number, pointY: number) => {
+    const offset = focusOffsetForPoint(pointX, pointY, canvasSize.current.width, canvasSize.current.height);
+    if (!offset) return;
+    Animated.spring(pan, {
+      toValue: offset,
+      useNativeDriver: false,
+      friction: 7,
+      tension: 40,
+    }).start();
+    currentPan.current = offset;
+    calculateBounds(offset.x, offset.y);
   };
 
   useEffect(() => {
@@ -59,42 +75,17 @@ export const DiscoveryMapCanvas: React.FC = () => {
       return;
     }
     const node = selectedNodeId ? useDiscoveryStore.getState().nodes[selectedNodeId] : null;
-    if (!node?.id.startsWith('beacon-')) return;
-    const nextX = width / 2 - (node.x - WORLD_OFFSET);
-    const nextY = CANVAS_HEIGHT / 2 - (node.y - WORLD_OFFSET);
-    Animated.spring(pan, {
-      toValue: { x: nextX, y: nextY },
-      useNativeDriver: false,
-      friction: 7,
-      tension: 40,
-    }).start();
-    currentPan.current = { x: nextX, y: nextY };
-    calculateBounds(nextX, nextY);
-  }, [selectedNodeId]);
+    if (!node) return;
+    moveTo(node.x, node.y);
+  }, [selectedNodeId, mapFocusToken]);
 
   useEffect(() => {
     if (!previewPin) return;
-    const nextX = width / 2 - (previewPin.x - WORLD_OFFSET);
-    const nextY = CANVAS_HEIGHT / 2 - (previewPin.y - WORLD_OFFSET);
-    Animated.spring(pan, {
-      toValue: { x: nextX, y: nextY },
-      useNativeDriver: false,
-      friction: 7,
-      tension: 40,
-    }).start();
-    currentPan.current = { x: nextX, y: nextY };
-    calculateBounds(nextX, nextY);
+    moveTo(previewPin.x, previewPin.y);
   }, [previewPin]);
 
   const handleRecenter = () => {
-    Animated.spring(pan, {
-      toValue: { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y },
-      useNativeDriver: false,
-      friction: 7,
-      tension: 40,
-    }).start();
-    currentPan.current = { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y };
-    calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
+    moveTo(BEACON_WORLD_X, BEACON_WORLD_Y);
   };
 
   const panResponder = useRef(
@@ -125,7 +116,17 @@ export const DiscoveryMapCanvas: React.FC = () => {
   ).current;
 
   return (
-    <View style={styles.canvasContainer} {...panResponder.panHandlers}>
+    <View
+      testID="discovery-map"
+      style={styles.canvasContainer}
+      onLayout={(event) => {
+        const { width: layoutWidth, height: layoutHeight } = event.nativeEvent.layout;
+        if (layoutWidth > 0 && layoutHeight > 0) {
+          canvasSize.current = { width: layoutWidth, height: layoutHeight };
+        }
+      }}
+      {...panResponder.panHandlers}
+    >
       <Animated.View
         style={[
           styles.interactiveWorld,
@@ -205,6 +206,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
 
               {/* Center Pin Marker */}
               <TouchableOpacity
+                testID={`discovery-pin-${item.id}`}
                 activeOpacity={0.8}
                 onPress={() => setSelectedNodeId(item.id)}
                 style={styles.pinWrapper}
