@@ -2,7 +2,7 @@ import React from 'react';
 import { StyleSheet, StatusBar, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProximitySocket } from '../hooks/useProximitySocket';
-import { DiscoveryMapCanvas } from '../components/discovery/DiscoveryMapCanvas';
+import { DiscoveryLeafletMap } from '../components/discovery/DiscoveryLeafletMap';
 import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
 import { EventCardList } from '../components/discovery/EventCardList';
 import { BottomNavBar } from '../components/discovery/BottomNavBar';
@@ -18,7 +18,7 @@ export const DiscoverScreen: React.FC = () => {
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
       <View style={styles.stage}>
         <View style={styles.mapLayer}>
-          <DiscoveryMapCanvas />
+          <DiscoveryLeafletMap />
         </View>
         <View style={styles.chrome} pointerEvents="box-none">
           <View

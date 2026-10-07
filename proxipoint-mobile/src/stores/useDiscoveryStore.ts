@@ -39,6 +39,10 @@ export interface ViewportBounds {
   maxX: number;
   minY: number;
   maxY: number;
+  south?: number;
+  north?: number;
+  west?: number;
+  east?: number;
 }
 
 export interface DropBeaconDraft {
@@ -127,11 +131,11 @@ const VENUE_POOL = [
   'Boulder Creek Pavilion',
 ];
 
-const DEFAULT_SELF = { latitude: 40.061708, longitude: -105.038292 };
+const DEFAULT_SELF = { latitude: 40.0149, longitude: -105.2778 };
 
-// Three downtown beacons share one geocode, the same way Pearl Street pins
+// Three Pearl Street beacons share one geocode, the same way downtown pins
 // collapse onto a single coordinate in the live feed.
-const DOWNTOWN_CLUSTER = { latitude: 40.0648, longitude: -105.036 };
+const DOWNTOWN_CLUSTER = { latitude: 40.0176, longitude: -105.2793 };
 
 let beaconSeq = 0;
 
@@ -159,6 +163,24 @@ export function etaForDistance(distanceMeters: number): { eta: string; etaMode: 
   return { eta: `${etaMinutes} min walk`, etaMode: 'walk' };
 }
 
+export function nodeInsideViewport(node: DiscoveryNode, bounds: ViewportBounds): boolean {
+  const { south, north, west, east } = bounds;
+  if (south != null && north != null && west != null && east != null) {
+    return (
+      node.latitude >= south &&
+      node.latitude <= north &&
+      node.longitude >= west &&
+      node.longitude <= east
+    );
+  }
+  return (
+    node.x >= bounds.minX &&
+    node.x <= bounds.maxX &&
+    node.y >= bounds.minY &&
+    node.y <= bounds.maxY
+  );
+}
+
 export function filterVisibleNodes(
   nodes: DiscoveryNode[],
   viewportBounds: ViewportBounds,
@@ -166,12 +188,7 @@ export function filterVisibleNodes(
   selectedTag: string,
 ): DiscoveryNode[] {
   return nodes.filter((node) => {
-    const inBounds =
-      node.x >= viewportBounds.minX &&
-      node.x <= viewportBounds.maxX &&
-      node.y >= viewportBounds.minY &&
-      node.y <= viewportBounds.maxY;
-    if (!inBounds) return false;
+    if (!nodeInsideViewport(node, viewportBounds)) return false;
     if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
     if (selectedTag !== 'All' && node.tag !== selectedTag) return false;
     return true;
@@ -204,135 +221,111 @@ const enrichNodeMetadata = (rawId: string, distanceMeters: number) => {
   };
 };
 
-// Seed initial fallback nodes so the UI displays immediately prior to WebSocket incoming feed
+function placedSeed(
+  node: Omit<DiscoveryNode, 'x' | 'y' | 'distanceMeters' | 'eta' | 'etaMode'>,
+): DiscoveryNode {
+  const distanceMeters = Math.round(
+    distanceMetersBetween(
+      DEFAULT_SELF.latitude,
+      DEFAULT_SELF.longitude,
+      node.latitude,
+      node.longitude,
+    ),
+  );
+  const { x, y } = toCanvasCoordinates(
+    node.latitude,
+    node.longitude,
+    DEFAULT_SELF.latitude,
+    DEFAULT_SELF.longitude,
+  );
+  const eta = etaForDistance(distanceMeters);
+  return { ...node, distanceMeters, x, y, eta: eta.eta, etaMode: eta.etaMode };
+}
+
+// Seed initial fallback nodes so the UI displays immediately prior to WebSocket incoming feed.
+// Coordinates are real downtown Boulder places so the free basemap lines up with the labels.
 const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
-  'event-1': {
+  'event-1': placedSeed({
     id: 'event-1',
     tag: '#LiveMusic',
     title: 'The Midnight Owls • Live at The Rusty Anchor',
-    venue: 'Title, Host',
-    latitude: 40.0632,
-    longitude: -105.0365,
-    distanceMeters: 210,
+    venue: 'Walnut Street',
+    latitude: 40.0163,
+    longitude: -105.2764,
     status: 'LIVE NOW',
     statusColor: '#10b981',
-    eta: '5 min walk',
-    etaMode: 'walk',
     attendeeCount: 45,
     isRsvpd: true,
     radii: [250, 500],
-    x: 180,
-    y: 220,
-  },
-  'event-2': {
+  }),
+  'event-2': placedSeed({
     id: 'event-2',
     tag: '#FoodTrucks',
     title: 'Taco Tuesday Truck Rally • Central Park Plaza',
-    venue: 'Central Park Plaza',
-    latitude: 40.0645,
-    longitude: -105.041,
-    distanceMeters: 430,
+    venue: 'Central Park',
+    latitude: 40.0186,
+    longitude: -105.2814,
     status: 'Starts in 15m',
     statusColor: '#38bdf8',
-    eta: '12+ here',
-    etaMode: 'walk',
     attendeeCount: 12,
     isRsvpd: true,
     radii: [250, 500],
-    x: 420,
-    y: 190,
-  },
-  'event-3': {
+  }),
+  'event-3': placedSeed({
     id: 'event-3',
     tag: '#TechMeetup',
     title: 'Go & Kotlin Devs • Monthly Social • Code & Coffee',
     venue: 'Downtown Tech Lab',
-    latitude: 40.071,
-    longitude: -105.032,
-    distanceMeters: 1200,
+    latitude: 40.0204,
+    longitude: -105.2708,
     status: 'Tomorrow 18:00',
     statusColor: '#94a3b8',
-    eta: '12 min drive',
-    etaMode: 'drive',
     attendeeCount: 38,
     isRsvpd: false,
     radii: [500, 1000],
-    x: 300,
-    y: 480,
-  },
+  }),
 };
 
-const downtownPoint = toCanvasCoordinates(
-  DOWNTOWN_CLUSTER.latitude,
-  DOWNTOWN_CLUSTER.longitude,
-  DEFAULT_SELF.latitude,
-  DEFAULT_SELF.longitude,
-);
-const downtownDistance = Math.round(
-  distanceMetersBetween(
-    DEFAULT_SELF.latitude,
-    DEFAULT_SELF.longitude,
-    DOWNTOWN_CLUSTER.latitude,
-    DOWNTOWN_CLUSTER.longitude,
-  ),
-);
-const downtownEta = etaForDistance(downtownDistance);
-
 const DOWNTOWN_SEED_NODES: Record<string, DiscoveryNode> = {
-  'downtown-1': {
+  'downtown-1': placedSeed({
     id: 'downtown-1',
     tag: '#LiveMusic',
     title: 'Pearl Street Acoustic Hour',
     venue: 'Pearl Street Mall',
     latitude: DOWNTOWN_CLUSTER.latitude,
     longitude: DOWNTOWN_CLUSTER.longitude,
-    distanceMeters: downtownDistance,
     status: 'LIVE NOW',
     statusColor: '#10b981',
-    eta: downtownEta.eta,
-    etaMode: downtownEta.etaMode,
     attendeeCount: 64,
     isRsvpd: false,
     radii: [250, 500],
-    x: downtownPoint.x,
-    y: downtownPoint.y,
-  },
-  'downtown-2': {
+  }),
+  'downtown-2': placedSeed({
     id: 'downtown-2',
     tag: '#FoodTrucks',
     title: 'Boulder Farmers Market',
     venue: 'Pearl Street Mall',
     latitude: DOWNTOWN_CLUSTER.latitude,
     longitude: DOWNTOWN_CLUSTER.longitude,
-    distanceMeters: downtownDistance,
     status: 'LIVE NOW',
     statusColor: '#10b981',
-    eta: downtownEta.eta,
-    etaMode: downtownEta.etaMode,
     attendeeCount: 28,
     isRsvpd: false,
     radii: [250, 500],
-    x: downtownPoint.x,
-    y: downtownPoint.y,
-  },
-  'downtown-3': {
+  }),
+  'downtown-3': placedSeed({
     id: 'downtown-3',
     tag: '#ArtWalk',
     title: 'Bandshell Pickup Soccer',
     venue: 'Pearl Street Mall',
     latitude: DOWNTOWN_CLUSTER.latitude,
     longitude: DOWNTOWN_CLUSTER.longitude,
-    distanceMeters: downtownDistance,
     status: 'Starts in 20m',
     statusColor: '#38bdf8',
-    eta: downtownEta.eta,
-    etaMode: downtownEta.etaMode,
     attendeeCount: 16,
     isRsvpd: true,
     radii: [250, 500],
-    x: downtownPoint.x,
-    y: downtownPoint.y,
-  },
+  }),
 };
 
 Object.assign(INITIAL_SEED_NODES, DOWNTOWN_SEED_NODES);
@@ -348,7 +341,16 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   isSocketConnected: false,
   lastAlertTimestamp: null,
 
-  viewportBounds: { minX: 0, maxX: 1400, minY: 0, maxY: 1400 },
+  viewportBounds: {
+    minX: 0,
+    maxX: 1400,
+    minY: 0,
+    maxY: 1400,
+    south: 40.005,
+    west: -105.295,
+    north: 40.032,
+    east: -105.26,
+  },
   nodes: INITIAL_SEED_NODES,
   selectedNodeId: 'downtown-1',
   selectedEventId: 'downtown-1',
