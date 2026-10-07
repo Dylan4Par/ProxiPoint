@@ -222,7 +222,8 @@ export const DropPointSheet: React.FC = () => {
           placeholder="123 Pearl St, Boulder, CO"
           placeholderTextColor="#475569"
           autoCapitalize="words"
-          style={styles.input}
+          multiline
+          style={[styles.input, styles.addressInput]}
         />
 
         <View style={styles.actionRow}>
@@ -359,6 +360,10 @@ const styles = StyleSheet.create({
     fontSize: 15,
     marginBottom: 16,
   },
+  addressInput: {
+    minHeight: 72,
+    textAlignVertical: 'top',
+  },
   channelHeading: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -431,6 +436,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
     lineHeight: 18,
     marginBottom: 8,
+    width: '100%',
   },
   errorText: {
     color: '#fca5a5',
