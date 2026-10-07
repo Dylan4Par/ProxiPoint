@@ -240,6 +240,7 @@ export const DiscoveryLeafletMap: React.FC = () => {
         });
         mapRef.current = map;
         map.on('load', () => {
+          map.resize();
           map.addSource('ring', { type: 'geojson', data: EMPTY });
           map.addLayer({
             id: 'ring',

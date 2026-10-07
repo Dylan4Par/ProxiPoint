@@ -6,6 +6,7 @@ import {
 } from './freeBasemap';
 
 export const DISCOVERY_PIN_CSS = `
+.maplibregl-map { position: absolute !important; top: 0; right: 0; bottom: 0; left: 0; width: 100% !important; height: 100% !important; }
 .pp-marker { position: relative; width: 22px; height: 28px; cursor: pointer; }
 .pp-head { width: 18px; height: 18px; margin: 0 auto; border-radius: 9px; background: #06b6d4; border: 2px solid #e0f2fe; box-shadow: 0 0 0 4px rgba(6,182,212,0.25); }
 .pp-marker.pp-selected .pp-head { background: #38bdf8; border-color: #fff; transform: scale(1.12); }
@@ -18,6 +19,7 @@ export const DISCOVERY_PIN_CSS = `
 .pp-tip-left { right: 100%; top: 0; margin-right: 6px; }
 .pp-tip-right { left: 100%; top: 0; margin-left: 6px; }
 .maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { transition: bottom 160ms ease; }
+.maplibregl-ctrl-bottom-right { right: 62px !important; }
 .maplibregl-ctrl-attrib { background: rgba(8,15,29,0.82); }
 .maplibregl-ctrl-attrib a { color: #7dd3fc; }
 `;
