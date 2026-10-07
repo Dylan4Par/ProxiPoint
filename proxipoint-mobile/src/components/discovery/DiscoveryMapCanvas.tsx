@@ -8,6 +8,7 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
+import { eventMatchesMapFilter, presentAssignedTag } from '../../lib/beaconDrop';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 const { width, height } = Dimensions.get('window');
@@ -27,8 +28,13 @@ export const DiscoveryMapCanvas: React.FC = () => {
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
   const setViewportBounds = useDiscoveryStore((s) => s.setViewportBounds);
+  const selectedTag = useDiscoveryStore((s) => s.selectedTag);
+  const activeTab = useDiscoveryStore((s) => s.activeTab);
 
-  const nodeList = Object.values(nodes || {});
+  const nodeList = Object.values(nodes || {}).filter((node) => {
+    if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
+    return eventMatchesMapFilter(node.tags, selectedTag, node.tag);
+  });
 
   const pan = useRef(new Animated.ValueXY({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y })).current;
   const currentPan = useRef({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y });
@@ -116,6 +122,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
           const isSelected = item.id === selectedNodeId;
           const posX = item.x ?? 480;
           const posY = item.y ?? 480;
+          const shownTag = presentAssignedTag(item.tags, selectedTag, item.tag);
 
           return (
             <View
@@ -143,6 +150,10 @@ export const DiscoveryMapCanvas: React.FC = () => {
                 ]}
               >
                 <Text style={styles.ringLabelInner}>250m</Text>
+              </View>
+
+              <View style={styles.pinTagPill}>
+                <Text style={styles.pinTagText}>{shownTag}</Text>
               </View>
 
               {/* Center Pin Marker */}
@@ -302,6 +313,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a1120',
     paddingHorizontal: 2,
     marginTop: -5,
+  },
+  pinTagPill: {
+    position: 'absolute',
+    bottom: 14,
+    alignSelf: 'center',
+    backgroundColor: '#0a1120',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.45)',
+    zIndex: 7,
+  },
+  pinTagText: {
+    color: '#67e8f9',
+    fontSize: 9,
+    fontWeight: '800',
   },
   pinWrapper: {
     alignItems: 'center',

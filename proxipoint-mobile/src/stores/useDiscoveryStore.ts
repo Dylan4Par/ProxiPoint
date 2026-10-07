@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { assignedTags, eventMatchesMapFilter } from '../lib/beaconDrop';
+import { calculateDistanceMeters } from '../lib/locationFilter';
 
 export interface InboundProximityNode {
   id: string;
@@ -16,6 +18,7 @@ export interface InboundProximityNode {
 export interface DiscoveryNode {
   id: string;
   tag: string;
+  tags: string[];
   title: string;
   venue: string;
   latitude: number;
@@ -57,6 +60,7 @@ export interface DiscoveryState {
   activeTab: 'Nearby' | 'RSVPd';
   selectedTag: string;
   tags: string[];
+  dropSheetOpen: boolean;
 
   // Setters & Actions
   setSocketConnected: (connected: boolean) => void;
@@ -66,6 +70,8 @@ export interface DiscoveryState {
   setSelectedEventId: (id: string) => void;
   setActiveTab: (tab: 'Nearby' | 'RSVPd') => void;
   setSelectedTag: (tag: string) => void;
+  setDropSheetOpen: (open: boolean) => void;
+  dropBeacon: (draft: DropBeaconDraft) => void;
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
   toggleRsvp: (id: string) => void;
@@ -95,6 +101,14 @@ const toCanvasCoordinates = (
 };
 
 const TAG_POOL = ['#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'];
+
+export interface DropBeaconDraft {
+  place: string;
+  tags: string[];
+  addressLabel: string;
+  latitude: number;
+  longitude: number;
+}
 const VENUE_POOL = [
   'Central Park Plaza',
   'The Rusty Anchor',
@@ -130,6 +144,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   'event-1': {
     id: 'event-1',
     tag: '#LiveMusic',
+    tags: ['#LiveMusic', '#FoodTrucks', '#ArtWalk'],
     title: 'The Midnight Owls • Live at The Rusty Anchor',
     venue: 'Title, Host',
     latitude: 40.0632,
@@ -148,6 +163,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   'event-2': {
     id: 'event-2',
     tag: '#FoodTrucks',
+    tags: ['#FoodTrucks', '#Pickleball'],
     title: 'Taco Tuesday Truck Rally • Central Park Plaza',
     venue: 'Central Park Plaza',
     latitude: 40.0645,
@@ -166,6 +182,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   'event-3': {
     id: 'event-3',
     tag: '#TechMeetup',
+    tags: ['#TechMeetup'],
     title: 'Go & Kotlin Devs • Monthly Social • Code & Coffee',
     venue: 'Downtown Tech Lab',
     latitude: 40.071,
@@ -201,6 +218,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   activeTab: 'Nearby',
   selectedTag: 'All',
   tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
+  dropSheetOpen: false,
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
@@ -209,6 +227,57 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   setSelectedEventId: (id) => set({ selectedNodeId: id, selectedEventId: id }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
+  setDropSheetOpen: (dropSheetOpen) => set({ dropSheetOpen }),
+
+  dropBeacon: (draft) =>
+    set((state) => {
+      const tags = assignedTags(draft.tags);
+      const place = draft.place.trim();
+      if (!place || tags.length === 0) return state;
+      if (!Number.isFinite(draft.latitude) || !Number.isFinite(draft.longitude)) return state;
+
+      const id = `beacon-${Date.now()}`;
+      const { latitude: selfLat, longitude: selfLon } = state.selfCoordinates;
+      const distanceMeters = Math.round(
+        calculateDistanceMeters(selfLat, selfLon, draft.latitude, draft.longitude),
+      );
+      let { x, y } = toCanvasCoordinates(draft.latitude, draft.longitude, selfLat, selfLon);
+      if (distanceMeters < 25) {
+        x += 36;
+        y -= 28;
+      }
+      const etaMinutes = Math.max(1, Math.round(distanceMeters / 80));
+      const node: DiscoveryNode = {
+        id,
+        tag: tags[0],
+        tags,
+        title: place,
+        venue: draft.addressLabel.trim() || place,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        distanceMeters,
+        status: 'LIVE NOW',
+        statusColor: '#10b981',
+        eta: distanceMeters > 1000 ? `${Math.max(1, Math.round(etaMinutes / 4))} min drive` : `${etaMinutes} min walk`,
+        etaMode: distanceMeters > 1000 ? 'drive' : 'walk',
+        attendeeCount: 1,
+        isRsvpd: false,
+        radii: [250, 500],
+        x,
+        y,
+      };
+
+      const selectedTag =
+        state.selectedTag === 'All' || tags.includes(state.selectedTag) ? state.selectedTag : tags[0];
+
+      return {
+        nodes: { ...state.nodes, [id]: node },
+        selectedNodeId: id,
+        selectedEventId: id,
+        selectedTag,
+        dropSheetOpen: false,
+      };
+    }),
 
   addTag: (tag) => {
     const cleanTag = tag.trim().startsWith('#') ? tag.trim() : `#${tag.trim()}`;
@@ -250,6 +319,13 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         const existing = state.nodes[node.id];
         const { x, y } = toCanvasCoordinates(node.latitude, node.longitude, selfLat, selfLon);
         const meta = enrichNodeMetadata(node.id, node.distance_meters);
+        const resolvedTag = node.category
+          ? `#${node.category.replace('#', '')}`
+          : existing?.tag || meta.tag;
+        const tags =
+          existing?.id.startsWith('beacon-') && existing.tags.length > 0
+            ? assignedTags(existing.tags, existing.tag)
+            : assignedTags([resolvedTag], resolvedTag);
 
         nextNodes[node.id] = {
           id: node.id,
@@ -260,7 +336,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           statusColor: meta.statusColor,
           batteryPct: node.battery_pct,
           title: node.title || existing?.title || meta.title,
-          tag: node.category ? `#${node.category.replace('#', '')}` : existing?.tag || meta.tag,
+          tag: tags[0],
+          tags,
           venue: node.host || existing?.venue || meta.venue,
           attendeeCount: node.attendees_count ?? existing?.attendeeCount ?? meta.attendeeCount,
           eta: meta.eta,
@@ -270,6 +347,12 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           x,
           y,
         };
+      });
+
+      Object.entries(state.nodes).forEach(([id, node]) => {
+        if (id.startsWith('beacon-') && !nextNodes[id]) {
+          nextNodes[id] = node;
+        }
       });
 
       const nodeKeys = Object.keys(nextNodes);
@@ -287,18 +370,16 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     }),
 
   getVisibleNodes: () => {
-    const { nodes, viewportBounds, activeTab, selectedTag } = get();
+    const { nodes, viewportBounds, activeTab, selectedTag, selectedNodeId } = get();
     return Object.values(nodes).filter((node) => {
       const inBounds =
         node.x >= viewportBounds.minX &&
         node.x <= viewportBounds.maxX &&
         node.y >= viewportBounds.minY &&
         node.y <= viewportBounds.maxY;
-      if (!inBounds) return false;
-
+      if (!inBounds && node.id !== selectedNodeId) return false;
       if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
-      if (selectedTag !== 'All' && node.tag !== selectedTag) return false;
-
+      if (!eventMatchesMapFilter(node.tags, selectedTag, node.tag)) return false;
       return true;
     });
   },

@@ -1,11 +1,19 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 export const BottomNavBar: React.FC = () => {
+  const dropSheetOpen = useDiscoveryStore((s) => s.dropSheetOpen);
+  const setDropSheetOpen = useDiscoveryStore((s) => s.setDropSheetOpen);
+
   return (
     <View style={styles.navWrapper}>
       {/* 1. Discover Button with Scaled Compass */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        onPress={() => setDropSheetOpen(false)}
+      >
         <View style={styles.iconContainer}>
           <View style={styles.compassBadge}>
             <View style={styles.compassNeedleWrap}>
@@ -15,11 +23,15 @@ export const BottomNavBar: React.FC = () => {
             </View>
           </View>
         </View>
-        <Text style={[styles.navLabel, styles.navLabelActive]}>Discover</Text>
+        <Text style={[styles.navLabel, !dropSheetOpen && styles.navLabelActive]}>Discover</Text>
       </TouchableOpacity>
 
       {/* 2. Drop Point Button with Matched 34px Badge */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        onPress={() => setDropSheetOpen(true)}
+      >
         <View style={styles.iconContainer}>
           <View style={styles.dropPointBadge}>
             <View style={styles.pinHead}>
@@ -28,7 +40,7 @@ export const BottomNavBar: React.FC = () => {
             <View style={styles.pinTip} />
           </View>
         </View>
-        <Text style={styles.navLabel}>Drop Point</Text>
+        <Text style={[styles.navLabel, dropSheetOpen && styles.navLabelActive]}>Drop Point</Text>
       </TouchableOpacity>
 
       {/* 3. Activity Button with Scaled Bell Icon */}

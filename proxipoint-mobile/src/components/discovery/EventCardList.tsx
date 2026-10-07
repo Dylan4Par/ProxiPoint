@@ -8,6 +8,7 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
+import { presentAssignedTag } from '../../lib/beaconDrop';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 
 const EXPANDED_HEIGHT = 360;
@@ -18,8 +19,14 @@ export const EventCardList: React.FC = () => {
   const toggleRsvp = useDiscoveryStore((s) => s.toggleRsvp);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
+  const selectedTag = useDiscoveryStore((s) => s.selectedTag);
+  useDiscoveryStore((s) => s.nodes);
+  useDiscoveryStore((s) => s.activeTab);
+  useDiscoveryStore((s) => s.viewportBounds);
 
   const visibleNodes = getVisibleNodes();
+  const tagFor = (node: { tags?: string[]; tag?: string }) =>
+    presentAssignedTag(node.tags, selectedTag, node.tag ?? '');
 
   const [isExpanded, setIsExpanded] = useState(true);
   const animatedHeight = useRef(new Animated.Value(EXPANDED_HEIGHT)).current;
@@ -29,6 +36,7 @@ export const EventCardList: React.FC = () => {
     visibleNodes[0] || {
       id: 'none',
       tag: '#Perimeter',
+      tags: ['#Perimeter'],
       title: 'No viewable nodes in sector',
       distanceMeters: 0,
       attendeeCount: 0,
@@ -72,9 +80,9 @@ export const EventCardList: React.FC = () => {
         onPress={() => setSelectedNodeId(item.id)}
         style={[styles.card, isSelected && styles.cardSelected]}
       >
-        <Text style={styles.tagText}>{item.tag}</Text>
+        <Text style={styles.tagText}>{tagFor(item)}</Text>
         <Text style={styles.titleText}>{item.title}</Text>
-        <Text style={styles.hostText}>{item.venue}</Text>
+        <Text style={styles.hostText} numberOfLines={2}>{item.venue}</Text>
 
         <View style={styles.statusRow}>
           <View style={styles.badgeRow}>
@@ -127,7 +135,7 @@ export const EventCardList: React.FC = () => {
           style={styles.collapsedHeaderRow}
         >
           <View style={styles.collapsedMeta}>
-            <Text style={styles.collapsedTag}>{selectedNode.tag}</Text>
+            <Text style={styles.collapsedTag}>{tagFor(selectedNode)}</Text>
             <Text numberOfLines={1} style={styles.collapsedTitle}>
               {selectedNode.title}
             </Text>
