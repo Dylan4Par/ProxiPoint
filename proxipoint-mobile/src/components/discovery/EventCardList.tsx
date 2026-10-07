@@ -395,11 +395,11 @@ function createCardStyles(c: AppearancePalette) {
   rsvpBtn: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 46,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+    minWidth: 62,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
     borderWidth: 1.5,
-    borderRadius: 8,
+    borderRadius: 10,
     borderColor: c.textMuted,
   },
   rsvpBtnActive: {
@@ -407,7 +407,8 @@ function createCardStyles(c: AppearancePalette) {
   },
   rsvpIcon: {
     color: c.textMuted,
-    fontSize: 14,
+    fontSize: 22,
+    lineHeight: 24,
     fontWeight: '700',
   },
   rsvpIconActive: {
@@ -415,7 +416,8 @@ function createCardStyles(c: AppearancePalette) {
   },
   rsvpLabel: {
     color: c.textDim,
-    fontSize: 9,
+    fontSize: 13,
+    lineHeight: 16,
     fontWeight: '700',
   },
   rsvpLabelActive: {
