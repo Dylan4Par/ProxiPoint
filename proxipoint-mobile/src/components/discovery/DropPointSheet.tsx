@@ -19,6 +19,7 @@ export const DropPointSheet: React.FC = () => {
   const tags = useDiscoveryStore((s) => s.tags);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   const dropBeacon = useDiscoveryStore((s) => s.dropBeacon);
+  const setSelfCoordinates = useDiscoveryStore((s) => s.setSelfCoordinates);
 
   const [place, setPlace] = useState('');
   const [channels, setChannels] = useState<string[]>([]);
@@ -106,6 +107,7 @@ export const DropPointSheet: React.FC = () => {
         longitude: coords.longitude,
       };
       const next = result ?? fallback;
+      setSelfCoordinates({ latitude: next.latitude, longitude: next.longitude });
       setAddress(next.label);
       setVerified({ ...next, query: next.label });
       setStatus('verified');
