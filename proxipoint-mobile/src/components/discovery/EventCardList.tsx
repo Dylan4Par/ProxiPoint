@@ -115,6 +115,11 @@ export const EventCardList: React.FC = () => {
     radii: [],
     x: 0,
     y: 0,
+    summary: 'Pan the map to bring another event into the frame.',
+    url: 'https://boulderdowntown.com/events',
+    pictures: [],
+    startsAt: '2026-10-07T23:00:00.000Z',
+    endsAt: '2026-10-08T01:00:00.000Z',
   };
 
   const selectedNode =

@@ -7,6 +7,7 @@ import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
 import { EventCardList } from '../components/discovery/EventCardList';
 import { BottomNavBar } from '../components/discovery/BottomNavBar';
 import { DropPointSheet } from '../components/discovery/DropPointSheet';
+import { EventDetailScreen } from '../components/discovery/EventDetailScreen';
 import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 
 export const DiscoverScreen: React.FC = () => {
@@ -33,6 +34,7 @@ export const DiscoverScreen: React.FC = () => {
         </View>
       </View>
       <DropPointSheet />
+      <EventDetailScreen />
     </SafeAreaView>
   );
 };
