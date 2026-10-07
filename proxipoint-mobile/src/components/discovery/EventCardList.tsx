@@ -13,7 +13,7 @@ import { formatDuration, formatStartLabel } from '../../lib/beaconSchedule';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 
 const EXPANDED_HEIGHT = 360;
-const COLLAPSED_HEIGHT = 64;
+const COLLAPSED_HEIGHT = 96;
 
 export const EventCardList: React.FC = () => {
   const getVisibleNodes = useDiscoveryStore((s) => s.getVisibleNodes);
