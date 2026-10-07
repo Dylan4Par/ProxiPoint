@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { eventMatchesMapFilter, presentAssignedTag } from '../../lib/beaconDrop';
 import { focusOffsetForPoint, visibleWorldBounds } from '../../lib/discoveryFocus';
+import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 const { width, height } = Dimensions.get('window');
@@ -51,6 +52,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   const activeTab = useDiscoveryStore((s) => s.activeTab);
   const previewPin = useDiscoveryStore((s) => s.previewPin);
+  const colors = useAppearanceStore((s) => s.colors);
 
   const nodeList = Object.values(nodes || {}).filter((node) => {
     if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
@@ -148,7 +150,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
   return (
     <View
       testID="discovery-map"
-      style={styles.canvasContainer}
+      style={[styles.canvasContainer, { backgroundColor: colors.map }]}
       onLayout={(event) => {
         const { width: layoutWidth, height: layoutHeight } = event.nativeEvent.layout;
         if (layoutWidth > 0 && layoutHeight > 0) {
@@ -168,16 +170,16 @@ export const DiscoveryMapCanvas: React.FC = () => {
         ]}
       >
         {/* Tactical Grid Overlay */}
-        <View style={styles.gridLineH1} />
-        <View style={styles.gridLineH2} />
-        <View style={styles.gridLineH3} />
-        <View style={styles.gridLineV1} />
-        <View style={styles.gridLineV2} />
-        <View style={styles.gridLineV3} />
+        <View style={[styles.gridLineH1, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineH2, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineH3, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineV1, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineV2, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineV3, { backgroundColor: colors.grid }]} />
 
         {/* Diagonal Arteries */}
-        <View style={styles.roadDiagonal1} />
-        <View style={styles.roadDiagonal2} />
+        <View style={[styles.roadDiagonal1, { backgroundColor: colors.road }]} />
+        <View style={[styles.roadDiagonal2, { backgroundColor: colors.road }]} />
 
         {previewPin ? (
           <View style={[styles.previewPin, { top: previewPin.y - 28, left: previewPin.x - 14 }]}>
@@ -215,12 +217,12 @@ export const DiscoveryMapCanvas: React.FC = () => {
             >
               {isSelected ? (
                 <View style={[styles.ring500m, styles.ringSelected]}>
-                  <Text style={styles.ringLabelTop}>500m</Text>
+                  <Text style={[styles.ringLabelTop, { color: colors.region, backgroundColor: colors.ringLabel }]}>500m</Text>
                 </View>
               ) : null}
 
-              <View pointerEvents="none" style={styles.pinTagPill}>
-                <Text style={styles.pinTagText}>{shownTag}</Text>
+              <View pointerEvents="none" style={[styles.pinTagPill, { backgroundColor: colors.pinTag }]}>
+                <Text style={[styles.pinTagText, { color: colors.pinTagText }]}>{shownTag}</Text>
               </View>
 
               {/* Center Pin Marker */}
@@ -253,7 +255,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
       {/* Pure View-based Tactical Crosshair Recenter Button */}
       <TouchableOpacity
         testID="discovery-recenter"
-        style={styles.crosshairBtn}
+        style={[styles.crosshairBtn, { backgroundColor: colors.crosshair, borderColor: colors.accentBright }]}
         activeOpacity={0.7}
         onPress={handleRecenter}
       >

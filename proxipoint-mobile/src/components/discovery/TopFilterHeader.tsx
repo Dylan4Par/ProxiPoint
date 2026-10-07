@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,8 @@ import {
   TextInput,
   TouchableWithoutFeedback,
 } from 'react-native';
+import type { AppearancePalette } from '../../lib/appearance';
+import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 export const TopFilterHeader: React.FC = () => {
@@ -19,6 +21,10 @@ export const TopFilterHeader: React.FC = () => {
   const tags = useDiscoveryStore((s) => s.tags);
   const addTag = useDiscoveryStore((s) => s.addTag);
   const removeTag = useDiscoveryStore((s) => s.removeTag);
+  const mode = useAppearanceStore((s) => s.mode);
+  const setMode = useAppearanceStore((s) => s.setMode);
+  const colors = useAppearanceStore((s) => s.colors);
+  const styles = useMemo(() => createHeaderStyles(colors), [colors]);
 
   // Settings Modal State
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -74,6 +80,7 @@ export const TopFilterHeader: React.FC = () => {
       {/* Top Row: Avatar Pill + Segmented Switcher */}
       <View style={styles.topRow}>
         <TouchableOpacity
+          testID="profile-button"
           style={styles.avatarButton}
           onPress={() => setSettingsOpen(true)}
           activeOpacity={0.8}
@@ -117,7 +124,7 @@ export const TopFilterHeader: React.FC = () => {
         }}
         onMouseDown={beginChannelPan}
         contentContainerStyle={styles.tagScrollContainer}
-        style={styles.tagScroll}
+        style={[styles.tagScroll, dragStyles.tagScroll]}
       >
         {tags.map((tag) => {
           const isActive = selectedTag === tag;
@@ -167,7 +174,7 @@ export const TopFilterHeader: React.FC = () => {
                   <TextInput
                     style={styles.addTagInput}
                     placeholder="e.g. Pickleball, FarmersMarket"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={colors.textDim}
                     value={newTagInput}
                     onChangeText={setNewTagInput}
                     onSubmitEditing={handleAddNewTag}
@@ -227,13 +234,37 @@ export const TopFilterHeader: React.FC = () => {
                 </View>
 
                 <View style={styles.fieldGroup}>
+                  <Text style={styles.fieldLabel}>Appearance</Text>
+                  <View style={styles.modeTrack} accessibilityRole="radiogroup">
+                    <TouchableOpacity
+                      testID="appearance-day"
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: mode === 'day' }}
+                      style={[styles.modeOption, mode === 'day' && styles.modeOptionSelected]}
+                      onPress={() => setMode('day')}
+                    >
+                      <Text style={[styles.modeOptionText, mode === 'day' && styles.modeOptionTextSelected]}>Day</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      testID="appearance-night"
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: mode === 'night' }}
+                      style={[styles.modeOption, mode === 'night' && styles.modeOptionSelected]}
+                      onPress={() => setMode('night')}
+                    >
+                      <Text style={[styles.modeOptionText, mode === 'night' && styles.modeOptionTextSelected]}>Night</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                <View style={styles.fieldGroup}>
                   <Text style={styles.fieldLabel}>Device Callsign / Handle</Text>
                   <TextInput
                     style={styles.textInput}
                     value={callsign}
                     onChangeText={setCallsign}
                     placeholder="e.g. Ranger-F0A5ACCF"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={colors.textDim}
                   />
                 </View>
 
@@ -244,7 +275,7 @@ export const TopFilterHeader: React.FC = () => {
                     value={tenantId}
                     onChangeText={setTenantId}
                     autoCapitalize="none"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={colors.textDim}
                   />
                 </View>
 
@@ -255,7 +286,7 @@ export const TopFilterHeader: React.FC = () => {
                     value={serverUrl}
                     onChangeText={setServerUrl}
                     autoCapitalize="none"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={colors.textDim}
                   />
                 </View>
 
@@ -279,11 +310,22 @@ export const TopFilterHeader: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const dragStyles = StyleSheet.create({
+  tagScroll: {
+    flexGrow: 0,
+    cursor: 'grab',
+    userSelect: 'none',
+  },
+});
+
+function createHeaderStyles(c: AppearancePalette) {
+  return StyleSheet.create({
   headerContainer: {
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: c.header,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
     zIndex: 10,
   },
   topRow: {
@@ -296,9 +338,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderWidth: 1.5,
-    borderColor: '#06b6d4',
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -307,12 +349,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#0f172a',
+    backgroundColor: c.inset,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
-    color: '#38bdf8',
+    color: c.accentBright,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -325,16 +367,16 @@ const styles = StyleSheet.create({
     borderRadius: 5.5,
     backgroundColor: '#10b981',
     borderWidth: 2,
-    borderColor: '#0a1120',
+    borderColor: c.onlineBorder,
   },
   segmentedWrapper: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderRadius: 24,
     padding: 3,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.2)',
+    borderColor: c.segmentBorder,
   },
   segmentBtn: {
     flex: 1,
@@ -343,23 +385,21 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   segmentBtnActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: c.accentSoft,
     borderWidth: 1,
-    borderColor: '#06b6d4',
+    borderColor: c.accent,
   },
   segmentText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#38bdf8',
+    color: c.accentBright,
     fontWeight: '700',
   },
   tagScroll: {
     flexGrow: 0,
-    cursor: 'grab',
-    userSelect: 'none',
   },
   tagScrollContainer: {
     paddingHorizontal: 16,
@@ -371,53 +411,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 18,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.border,
   },
   tagPillActive: {
-    backgroundColor: '#06b6d4',
-    borderColor: '#22d3ee',
+    backgroundColor: c.accent,
+    borderColor: c.region,
   },
   tagText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },
   tagTextActive: {
-    color: '#0f172a',
+    color: c.onAccent,
     fontWeight: '700',
   },
   trailingEditPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 18,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#06b6d4',
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   trailingEditIcon: {
-    color: '#38bdf8',
+    color: c.accentBright,
     fontSize: 13,
     fontWeight: '700',
   },
   /* Modals */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.8)',
+    backgroundColor: c.modalBackdrop,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#0f172a',
+    backgroundColor: c.modal,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.border,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -425,16 +465,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: c.border,
     paddingBottom: 10,
   },
   modalTitle: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 16,
     fontWeight: '700',
   },
   modalCloseText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 18,
     fontWeight: '700',
     padding: 4,
@@ -446,28 +486,28 @@ const styles = StyleSheet.create({
   },
   addTagInput: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: c.border,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 13,
   },
   addTagBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: c.accent,
     paddingHorizontal: 16,
     justifyContent: 'center',
     borderRadius: 10,
   },
   addTagBtnText: {
-    color: '#0f172a',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '700',
   },
   sectionSubtitle: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -482,16 +522,16 @@ const styles = StyleSheet.create({
   editorChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.border,
   },
   editorChipText: {
-    color: '#e2e8f0',
+    color: c.text,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -505,18 +545,18 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   fieldLabel: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 11,
     fontWeight: '600',
     marginBottom: 6,
     textTransform: 'uppercase',
   },
   textInput: {
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: c.border,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
@@ -525,7 +565,7 @@ const styles = StyleSheet.create({
   statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#172554',
+    backgroundColor: c.statusBox,
     padding: 10,
     borderRadius: 8,
     gap: 8,
@@ -538,20 +578,48 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981',
   },
   statusBoxText: {
-    color: '#38bdf8',
+    color: c.accentBright,
     fontSize: 11,
     fontWeight: '600',
   },
   saveBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: c.accent,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 6,
   },
   saveBtnText: {
-    color: '#0f172a',
+    color: c.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },
+  modeTrack: {
+    flexDirection: 'row',
+    backgroundColor: c.inset,
+    borderRadius: 12,
+    padding: 3,
+    borderWidth: 1,
+    borderColor: c.border,
+    gap: 4,
+  },
+  modeOption: {
+    flex: 1,
+    minHeight: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+  },
+  modeOptionSelected: {
+    backgroundColor: c.accent,
+  },
+  modeOptionText: {
+    color: c.textMuted,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  modeOptionTextSelected: {
+    color: c.onAccent,
+  },
 });
+}

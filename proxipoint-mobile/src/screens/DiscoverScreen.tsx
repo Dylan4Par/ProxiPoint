@@ -7,14 +7,16 @@ import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
 import { EventCardList } from '../components/discovery/EventCardList';
 import { DropPointSheet } from '../components/discovery/DropPointSheet';
 import { BottomNavBar } from '../components/discovery/BottomNavBar';
+import { useAppearanceStore } from '../stores/useAppearanceStore';
 
 export const DiscoverScreen: React.FC = () => {
+  const colors = useAppearanceStore((s) => s.colors);
   // Live duplex telemetry socket hook
   useProximitySocket();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
+    <SafeAreaView style={[styles.container, { backgroundColor: colors.screen }]} edges={['top', 'left', 'right']}>
+      <StatusBar barStyle={colors.statusBar} translucent backgroundColor="transparent" />
       <View style={styles.stage}>
         <TopFilterHeader />
         <DiscoveryMapCanvas />

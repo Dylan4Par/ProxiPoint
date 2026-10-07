@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Stop } from 'react-native-svg';
+import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 const ICON = 40;
@@ -95,9 +96,10 @@ const ActivityIcon: React.FC = () => (
 export const BottomNavBar: React.FC = () => {
   const dropSheetOpen = useDiscoveryStore((s) => s.dropSheetOpen);
   const setDropSheetOpen = useDiscoveryStore((s) => s.setDropSheetOpen);
+  const colors = useAppearanceStore((s) => s.colors);
 
   return (
-    <View style={styles.navWrapper}>
+    <View style={[styles.navWrapper, { backgroundColor: colors.nav, borderTopColor: colors.navBorder }]}>
       <TouchableOpacity
         style={styles.navItem}
         activeOpacity={0.7}
@@ -106,7 +108,7 @@ export const BottomNavBar: React.FC = () => {
         <View style={styles.iconContainer}>
           <DiscoverIcon />
         </View>
-        <Text style={[styles.navLabel, !dropSheetOpen && styles.navLabelActive]}>Discover</Text>
+        <Text style={[styles.navLabel, { color: dropSheetOpen ? colors.navLabel : colors.navLabelActive }]}>Discover</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -117,14 +119,14 @@ export const BottomNavBar: React.FC = () => {
         <View style={styles.iconContainer}>
           <DropPointIcon />
         </View>
-        <Text style={[styles.navLabel, dropSheetOpen && styles.navLabelActive]}>Drop Point</Text>
+        <Text style={[styles.navLabel, { color: dropSheetOpen ? colors.navLabelActive : colors.navLabel }]}>Drop Point</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
         <View style={styles.iconContainer}>
           <ActivityIcon />
         </View>
-        <Text style={styles.navLabel}>Activity</Text>
+        <Text style={[styles.navLabel, { color: colors.navLabel }]}>Activity</Text>
       </TouchableOpacity>
     </View>
   );

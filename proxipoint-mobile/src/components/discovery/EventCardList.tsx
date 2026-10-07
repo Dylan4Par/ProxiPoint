@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,8 @@ import {
 } from 'react-native';
 import { presentAssignedTag } from '../../lib/beaconDrop';
 import { formatDuration, formatStartLabel } from '../../lib/beaconSchedule';
+import type { AppearancePalette } from '../../lib/appearance';
+import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 
 const EXPANDED_HEIGHT = 360;
@@ -25,6 +27,8 @@ export const EventCardList: React.FC = () => {
   useDiscoveryStore((s) => s.activeTab);
   useDiscoveryStore((s) => s.viewportBounds);
   useDiscoveryStore((s) => s.selfCoordinates);
+  const colors = useAppearanceStore((s) => s.colors);
+  const styles = useMemo(() => createCardStyles(colors), [colors]);
 
   const visibleNodes = getVisibleNodes();
   const tagFor = (node: { tags?: string[]; tag?: string }) =>
@@ -198,13 +202,14 @@ export const EventCardList: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+function createCardStyles(c: AppearancePalette) {
+  return StyleSheet.create({
   drawerContainer: {
-    backgroundColor: '#090f1d',
+    backgroundColor: c.drawer,
     borderTopLeftRadius: 28,
     borderTopRightRadius: 28,
     borderTopWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
     overflow: 'hidden',
     flexDirection: 'column',
   },
@@ -216,13 +221,13 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 6,
     paddingHorizontal: 16,
-    backgroundColor: '#090f1d',
+    backgroundColor: c.drawer,
   },
   pullBar: {
     width: 42,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#334155',
+    backgroundColor: c.pull,
     alignSelf: 'center',
     marginBottom: 6,
   },
@@ -237,31 +242,31 @@ const styles = StyleSheet.create({
     marginRight: 10,
   },
   collapsedTag: {
-    color: '#06b6d4',
+    color: c.accent,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   collapsedTitle: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 13,
     fontWeight: '700',
     marginTop: 1,
   },
   collapsedRegion: {
-    color: '#22d3ee',
+    color: c.region,
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
   },
   collapsedSchedule: {
-    color: '#67e8f9',
+    color: c.schedule,
     fontSize: 11,
     fontWeight: '700',
     marginTop: 2,
   },
   chevronToggle: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 18,
     fontWeight: '700',
     paddingHorizontal: 4,
@@ -272,41 +277,41 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   card: {
-    backgroundColor: '#0f172a',
+    backgroundColor: c.card,
     borderRadius: 16,
     padding: 14,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
   },
   cardSelected: {
-    borderColor: '#06b6d4',
-    backgroundColor: '#0b1629',
+    borderColor: c.accent,
+    backgroundColor: c.cardSelected,
   },
   tagText: {
-    color: '#06b6d4',
+    color: c.accent,
     fontSize: 12,
     fontWeight: '700',
     marginBottom: 2,
   },
   titleText: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 14,
     fontWeight: '700',
   },
   regionText: {
-    color: '#22d3ee',
+    color: c.region,
     fontSize: 12,
     fontWeight: '700',
     marginTop: 4,
   },
   hostText: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 11,
     marginTop: 2,
     marginBottom: 4,
   },
   scheduleText: {
-    color: '#67e8f9',
+    color: c.schedule,
     fontSize: 11,
     fontWeight: '700',
     marginTop: 4,
@@ -326,7 +331,7 @@ const styles = StyleSheet.create({
   distanceBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#172554',
+    backgroundColor: c.badge,
     paddingHorizontal: 8,
     paddingVertical: 3,
     borderRadius: 10,
@@ -339,7 +344,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981',
   },
   distanceText: {
-    color: '#38bdf8',
+    color: c.badgeText,
     fontSize: 10,
     fontWeight: '700',
   },
@@ -368,20 +373,20 @@ const styles = StyleSheet.create({
     height: 22,
     borderRadius: 11,
     borderWidth: 1.5,
-    borderColor: '#0f172a',
+    borderColor: c.card,
   },
   avatarCount: {
     width: 24,
     height: 22,
     borderRadius: 11,
-    backgroundColor: '#334155',
+    backgroundColor: c.pull,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1.5,
-    borderColor: '#0f172a',
+    borderColor: c.card,
   },
   avatarCountText: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 8,
     fontWeight: '700',
   },
@@ -390,34 +395,34 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
   },
   rsvpIcon: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '700',
   },
   rsvpIconActive: {
-    color: '#06b6d4',
+    color: c.accent,
   },
   rsvpLabel: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 9,
     fontWeight: '700',
   },
   rsvpLabelActive: {
-    color: '#06b6d4',
+    color: c.accent,
   },
   cardFooter: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     borderTopWidth: 1,
-    borderTopColor: '#1e293b',
+    borderTopColor: c.border,
     paddingTop: 6,
   },
   etaText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 10,
   },
   activeReadout: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 10,
   },
   emptyContainer: {
@@ -426,14 +431,15 @@ const styles = StyleSheet.create({
     paddingVertical: 36,
   },
   emptyTitle: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
   },
   emptySubtitle: {
-    color: '#475569',
+    color: c.textDim,
     fontSize: 11,
     marginTop: 4,
   },
 });
+}

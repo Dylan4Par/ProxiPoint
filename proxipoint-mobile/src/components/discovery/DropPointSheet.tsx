@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,8 @@ import {
 } from '../../lib/beaconSchedule';
 import { readCurrentPosition, verifyAddressQuery, verifyCoordinates } from '../../services/addressVerify';
 import { lookupContainingRegions } from '../../services/regionLookup';
+import type { AppearancePalette } from '../../lib/appearance';
+import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 export const DropPointSheet: React.FC = () => {
@@ -35,6 +37,8 @@ export const DropPointSheet: React.FC = () => {
   const previewPin = useDiscoveryStore((s) => s.previewPin);
   const placePreviewPin = useDiscoveryStore((s) => s.placePreviewPin);
   const clearPreviewPin = useDiscoveryStore((s) => s.clearPreviewPin);
+  const colors = useAppearanceStore((s) => s.colors);
+  const styles = useMemo(() => createDropStyles(colors), [colors]);
 
   const [place, setPlace] = useState('');
   const [channels, setChannels] = useState<string[]>([]);
@@ -267,7 +271,7 @@ export const DropPointSheet: React.FC = () => {
           value={place}
           onChangeText={setPlace}
           placeholder="Pearl Street Mall"
-          placeholderTextColor="#475569"
+          placeholderTextColor={colors.textDim}
           style={styles.input}
         />
 
@@ -302,7 +306,7 @@ export const DropPointSheet: React.FC = () => {
           onChangeText={onChangeAddress}
           onSubmitEditing={() => void verifyTypedAddress()}
           placeholder="123 Pearl St, Boulder, CO"
-          placeholderTextColor="#475569"
+          placeholderTextColor={colors.textDim}
           autoCapitalize="words"
           multiline
           style={[styles.input, styles.addressInput]}
@@ -316,7 +320,7 @@ export const DropPointSheet: React.FC = () => {
             disabled={status === 'checking'}
           >
             {status === 'checking' && !locating ? (
-              <ActivityIndicator color="#22d3ee" size="small" />
+              <ActivityIndicator color={colors.accent} size="small" />
             ) : (
               <Text style={styles.secondaryBtnText}>{addressVerified ? 'Verified' : 'Verify address'}</Text>
             )}
@@ -328,7 +332,7 @@ export const DropPointSheet: React.FC = () => {
             disabled={status === 'checking'}
           >
             {locating ? (
-              <ActivityIndicator color="#22d3ee" size="small" />
+              <ActivityIndicator color={colors.accent} size="small" />
             ) : (
               <Text style={styles.secondaryBtnText}>Use my current position</Text>
             )}
@@ -411,18 +415,19 @@ export const DropPointSheet: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+function createDropStyles(c: AppearancePalette) {
+  return StyleSheet.create({
   sheet: {
     position: 'absolute',
     top: 8,
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#070d18',
+    backgroundColor: c.sheet,
     borderTopLeftRadius: 22,
     borderTopRightRadius: 22,
     borderTopWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.navBorder,
     zIndex: 30,
     paddingTop: 8,
   },
@@ -433,9 +438,9 @@ const styles = StyleSheet.create({
     marginTop: 14,
     height: 42,
     borderRadius: 21,
-    backgroundColor: '#0d1526',
+    backgroundColor: c.input,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.navBorder,
     flexDirection: 'row',
     position: 'relative',
     overflow: 'hidden',
@@ -459,7 +464,7 @@ const styles = StyleSheet.create({
     zIndex: 1,
   },
   visibilityText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '800',
   },
@@ -477,33 +482,33 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#155e75',
-    backgroundColor: '#0b1524',
+    backgroundColor: c.inset,
     minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: 8,
   },
   stepperBtnText: {
-    color: '#67e8f9',
+    color: c.schedule,
     fontSize: 13,
     fontWeight: '800',
   },
   stepperValue: {
     flex: 1,
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 15,
     fontWeight: '700',
     textAlign: 'center',
   },
   stepperHint: {
     flex: 1,
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
   },
   endsText: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'center',
@@ -513,9 +518,9 @@ const styles = StyleSheet.create({
     flex: 1,
     height: 28,
     borderRadius: 14,
-    backgroundColor: '#0d1526',
+    backgroundColor: c.input,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.navBorder,
     justifyContent: 'center',
     overflow: 'hidden',
   },
@@ -531,7 +536,7 @@ const styles = StyleSheet.create({
     width: 42,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#334155',
+    backgroundColor: c.pull,
     alignSelf: 'center',
     marginBottom: 8,
   },
@@ -546,13 +551,13 @@ const styles = StyleSheet.create({
     paddingRight: 12,
   },
   eyebrow: {
-    color: '#22d3ee',
+    color: c.region,
     fontSize: 11,
     fontWeight: '800',
     letterSpacing: 0.6,
   },
   title: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 26,
     fontWeight: '800',
     marginTop: 2,
@@ -564,7 +569,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   closeText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 18,
     fontWeight: '700',
   },
@@ -581,25 +586,25 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
   subtitle: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 13,
     lineHeight: 18,
     marginTop: 8,
     marginBottom: 16,
   },
   fieldLabel: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 0.6,
     marginBottom: 8,
   },
   input: {
-    backgroundColor: '#0d1526',
+    backgroundColor: c.input,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    color: '#f8fafc',
+    borderColor: c.navBorder,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 12,
     fontSize: 15,
@@ -615,7 +620,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   channelCount: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 11,
     fontWeight: '700',
     marginBottom: 8,
@@ -630,9 +635,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 16,
-    backgroundColor: '#111827',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.navBorder,
   },
   channelChipSelected: {
     backgroundColor: '#22d3ee',
@@ -642,7 +647,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
   channelText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -662,7 +667,7 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     borderWidth: 1,
     borderColor: '#155e75',
-    backgroundColor: '#0b1524',
+    backgroundColor: c.inset,
     minHeight: 42,
     alignItems: 'center',
     justifyContent: 'center',
@@ -672,7 +677,7 @@ const styles = StyleSheet.create({
     opacity: 0.8,
   },
   secondaryBtnText: {
-    color: '#67e8f9',
+    color: c.schedule,
     fontSize: 14,
     fontWeight: '700',
   },
@@ -709,3 +714,5 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
 });
+}
+
