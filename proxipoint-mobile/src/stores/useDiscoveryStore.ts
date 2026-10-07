@@ -3,6 +3,7 @@ import { assignedTags, eventMatchesMapFilter } from '../lib/beaconDrop';
 import { beaconWindowStatus, clampDuration, clampStart, type BeaconVisibility } from '../lib/beaconSchedule';
 import { cardListBounds, DISCOVERY_PIXELS_PER_METER, pointInBounds } from '../lib/discoveryFocus';
 import { calculateDistanceMeters } from '../lib/locationFilter';
+import { isInOperatorDistrict } from '../lib/regions';
 
 export interface InboundProximityNode {
   id: string;
@@ -163,7 +164,10 @@ const enrichNodeMetadata = (rawId: string, distanceMeters: number) => {
   };
 };
 
-// Seed initial fallback nodes so the UI displays immediately prior to WebSocket incoming feed
+const DOWNTOWN_REGION = 'Downtown Boulder';
+const DOWNTOWN_CHAIN = 'Downtown Boulder · Boulder · Boulder County';
+
+// Seed events sit inside Downtown Boulder so the default card list is the district.
 const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   'event-1': {
     id: 'event-1',
@@ -171,18 +175,20 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     tags: ['#LiveMusic', '#FoodTrucks', '#ArtWalk'],
     title: 'The Midnight Owls • Live at The Rusty Anchor',
     venue: 'Title, Host',
-    latitude: 40.0632,
-    longitude: -105.0365,
-    distanceMeters: 210,
+    latitude: 40.017458,
+    longitude: -105.283779,
+    distanceMeters: 478,
     status: 'LIVE NOW',
     statusColor: '#10b981',
-    eta: '5 min walk',
+    eta: '6 min walk',
     etaMode: 'walk',
     attendeeCount: 45,
     isRsvpd: true,
     radii: [250, 500],
-    x: 180,
-    y: 220,
+    x: 266,
+    y: 459,
+    regionName: DOWNTOWN_REGION,
+    regionChain: DOWNTOWN_CHAIN,
   },
   'event-2': {
     id: 'event-2',
@@ -190,18 +196,20 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     tags: ['#FoodTrucks', '#Pickleball'],
     title: 'Taco Tuesday Truck Rally • Central Park Plaza',
     venue: 'Central Park Plaza',
-    latitude: 40.0645,
-    longitude: -105.041,
-    distanceMeters: 430,
+    latitude: 40.017874,
+    longitude: -105.273221,
+    distanceMeters: 433,
     status: 'Starts in 15m',
     statusColor: '#38bdf8',
-    eta: '12+ here',
+    eta: '5 min walk',
     etaMode: 'walk',
     attendeeCount: 12,
     isRsvpd: true,
     radii: [250, 500],
-    x: 420,
-    y: 190,
+    x: 670,
+    y: 438,
+    regionName: DOWNTOWN_REGION,
+    regionChain: DOWNTOWN_CHAIN,
   },
   'event-3': {
     id: 'event-3',
@@ -209,18 +217,20 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     tags: ['#TechMeetup'],
     title: 'Go & Kotlin Devs • Monthly Social • Code & Coffee',
     venue: 'Downtown Tech Lab',
-    latitude: 40.071,
-    longitude: -105.032,
-    distanceMeters: 1200,
+    latitude: 40.020368,
+    longitude: -105.278189,
+    distanceMeters: 370,
     status: 'Tomorrow 18:00',
     statusColor: '#94a3b8',
-    eta: '12 min drive',
-    etaMode: 'drive',
+    eta: '5 min walk',
+    etaMode: 'walk',
     attendeeCount: 38,
     isRsvpd: false,
     radii: [500, 1000],
-    x: 300,
-    y: 480,
+    x: 480,
+    y: 314,
+    regionName: DOWNTOWN_REGION,
+    regionChain: DOWNTOWN_CHAIN,
   },
 };
 
@@ -228,7 +238,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   tenantId: '00000000-0000-0000-0000-000000000001',
   deviceId: 'Ranger-F0A5ACCF',
   wsEndpoint: 'ws://10.0.2.2:8080/api/v1/ingest',
-  selfCoordinates: { latitude: 40.061708, longitude: -105.038292 },
+  selfCoordinates: { latitude: 40.017042, longitude: -105.278189 },
   searchRadiusMeters: 500,
   batteryPct: 87,
 
@@ -428,10 +438,16 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     }),
 
   getVisibleNodes: () => {
-    const { nodes, viewportBounds, activeTab, selectedTag, selectedNodeId } = get();
+    const { nodes, viewportBounds, activeTab, selectedTag, selectedNodeId, selfCoordinates } = get();
     return Object.values(nodes).filter((node) => {
-      const inBounds = pointInBounds(node.x, node.y, cardListBounds(viewportBounds));
-      if (!inBounds && node.id !== selectedNodeId) return false;
+      const onScreen = pointInBounds(node.x, node.y, cardListBounds(viewportBounds));
+      const inDistrict = isInOperatorDistrict(
+        node.longitude,
+        node.latitude,
+        selfCoordinates.longitude,
+        selfCoordinates.latitude,
+      );
+      if (!onScreen && !inDistrict && node.id !== selectedNodeId) return false;
       if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
       if (!eventMatchesMapFilter(node.tags, selectedTag, node.tag)) return false;
       return true;

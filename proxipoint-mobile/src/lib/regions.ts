@@ -199,3 +199,27 @@ export function locateRegions(
 export function regionLabel(matches: RegionMatch[]): string {
   return matches.map((match) => match.name).join(' · ');
 }
+
+const DISTRICT_TYPES = new Set(['commercial_district', 'neighborhood']);
+
+// The operator's district is the smallest commercial district or neighborhood
+// that contains them. Every event inside that polygon belongs on the list.
+export function isInOperatorDistrict(
+  eventLongitude: number,
+  eventLatitude: number,
+  operatorLongitude: number,
+  operatorLatitude: number,
+): boolean {
+  if (![eventLongitude, eventLatitude, operatorLongitude, operatorLatitude].every(Number.isFinite)) {
+    return false;
+  }
+  const district = REGIONS.filter((region) => DISTRICT_TYPES.has(region.regionType))
+    .filter(
+      (region) =>
+        contains(region.geom, operatorLongitude, operatorLatitude) ||
+        distanceMeters(region.geom, operatorLongitude, operatorLatitude) <= DEFAULT_REGION_TOLERANCE_METERS,
+    )
+    .sort((a, b) => a.areaSquareMeters - b.areaSquareMeters)[0];
+  if (!district) return false;
+  return contains(district.geom, eventLongitude, eventLatitude);
+}

@@ -24,6 +24,7 @@ export const EventCardList: React.FC = () => {
   useDiscoveryStore((s) => s.nodes);
   useDiscoveryStore((s) => s.activeTab);
   useDiscoveryStore((s) => s.viewportBounds);
+  useDiscoveryStore((s) => s.selfCoordinates);
 
   const visibleNodes = getVisibleNodes();
   const tagFor = (node: { tags?: string[]; tag?: string }) =>
