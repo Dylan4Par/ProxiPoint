@@ -71,6 +71,7 @@ export interface DiscoveryState {
   headerHeight: number;
   focusToken: number;
   dropSheetOpen: boolean;
+  drawerDragging: boolean;
 
   // Setters & Actions
   setSocketConnected: (connected: boolean) => void;
@@ -82,6 +83,7 @@ export interface DiscoveryState {
   setSelectedTag: (tag: string) => void;
   setDrawerSnap: (snap: DrawerSnap) => void;
   setDrawerHeight: (height: number) => void;
+  setDrawerDragging: (dragging: boolean) => void;
   setHeaderHeight: (height: number) => void;
   selectNodeFromCard: (id: string) => void;
   selectNodeFromPin: (id: string) => void;
@@ -358,6 +360,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   headerHeight: 112,
   focusToken: 0,
   dropSheetOpen: false,
+  drawerDragging: false,
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
@@ -367,6 +370,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
   setDrawerSnap: (snap) => set({ drawerSnap: snap }),
+  setDrawerDragging: (dragging) =>
+    set((state) => (state.drawerDragging === dragging ? state : { drawerDragging: dragging })),
   setDrawerHeight: (height) =>
     set((state) => (Math.abs(state.drawerHeight - height) < 0.25 ? state : { drawerHeight: height })),
   setHeaderHeight: (height) =>

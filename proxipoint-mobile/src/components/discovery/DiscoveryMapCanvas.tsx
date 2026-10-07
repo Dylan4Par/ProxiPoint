@@ -168,8 +168,10 @@ export const DiscoveryMapCanvas: React.FC = () => {
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gesture) =>
-        Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4 || gesture.numberActiveTouches > 1,
+      onMoveShouldSetPanResponder: (_, gesture) => {
+        if (useDiscoveryStore.getState().drawerDragging) return false;
+        return Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4 || gesture.numberActiveTouches > 1;
+      },
       onPanResponderGrant: (event: GestureResponderEvent) => {
         springRef.current?.stop();
         gestureOrigin.current = { ...cameraRef.current };

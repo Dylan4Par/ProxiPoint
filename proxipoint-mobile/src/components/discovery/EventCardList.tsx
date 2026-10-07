@@ -84,6 +84,7 @@ export const EventCardList: React.FC = () => {
   const drawerSnap = useDiscoveryStore((state) => state.drawerSnap);
   const setDrawerSnap = useDiscoveryStore((state) => state.setDrawerSnap);
   const setDrawerHeight = useDiscoveryStore((state) => state.setDrawerHeight);
+  const setDrawerDragging = useDiscoveryStore((state) => state.setDrawerDragging);
 
   const visibleNodes = useMemo(
     () => filterVisibleNodes(Object.values(nodes), viewportBounds, activeTab, selectedTag),
@@ -166,6 +167,7 @@ export const EventCardList: React.FC = () => {
     grantDy.current = dy;
     animatedHeight.stopAnimation();
     dragStart.current = heightRef.current;
+    setDrawerDragging(true);
   };
   dragApi.current.move = (dy: number) => {
     const expanded = heightForSnap('expanded', windowHeightRef.current);
@@ -176,6 +178,7 @@ export const EventCardList: React.FC = () => {
     animatedHeight.setValue(next);
   };
   dragApi.current.end = (dy: number, vy: number, tap: boolean) => {
+    setDrawerDragging(false);
     const delta = dy - grantDy.current;
     if (tap && Math.abs(delta) < 8) {
       cycleSnap();
