@@ -10,12 +10,21 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/events"
+	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/tags"
 	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/telemetry"
+	"github.com/Dylan4Par/ProxiPoint/overwatchcore/migrations"
 )
 
 func main() {
 	addr := getenv("ADDR", ":8080")
-	index := openIndex()
+	db, index := openStore()
+	var tagSvc *tags.TagService
+	var assigner events.TagAssigner
+	if db != nil {
+		tagSvc = tags.NewTagService(db)
+		assigner = tagSvc
+	}
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -24,6 +33,9 @@ func main() {
 	})
 	mux.HandleFunc("/api/v1/telemetry/ping", telemetry.HandleTelemetryHTTP(index))
 	mux.HandleFunc("/api/v1/telemetry/ws", telemetry.HandleTelemetryWS(index))
+	mux.HandleFunc("/api/v1/tags/autocomplete", tags.HandleAutocomplete(tagSvc))
+	mux.HandleFunc("/api/v1/events", events.HandleCreate(assigner))
+	mux.HandleFunc("/api/v1/events/{id}", events.HandleByID(assigner))
 
 	server := &http.Server{
 		Addr:              addr,
@@ -36,11 +48,11 @@ func main() {
 	}
 }
 
-func openIndex() telemetry.NearbyQuerier {
+func openStore() (*sql.DB, telemetry.NearbyQuerier) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
 		log.Printf("DATABASE_URL unset; using in-memory geofence index")
-		return telemetry.NewDemoIndex()
+		return nil, telemetry.NewDemoIndex()
 	}
 
 	db, err := sql.Open("pgx", dsn)
@@ -58,8 +70,11 @@ func openIndex() telemetry.NearbyQuerier {
 	if err := telemetry.EnsureSchema(ctx, db); err != nil {
 		log.Fatalf("migrate schema: %v", err)
 	}
+	if err := migrations.Apply(ctx, db); err != nil {
+		log.Fatalf("migrate tag schema: %v", err)
+	}
 	log.Printf("connected to PostGIS")
-	return telemetry.NewPostGISIndex(db)
+	return db, telemetry.NewPostGISIndex(db)
 }
 
 func getenv(key, fallback string) string {
