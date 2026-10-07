@@ -19,7 +19,7 @@ export const EventCardList: React.FC = () => {
   const getVisibleNodes = useDiscoveryStore((s) => s.getVisibleNodes);
   const toggleRsvp = useDiscoveryStore((s) => s.toggleRsvp);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
-  const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
+  const focusCard = useDiscoveryStore((s) => s.focusCard);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   useDiscoveryStore((s) => s.nodes);
   useDiscoveryStore((s) => s.activeTab);
@@ -81,7 +81,7 @@ export const EventCardList: React.FC = () => {
     return (
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => setSelectedNodeId(item.id)}
+        onPress={() => focusCard(item.id)}
         style={[styles.card, isSelected && styles.cardSelected]}
       >
         <Text style={styles.tagText}>{tagFor(item)}</Text>

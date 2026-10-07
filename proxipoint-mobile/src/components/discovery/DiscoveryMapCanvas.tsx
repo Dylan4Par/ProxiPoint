@@ -45,15 +45,17 @@ export const DiscoveryMapCanvas: React.FC = () => {
 
   const calculateBounds = (offsetX: number, offsetY: number) => {
     const minX = -offsetX - 40;
-    const maxX = -offsetX + canvasSize.current.width + 40;
+    const maxX = -offsetX + width + 40;
     const minY = -offsetY - 40;
-    const maxY = -offsetY + canvasSize.current.height + 40;
+    const maxY = -offsetY + CANVAS_HEIGHT + 40;
     setViewportBounds({ minX, maxX, minY, maxY });
   };
 
   const moveTo = (pointX: number, pointY: number) => {
     const offset = focusOffsetForPoint(pointX, pointY, canvasSize.current.width, canvasSize.current.height);
     if (!offset) return;
+    pan.stopAnimation();
+    pan.flattenOffset();
     Animated.spring(pan, {
       toValue: offset,
       useNativeDriver: false,
@@ -68,16 +70,13 @@ export const DiscoveryMapCanvas: React.FC = () => {
     calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
   }, []);
 
-  const skipInitialFocus = useRef(true);
   useEffect(() => {
-    if (skipInitialFocus.current) {
-      skipInitialFocus.current = false;
-      return;
-    }
-    const node = selectedNodeId ? useDiscoveryStore.getState().nodes[selectedNodeId] : null;
+    if (mapFocusToken === 0) return;
+    const selectedId = useDiscoveryStore.getState().selectedNodeId;
+    const node = selectedId ? useDiscoveryStore.getState().nodes[selectedId] : null;
     if (!node) return;
     moveTo(node.x, node.y);
-  }, [selectedNodeId, mapFocusToken]);
+  }, [mapFocusToken]);
 
   useEffect(() => {
     if (!previewPin) return;
@@ -95,6 +94,11 @@ export const DiscoveryMapCanvas: React.FC = () => {
         return Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4;
       },
       onPanResponderGrant: () => {
+        pan.stopAnimation((value: { x: number; y: number }) => {
+          if (Number.isFinite(value?.x) && Number.isFinite(value?.y)) {
+            currentPan.current = { x: value.x, y: value.y };
+          }
+        });
         pan.setOffset({ x: currentPan.current.x, y: currentPan.current.y });
         pan.setValue({ x: 0, y: 0 });
       },
@@ -175,6 +179,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
           return (
             <View
               key={item.id}
+              pointerEvents="box-none"
               style={[
                 styles.nodeCluster,
                 { top: posY - 75, left: posX - 75 },
@@ -182,6 +187,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
             >
               {/* Outer Tactical Ring */}
               <View
+                pointerEvents="none"
                 style={[
                   styles.ring500m,
                   isSelected && styles.ringSelected,
@@ -192,6 +198,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
 
               {/* Inner Tactical Ring */}
               <View
+                pointerEvents="none"
                 style={[
                   styles.ring250m,
                   isSelected && styles.ringInnerSelected,
@@ -200,7 +207,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
                 <Text style={styles.ringLabelInner}>250m</Text>
               </View>
 
-              <View style={styles.pinTagPill}>
+              <View pointerEvents="none" style={styles.pinTagPill}>
                 <Text style={styles.pinTagText}>{shownTag}</Text>
               </View>
 

@@ -83,6 +83,7 @@ export interface DiscoveryState {
   setViewportBounds: (bounds: ViewportBounds) => void;
   setSelectedNodeId: (id: string | null) => void;
   setSelectedEventId: (id: string) => void;
+  focusCard: (id: string) => void;
   setActiveTab: (tab: 'Nearby' | 'RSVPd') => void;
   setSelectedTag: (tag: string) => void;
   setDropSheetOpen: (open: boolean) => void;
@@ -247,16 +248,12 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
   setViewportBounds: (bounds) => set({ viewportBounds: bounds }),
-  setSelectedNodeId: (id) =>
+  setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEventId: id || 'event-1' }),
+  setSelectedEventId: (id) => set({ selectedNodeId: id, selectedEventId: id }),
+  focusCard: (id) =>
     set((state) => ({
       selectedNodeId: id,
       selectedEventId: id || 'event-1',
-      mapFocusToken: state.mapFocusToken + 1,
-    })),
-  setSelectedEventId: (id) =>
-    set((state) => ({
-      selectedNodeId: id,
-      selectedEventId: id,
       mapFocusToken: state.mapFocusToken + 1,
     })),
   setActiveTab: (tab) => set({ activeTab: tab }),
@@ -333,7 +330,6 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         nodes: { ...state.nodes, [id]: node },
         selectedNodeId: id,
         selectedEventId: id,
-        mapFocusToken: state.mapFocusToken + 1,
         selectedTag,
         dropSheetOpen: false,
         previewPin: null,
