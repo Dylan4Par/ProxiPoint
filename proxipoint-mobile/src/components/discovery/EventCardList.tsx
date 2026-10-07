@@ -121,13 +121,19 @@ export const EventCardList: React.FC = () => {
 
   const animatedHeight = useRef(new Animated.Value(heightForSnap(drawerSnap, windowHeight))).current;
   const dragStart = useRef(heightForSnap(drawerSnap, windowHeight));
+  const heightRef = useRef(heightForSnap(drawerSnap, windowHeight));
   const windowHeightRef = useRef(windowHeight);
   windowHeightRef.current = windowHeight;
 
   useEffect(() => {
-    const id = animatedHeight.addListener(({ value }) => setDrawerHeight(value));
+    const id = animatedHeight.addListener(({ value }) => {
+      heightRef.current = value;
+      setDrawerHeight(value);
+    });
     return () => animatedHeight.removeListener(id);
   }, [animatedHeight, setDrawerHeight]);
+
+  const grantDy = useRef(0);
 
   const springTo = (height: number) => {
     animatedHeight.stopAnimation();
@@ -150,27 +156,63 @@ export const EventCardList: React.FC = () => {
     setDrawerSnap(next);
   };
 
-  const panResponder = useRef(
+  const dragApi = useRef({
+    begin: (_dy: number) => {},
+    move: (_dy: number) => {},
+    end: (_dy: number, _vy: number, _tap: boolean) => {},
+  });
+
+  dragApi.current.begin = (dy: number) => {
+    grantDy.current = dy;
+    animatedHeight.stopAnimation();
+    dragStart.current = heightRef.current;
+  };
+  dragApi.current.move = (dy: number) => {
+    const expanded = heightForSnap('expanded', windowHeightRef.current);
+    const next = Math.min(
+      expanded,
+      Math.max(DRAWER_COLLAPSED, dragStart.current - (dy - grantDy.current)),
+    );
+    animatedHeight.setValue(next);
+  };
+  dragApi.current.end = (dy: number, vy: number, tap: boolean) => {
+    const delta = dy - grantDy.current;
+    if (tap && Math.abs(delta) < 8) {
+      cycleSnap();
+      return;
+    }
+    const height = windowHeightRef.current;
+    const expanded = heightForSnap('expanded', height);
+    const current = Math.min(expanded, Math.max(DRAWER_COLLAPSED, dragStart.current - delta));
+    const next = resolveDrawerSnap(current, vy, height);
+    setDrawerSnap(next);
+    springTo(heightForSnap(next, height));
+  };
+
+  const headerPan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) => Math.abs(gesture.dy) > 6,
-      onPanResponderGrant: () => {
-        animatedHeight.stopAnimation((value) => {
-          dragStart.current = value;
-        });
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (_, gesture) => dragApi.current.begin(gesture.dy),
+      onPanResponderMove: (_, gesture) => dragApi.current.move(gesture.dy),
+      onPanResponderRelease: (_, gesture) => dragApi.current.end(gesture.dy, gesture.vy, true),
+      onPanResponderTerminate: (_, gesture) => dragApi.current.end(gesture.dy, 0, false),
+    }),
+  ).current;
+
+  const listPan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponderCapture: (_, gesture) => {
+        if (useDiscoveryStore.getState().drawerSnap === 'expanded') return false;
+        return Math.abs(gesture.dy) > 8 && Math.abs(gesture.dy) > Math.abs(gesture.dx);
       },
-      onPanResponderMove: (_, gesture) => {
-        const expanded = heightForSnap('expanded', windowHeightRef.current);
-        const next = Math.min(expanded, Math.max(DRAWER_COLLAPSED, dragStart.current - gesture.dy));
-        animatedHeight.setValue(next);
-      },
-      onPanResponderRelease: (_, gesture) => {
-        const height = windowHeightRef.current;
-        const expanded = heightForSnap('expanded', height);
-        const current = Math.min(expanded, Math.max(DRAWER_COLLAPSED, dragStart.current - gesture.dy));
-        const next = resolveDrawerSnap(current, gesture.vy, height);
-        setDrawerSnap(next);
-        springTo(heightForSnap(next, height));
-      },
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (_, gesture) => dragApi.current.begin(gesture.dy),
+      onPanResponderMove: (_, gesture) => dragApi.current.move(gesture.dy),
+      onPanResponderRelease: (_, gesture) => dragApi.current.end(gesture.dy, gesture.vy, false),
+      onPanResponderTerminate: (_, gesture) => dragApi.current.end(gesture.dy, 0, false),
     }),
   ).current;
 
@@ -231,9 +273,9 @@ export const EventCardList: React.FC = () => {
 
   return (
     <Animated.View style={[styles.drawerContainer, { height: animatedHeight }]}>
-      <View {...panResponder.panHandlers} style={styles.headerDraggable}>
+      <View {...headerPan.panHandlers} style={styles.headerDraggable}>
         <View style={styles.pullBar} />
-        <TouchableOpacity activeOpacity={0.8} onPress={cycleSnap} style={styles.collapsedHeaderRow}>
+        <View style={styles.collapsedHeaderRow}>
           <ProximityPulse
             active={liveSelected && selectedNode.id !== 'none'}
             color={selectedNode.statusColor}
@@ -249,12 +291,13 @@ export const EventCardList: React.FC = () => {
             {selectedNode.id === 'none' ? '--' : formatDistance(selectedNode.distanceMeters)}
           </Text>
           <Text style={styles.chevronToggle}>{drawerSnap === 'expanded' ? '▾' : '▴'}</Text>
-        </TouchableOpacity>
+        </View>
       </View>
 
       <View
         pointerEvents={drawerSnap === 'collapsed' ? 'none' : 'auto'}
         style={styles.listWrap}
+        {...listPan.panHandlers}
       >
         <FlatList
           data={orderedNodes}
@@ -263,6 +306,7 @@ export const EventCardList: React.FC = () => {
           extraData={selectedNodeId}
           contentContainerStyle={styles.listContent}
           showsVerticalScrollIndicator={false}
+          scrollEnabled={drawerSnap === 'expanded'}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>NO VIEWABLE EVENTS IN SECTOR</Text>
@@ -283,12 +327,14 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#1e293b',
     overflow: 'hidden',
+    userSelect: 'none',
   },
   headerDraggable: {
     height: DRAWER_COLLAPSED,
     paddingTop: 8,
     paddingHorizontal: 16,
     backgroundColor: '#090f1d',
+    cursor: 'pointer',
   },
   pullBar: {
     width: 42,
