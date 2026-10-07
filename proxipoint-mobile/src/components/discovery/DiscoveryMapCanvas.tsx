@@ -9,7 +9,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { eventMatchesMapFilter, presentAssignedTag } from '../../lib/beaconDrop';
-import { focusOffsetForPoint } from '../../lib/discoveryFocus';
+import { focusOffsetForPoint, visibleWorldBounds } from '../../lib/discoveryFocus';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 const { width, height } = Dimensions.get('window');
@@ -44,11 +44,8 @@ export const DiscoveryMapCanvas: React.FC = () => {
   const canvasSize = useRef({ width, height: CANVAS_HEIGHT });
 
   const calculateBounds = (offsetX: number, offsetY: number) => {
-    const minX = -offsetX - 40;
-    const maxX = -offsetX + width + 40;
-    const minY = -offsetY - 40;
-    const maxY = -offsetY + CANVAS_HEIGHT + 40;
-    setViewportBounds({ minX, maxX, minY, maxY });
+    const { width: canvasWidth, height: canvasHeight } = canvasSize.current;
+    setViewportBounds(visibleWorldBounds(offsetX, offsetY, canvasWidth, canvasHeight));
   };
 
   const moveTo = (pointX: number, pointY: number) => {
@@ -127,6 +124,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
         const { width: layoutWidth, height: layoutHeight } = event.nativeEvent.layout;
         if (layoutWidth > 0 && layoutHeight > 0) {
           canvasSize.current = { width: layoutWidth, height: layoutHeight };
+          calculateBounds(currentPan.current.x, currentPan.current.y);
         }
       }}
       {...panResponder.panHandlers}

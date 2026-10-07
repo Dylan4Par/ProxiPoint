@@ -178,6 +178,8 @@ export const EventCardList: React.FC = () => {
 
       {isExpanded && (
         <FlatList
+          testID="event-card-list"
+          style={styles.list}
           data={visibleNodes}
           keyExtractor={(item) => item.id}
           renderItem={renderCard}
@@ -203,6 +205,11 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderColor: '#1e293b',
     overflow: 'hidden',
+    flexDirection: 'column',
+  },
+  list: {
+    flex: 1,
+    minHeight: 0,
   },
   headerDraggable: {
     paddingTop: 8,

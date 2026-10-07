@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { assignedTags, eventMatchesMapFilter } from '../lib/beaconDrop';
 import { beaconWindowStatus, clampDuration, clampStart, type BeaconVisibility } from '../lib/beaconSchedule';
+import { cardListBounds, DISCOVERY_PIXELS_PER_METER, pointInBounds } from '../lib/discoveryFocus';
 import { calculateDistanceMeters } from '../lib/locationFilter';
 
 export interface InboundProximityNode {
@@ -103,7 +104,7 @@ const toCanvasCoordinates = (
   nodeLon: number,
   centerLat: number,
   centerLon: number,
-  scaleFactor: number = 0.45
+  scaleFactor: number = DISCOVERY_PIXELS_PER_METER
 ): { x: number; y: number } => {
   const earthRadius = 6371000;
   const rad = Math.PI / 180;
@@ -429,11 +430,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   getVisibleNodes: () => {
     const { nodes, viewportBounds, activeTab, selectedTag, selectedNodeId } = get();
     return Object.values(nodes).filter((node) => {
-      const inBounds =
-        node.x >= viewportBounds.minX &&
-        node.x <= viewportBounds.maxX &&
-        node.y >= viewportBounds.minY &&
-        node.y <= viewportBounds.maxY;
+      const inBounds = pointInBounds(node.x, node.y, cardListBounds(viewportBounds));
       if (!inBounds && node.id !== selectedNodeId) return false;
       if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
       if (!eventMatchesMapFilter(node.tags, selectedTag, node.tag)) return false;
