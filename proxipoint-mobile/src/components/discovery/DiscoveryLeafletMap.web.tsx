@@ -1,33 +1,65 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { View, StyleSheet } from 'react-native';
-import * as LeafletNamespace from 'leaflet';
-import { LEAFLET_CSS } from '../../lib/leafletCss';
+import { DISCOVERY_PIN_CSS } from '../../lib/discoveryMapDocument';
 import {
   DISCOVERY_MAP_ZOOM,
-  FREE_DARK_TILE_ATTRIBUTION,
-  FREE_DARK_TILE_SUBDOMAINS,
-  FREE_DARK_TILE_URL,
+  FREE_DARK_STYLE_URL,
+  MAPLIBRE_CSS_URL,
+  MAPLIBRE_JS_URL,
   buildMarkerPayload,
+  circlePolygon,
   declutterScaleForZoom,
-  escapeHtml,
 } from '../../lib/freeBasemap';
-import { NAV_HEIGHT, opticalCenter } from '../../lib/mapViewport';
+import { NAV_HEIGHT } from '../../lib/mapViewport';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { DiscoveryMapChrome } from './DiscoveryMapChrome';
 
-const LeafletModule = LeafletNamespace as typeof LeafletNamespace & {
-  default?: typeof LeafletNamespace;
-};
-const L = LeafletModule.default?.map ? LeafletModule.default : LeafletModule;
-
-function ensureLeafletCss() {
-  if (typeof document === 'undefined') return;
-  if (document.getElementById('proxipoint-leaflet-css')) return;
-  const style = document.createElement('style');
-  style.id = 'proxipoint-leaflet-css';
-  style.textContent = LEAFLET_CSS;
-  document.head.appendChild(style);
+interface Padding {
+  top: number;
+  bottom: number;
+  left: number;
+  right: number;
 }
+
+interface GeoBounds {
+  getSouth(): number;
+  getNorth(): number;
+  getWest(): number;
+  getEast(): number;
+}
+
+interface GeoSource {
+  setData(data: unknown): void;
+}
+
+interface StreetMap {
+  remove(): void;
+  resize(): void;
+  getZoom(): number;
+  getBounds(): GeoBounds | null;
+  getContainer(): HTMLElement;
+  flyTo(options: { center: [number, number]; zoom: number; duration: number }): void;
+  jumpTo(options: { center: [number, number]; zoom: number; padding: Padding }): void;
+  easeTo(options: { padding: Padding; duration: number }): void;
+  dragPan: { enable(): void; disable(): void };
+  on(type: string, handler: () => void): void;
+  getSource(id: string): GeoSource | undefined;
+  addSource(id: string, source: unknown): void;
+  addLayer(layer: unknown): void;
+}
+
+interface MapLibreMarker {
+  remove(): void;
+}
+
+interface MapLibreGL {
+  Map: new (options: Record<string, unknown>) => StreetMap;
+  Marker: new (options: { element: HTMLElement; anchor: string }) => {
+    setLngLat(lngLat: [number, number]): { addTo(map: StreetMap): MapLibreMarker };
+  };
+}
+
+const EMPTY = { type: 'FeatureCollection', features: [] };
 
 function hostElement(node: View | null): HTMLElement | null {
   if (!node) return null;
@@ -35,16 +67,57 @@ function hostElement(node: View | null): HTMLElement | null {
   return typeof candidate.clientWidth === 'number' ? candidate : null;
 }
 
-function centerForOptical(
-  map: L.Map,
-  latlng: L.LatLngExpression,
-  zoom: number,
-  opticalY: number,
-  height: number,
-): L.LatLng {
-  const projected = map.project(latlng, zoom);
-  const dy = height / 2 - opticalY;
-  return map.unproject(projected.add([0, dy]), zoom);
+function chromePadding(header: number, drawer: number): Padding {
+  return { top: header, bottom: drawer + NAV_HEIGHT, left: 0, right: 0 };
+}
+
+function ensurePinCss() {
+  if (typeof document === 'undefined') return;
+  if (document.getElementById('proxipoint-pin-css')) return;
+  const style = document.createElement('style');
+  style.id = 'proxipoint-pin-css';
+  style.textContent = DISCOVERY_PIN_CSS;
+  document.head.appendChild(style);
+}
+
+let mapLibrePromise: Promise<MapLibreGL> | null = null;
+
+function loadMapLibre(): Promise<MapLibreGL> {
+  if (typeof document === 'undefined') return Promise.reject(new Error('MapLibre needs a browser'));
+  const existing = (window as Window & { maplibregl?: MapLibreGL }).maplibregl;
+  if (existing) return Promise.resolve(existing);
+  if (mapLibrePromise) return mapLibrePromise;
+  mapLibrePromise = new Promise((resolve, reject) => {
+    if (!document.querySelector('link[data-proxipoint-maplibre]')) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = MAPLIBRE_CSS_URL;
+      link.dataset.proxipointMaplibre = '1';
+      document.head.appendChild(link);
+    }
+    const script = document.createElement('script');
+    script.src = MAPLIBRE_JS_URL;
+    script.async = true;
+    script.onload = () => {
+      const loaded = (window as Window & { maplibregl?: MapLibreGL }).maplibregl;
+      if (loaded) resolve(loaded);
+      else reject(new Error('MapLibre did not load'));
+    };
+    script.onerror = () => reject(new Error('MapLibre script failed'));
+    document.head.appendChild(script);
+  });
+  return mapLibrePromise;
+}
+
+function ringFeature(latitude: number, longitude: number) {
+  return {
+    type: 'Feature',
+    properties: {},
+    geometry: {
+      type: 'LineString',
+      coordinates: circlePolygon({ latitude, longitude }, 120).map((point) => [point.longitude, point.latitude]),
+    },
+  };
 }
 
 export const DiscoveryLeafletMap: React.FC = () => {
@@ -59,18 +132,19 @@ export const DiscoveryLeafletMap: React.FC = () => {
   const setViewportBounds = useDiscoveryStore((state) => state.setViewportBounds);
 
   const hostRef = useRef<View>(null);
-  const mapRef = useRef<L.Map | null>(null);
-  const markerLayerRef = useRef<L.LayerGroup | null>(null);
-  const userLayerRef = useRef<L.LayerGroup | null>(null);
-  const opticalRef = useRef<number | null>(null);
+  const mapRef = useRef<StreetMap | null>(null);
+  const markersRef = useRef<MapLibreMarker[]>([]);
   const selectRef = useRef(selectNodeFromPin);
   selectRef.current = selectNodeFromPin;
   const bootRef = useRef<() => void>(() => {});
+  const bootingRef = useRef(false);
+  const aliveRef = useRef(true);
   const [zoom, setZoom] = useState(DISCOVERY_MAP_ZOOM);
   const [ready, setReady] = useState(false);
 
-  const publishBounds = (map: L.Map) => {
+  const publishBounds = (map: StreetMap) => {
     const bounds = map.getBounds();
+    if (!bounds) return;
     setViewportBounds({
       minX: 0,
       maxX: 1400,
@@ -84,65 +158,49 @@ export const DiscoveryLeafletMap: React.FC = () => {
     setZoom(map.getZoom());
   };
 
-  const drawMarkers = (map: L.Map) => {
-    const markerLayer = markerLayerRef.current;
-    const userLayer = userLayerRef.current;
-    if (!markerLayer || !userLayer) return;
-    markerLayer.clearLayers();
-    userLayer.clearLayers();
-
+  const drawMarkers = (map: StreetMap) => {
+    markersRef.current.forEach((marker) => marker.remove());
+    markersRef.current = [];
     const state = useDiscoveryStore.getState();
-    const zoomLevel = map.getZoom();
+    const maplibre = (window as Window & { maplibregl?: MapLibreGL }).maplibregl;
+    if (!maplibre) return;
     const markers = buildMarkerPayload(
       Object.values(state.nodes),
       state.selfCoordinates,
-      zoomLevel,
+      map.getZoom(),
       state.selectedNodeId,
     );
-
     markers.forEach((pin) => {
-      const icon = L.divIcon({
-        className: 'pp-pin',
-        html: `<div class="pp-head${pin.selected ? ' pp-selected' : ''}"></div><div class="pp-tip-dot${pin.selected ? ' pp-selected' : ''}"></div>`,
-        iconSize: [22, 28],
-        iconAnchor: [11, 26],
-      });
-      const marker = L.marker([pin.latitude, pin.longitude], {
-        icon,
-        zIndexOffset: pin.selected ? 800 : 0,
-        title: pin.title,
-      });
-      marker.bindTooltip(escapeHtml(pin.label), {
-        permanent: true,
-        direction: pin.labelAnchor,
-        className: pin.selected ? 'pp-tip pp-tip-selected' : 'pp-tip',
-        offset: [0, -4],
-      });
-      marker.on('click', (event: L.LeafletMouseEvent) => {
-        L.DomEvent.stopPropagation(event.originalEvent);
+      const element = document.createElement('div');
+      element.className = `pp-marker${pin.selected ? ' pp-selected' : ''}`;
+      const head = document.createElement('div');
+      head.className = 'pp-head';
+      const stem = document.createElement('div');
+      stem.className = 'pp-tip-dot';
+      const tip = document.createElement('div');
+      tip.className = `pp-tip pp-tip-${pin.labelAnchor}`;
+      tip.textContent = pin.label;
+      element.append(head, stem, tip);
+      element.addEventListener('click', (event) => {
+        event.stopPropagation();
         selectRef.current(pin.id);
       });
-      marker.addTo(markerLayer);
-
-      if (pin.selected) {
-        L.circle([pin.trueLatitude, pin.trueLongitude], {
-          radius: 120,
-          color: '#22d3ee',
-          weight: 1.5,
-          dashArray: '4 6',
-          fillColor: '#22d3ee',
-          fillOpacity: 0.08,
-        }).addTo(markerLayer);
-      }
+      const marker = new maplibre.Marker({ element, anchor: 'bottom' })
+        .setLngLat([pin.longitude, pin.latitude])
+        .addTo(map);
+      markersRef.current.push(marker);
     });
 
-    L.circleMarker([state.selfCoordinates.latitude, state.selfCoordinates.longitude], {
-      radius: 7,
-      color: '#ffffff',
-      weight: 2,
-      fillColor: '#38bdf8',
-      fillOpacity: 1,
-    }).addTo(userLayer);
+    const selected = markers.find((pin) => pin.selected);
+    map.getSource('ring')?.setData(selected ? ringFeature(selected.trueLatitude, selected.trueLongitude) : EMPTY);
+    map.getSource('self')?.setData({
+      type: 'Feature',
+      properties: {},
+      geometry: {
+        type: 'Point',
+        coordinates: [state.selfCoordinates.longitude, state.selfCoordinates.latitude],
+      },
+    });
   };
 
   const drawRef = useRef(drawMarkers);
@@ -151,72 +209,84 @@ export const DiscoveryLeafletMap: React.FC = () => {
   publishRef.current = publishBounds;
 
   const flyToPoint = (latitude: number, longitude: number, zoomLevel: number) => {
-    const map = mapRef.current;
-    if (!map) return;
-    const size = map.getSize();
-    const opticalY = opticalRef.current ?? size.y / 2;
-    const center = centerForOptical(map, [latitude, longitude], zoomLevel, opticalY, size.y);
-    map.flyTo(center, zoomLevel, { duration: 0.55 });
+    mapRef.current?.flyTo({ center: [longitude, latitude], zoom: zoomLevel, duration: 550 });
   };
 
   bootRef.current = () => {
-    if (mapRef.current) return;
-    ensureLeafletCss();
+    if (!aliveRef.current || mapRef.current || bootingRef.current) return;
     const host = hostElement(hostRef.current);
     if (!host || host.clientWidth === 0 || host.clientHeight === 0) return;
-
+    ensurePinCss();
+    bootingRef.current = true;
     const state = useDiscoveryStore.getState();
-    const map = L.map(host, {
-      zoomControl: false,
-      attributionControl: true,
-      minZoom: 3,
-      maxZoom: 20,
-    });
-    L.tileLayer(FREE_DARK_TILE_URL, {
-      attribution: FREE_DARK_TILE_ATTRIBUTION,
-      subdomains: FREE_DARK_TILE_SUBDOMAINS,
-      maxZoom: 20,
-    }).addTo(map);
-
-    const size = map.getSize();
-    const opticalY = opticalCenter({
-      canvasWidth: size.x,
-      canvasHeight: size.y,
-      headerHeight: state.headerHeight,
-      drawerHeight: state.drawerHeight,
-      navHeight: NAV_HEIGHT,
-    }).y;
-    opticalRef.current = opticalY;
-    const center = centerForOptical(
-      map,
-      [state.selfCoordinates.latitude, state.selfCoordinates.longitude],
-      DISCOVERY_MAP_ZOOM,
-      opticalY,
-      size.y,
-    );
-    map.setView(center, DISCOVERY_MAP_ZOOM);
-    markerLayerRef.current = L.layerGroup().addTo(map);
-    userLayerRef.current = L.layerGroup().addTo(map);
-    mapRef.current = map;
-    drawRef.current(map);
-    publishRef.current(map);
-
-    map.on('moveend', () => {
-      if (!mapRef.current) return;
-      publishRef.current(map);
-    });
-    map.on('zoomend', () => {
-      if (!mapRef.current) return;
-      drawRef.current(map);
-      publishRef.current(map);
-    });
-
-    const attribution = host.querySelector('.leaflet-bottom') as HTMLElement | null;
-    if (attribution) attribution.style.transition = 'bottom 160ms ease';
-    setReady(true);
+    loadMapLibre()
+      .then((maplibre) => {
+        if (!aliveRef.current || mapRef.current) {
+          bootingRef.current = false;
+          return;
+        }
+        const currentHost = hostElement(hostRef.current);
+        if (!currentHost) {
+          bootingRef.current = false;
+          return;
+        }
+        const map = new maplibre.Map({
+          container: currentHost,
+          style: FREE_DARK_STYLE_URL,
+          center: [state.selfCoordinates.longitude, state.selfCoordinates.latitude],
+          zoom: DISCOVERY_MAP_ZOOM,
+          attributionControl: true,
+          fadeDuration: 0,
+        });
+        mapRef.current = map;
+        map.on('load', () => {
+          map.addSource('ring', { type: 'geojson', data: EMPTY });
+          map.addLayer({
+            id: 'ring',
+            type: 'line',
+            source: 'ring',
+            paint: { 'line-color': '#22d3ee', 'line-width': 1.5, 'line-dasharray': [1.5, 1.5] },
+          });
+          map.addSource('self', { type: 'geojson', data: EMPTY });
+          map.addLayer({
+            id: 'self-dot',
+            type: 'circle',
+            source: 'self',
+            paint: {
+              'circle-radius': 7,
+              'circle-color': '#38bdf8',
+              'circle-stroke-width': 2,
+              'circle-stroke-color': '#ffffff',
+            },
+          });
+          const latest = useDiscoveryStore.getState();
+          map.jumpTo({
+            center: [latest.selfCoordinates.longitude, latest.selfCoordinates.latitude],
+            zoom: DISCOVERY_MAP_ZOOM,
+            padding: chromePadding(latest.headerHeight, latest.drawerHeight),
+          });
+          drawRef.current(map);
+          publishRef.current(map);
+          map.on('moveend', () => {
+            if (!mapRef.current) return;
+            publishRef.current(map);
+          });
+          map.on('zoomend', () => {
+            if (!mapRef.current) return;
+            drawRef.current(map);
+            publishRef.current(map);
+          });
+          setReady(true);
+        });
+      })
+      .catch(() => {
+        bootingRef.current = false;
+        mapRef.current = null;
+      });
   };
 
   useEffect(() => {
+    aliveRef.current = true;
     let cancelled = false;
     let frame = 0;
     let attempts = 0;
@@ -231,11 +301,13 @@ export const DiscoveryLeafletMap: React.FC = () => {
     tick();
     return () => {
       cancelled = true;
+      aliveRef.current = false;
+      bootingRef.current = false;
       cancelAnimationFrame(frame);
+      markersRef.current.forEach((marker) => marker.remove());
+      markersRef.current = [];
       mapRef.current?.remove();
       mapRef.current = null;
-      markerLayerRef.current = null;
-      userLayerRef.current = null;
       setReady(false);
     };
   }, []);
@@ -258,28 +330,18 @@ export const DiscoveryLeafletMap: React.FC = () => {
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !ready) return;
-    if (drawerDragging) map.dragging.disable();
-    else map.dragging.enable();
+    if (drawerDragging) map.dragPan.disable();
+    else map.dragPan.enable();
   }, [drawerDragging, ready]);
 
   useEffect(() => {
     const map = mapRef.current;
-    const host = hostElement(hostRef.current);
-    if (!map || !host || !ready) return;
-    const size = map.getSize();
-    const next = opticalCenter({
-      canvasWidth: size.x || host.clientWidth,
-      canvasHeight: size.y || host.clientHeight,
-      headerHeight,
-      drawerHeight,
-      navHeight: NAV_HEIGHT,
-    }).y;
-    const previous = opticalRef.current;
-    opticalRef.current = next;
-    const attribution = host.querySelector('.leaflet-bottom') as HTMLElement | null;
-    if (attribution) attribution.style.bottom = `${drawerHeight + NAV_HEIGHT + 6}px`;
-    if (previous == null || Math.abs(next - previous) < 0.5) return;
-    map.panBy([0, -(next - previous)], { animate: false });
+    if (!map || !ready) return;
+    map.easeTo({ padding: chromePadding(headerHeight, drawerHeight), duration: 0 });
+    const bottom = `${drawerHeight + NAV_HEIGHT + 6}px`;
+    map.getContainer().querySelectorAll('.maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left').forEach((node) => {
+      (node as HTMLElement).style.bottom = bottom;
+    });
   }, [drawerHeight, headerHeight, ready]);
 
   const handleRecenter = () => {
@@ -297,13 +359,13 @@ export const DiscoveryLeafletMap: React.FC = () => {
         onLayout={() => {
           const map = mapRef.current;
           if (map) {
-            map.invalidateSize();
+            map.resize();
             return;
           }
           bootRef.current();
         }}
       />
-      <DiscoveryMapChrome zoomText={`${wide ? 'WIDE' : 'CLOSE'} · z${zoom}`} onRecenter={handleRecenter} />
+      <DiscoveryMapChrome zoomText={`${wide ? 'WIDE' : 'CLOSE'} · z${Math.round(zoom)}`} onRecenter={handleRecenter} />
     </View>
   );
 };

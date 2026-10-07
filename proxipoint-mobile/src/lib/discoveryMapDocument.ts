@@ -1,71 +1,77 @@
-import { LEAFLET_CSS } from './leafletCss';
 import {
-  FREE_DARK_TILE_ATTRIBUTION,
-  FREE_DARK_TILE_SUBDOMAINS,
-  FREE_DARK_TILE_URL,
+  FREE_DARK_STYLE_URL,
+  MAPLIBRE_CSS_URL,
+  MAPLIBRE_JS_URL,
   scriptJson,
 } from './freeBasemap';
 
-const PIN_CSS = `
-.leaflet-container { background:#0b1220; height:100%; width:100%; }
-.pp-pin { background: transparent !important; border: none !important; }
-.pp-tip { background: rgba(8,15,29,0.92); color: #e0f2fe; border: 1px solid rgba(34,211,238,0.45); border-radius: 8px; box-shadow: none; font-weight: 700; font-size: 10px; letter-spacing: 0.3px; padding: 2px 6px; }
-.pp-tip.pp-tip-selected { color: #fff; border-color: #67e8f9; }
-.pp-head { width: 18px; height: 18px; border-radius: 9px; background: #06b6d4; border: 2px solid #e0f2fe; box-shadow: 0 0 0 4px rgba(6,182,212,0.25); }
-.pp-head.pp-selected { background: #38bdf8; border-color: #fff; transform: scale(1.15); }
-.pp-tip-dot { width: 0; height: 0; margin: 0 auto; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid #06b6d4; }
-.pp-tip-dot.pp-selected { border-top-color: #38bdf8; }
+export const DISCOVERY_PIN_CSS = `
+.pp-marker { position: relative; width: 22px; height: 28px; cursor: pointer; }
+.pp-head { width: 18px; height: 18px; margin: 0 auto; border-radius: 9px; background: #06b6d4; border: 2px solid #e0f2fe; box-shadow: 0 0 0 4px rgba(6,182,212,0.25); }
+.pp-marker.pp-selected .pp-head { background: #38bdf8; border-color: #fff; transform: scale(1.12); }
+.pp-tip-dot { width: 0; height: 0; margin: -1px auto 0; border-left: 5px solid transparent; border-right: 5px solid transparent; border-top: 7px solid #06b6d4; }
+.pp-marker.pp-selected .pp-tip-dot { border-top-color: #38bdf8; }
+.pp-tip { position: absolute; white-space: nowrap; background: rgba(8,15,29,0.92); color: #e0f2fe; border: 1px solid rgba(34,211,238,0.45); border-radius: 8px; font-weight: 700; font-size: 10px; letter-spacing: 0.3px; padding: 2px 6px; }
+.pp-marker.pp-selected .pp-tip { color: #fff; border-color: #67e8f9; }
+.pp-tip-top { bottom: 100%; left: 50%; transform: translateX(-50%); margin-bottom: 4px; }
+.pp-tip-bottom { top: 100%; left: 50%; transform: translateX(-50%); margin-top: 4px; }
+.pp-tip-left { right: 100%; top: 0; margin-right: 6px; }
+.pp-tip-right { left: 100%; top: 0; margin-left: 6px; }
+.maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left { transition: bottom 160ms ease; }
+.maplibregl-ctrl-attrib { background: rgba(8,15,29,0.82); }
+.maplibregl-ctrl-attrib a { color: #7dd3fc; }
 `;
 
-// A self-contained Leaflet page for the native WebView. Tiles stay on the
-// keyless CARTO dark basemap. The app pushes marker and camera commands in.
+// A self-contained MapLibre page for the native WebView. The style is
+// OpenFreeMap dark, which needs no API key. The app pushes markers and camera
+// commands in after the style loads.
 export function buildDiscoveryMapDocument(): string {
-  const css = scriptJson(`${LEAFLET_CSS}\n${PIN_CSS}`);
-  const tileUrl = scriptJson(FREE_DARK_TILE_URL);
-  const attribution = scriptJson(FREE_DARK_TILE_ATTRIBUTION);
-  const subdomains = scriptJson(FREE_DARK_TILE_SUBDOMAINS);
+  const css = scriptJson(DISCOVERY_PIN_CSS);
+  const styleUrl = scriptJson(FREE_DARK_STYLE_URL);
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-<style>html,body,#map{height:100%;margin:0;background:#0b1220;} .leaflet-bottom{transition:bottom 160ms ease;}</style>
+<link rel="stylesheet" href="${MAPLIBRE_CSS_URL}" />
+<style>html,body,#map{height:100%;margin:0;background:#0b1220;}</style>
 </head>
 <body>
 <div id="map"></div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="${MAPLIBRE_JS_URL}"></script>
 <script>
 document.head.appendChild(Object.assign(document.createElement('style'), { textContent: ${css} }));
 var NAV = 72;
-var map = null;
-var markers = null;
-var userLayer = null;
-var opticalY = null;
+var STYLE_URL = ${styleUrl};
+var map = new maplibregl.Map({
+  container: 'map',
+  style: STYLE_URL,
+  center: [-105.2778, 40.0149],
+  zoom: 15,
+  attributionControl: true,
+  fadeDuration: 0
+});
+var markerObjs = [];
 var viewReady = false;
+var EMPTY = { type: 'FeatureCollection', features: [] };
 
 function post(message) {
   if (window.ReactNativeWebView) window.ReactNativeWebView.postMessage(JSON.stringify(message));
 }
 
-function opticalCenterY(header, drawer) {
-  var height = map.getSize().y;
-  var top = Math.max(0, Math.min(header, height));
-  var bottomInset = Math.max(0, Math.min(drawer + NAV, height));
-  var visible = Math.max(0, height - top - bottomInset);
-  return top + visible / 2;
+function paddingFor(header, drawer) {
+  return { top: header, bottom: drawer + NAV, left: 0, right: 0 };
 }
 
-function centerForOptical(latlng, zoom, optical) {
-  var size = map.getSize();
-  var projected = map.project(latlng, zoom);
-  return map.unproject(projected.add([0, size.y / 2 - optical]), zoom);
+function liftAttribution(drawer) {
+  var nodes = document.querySelectorAll('.maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left');
+  for (var i = 0; i < nodes.length; i += 1) nodes[i].style.bottom = (drawer + NAV + 6) + 'px';
 }
 
 function publish() {
-  if (!map) return;
   var bounds = map.getBounds();
+  if (!bounds) return;
   post({
     type: 'bounds',
     south: bounds.getSouth(),
@@ -76,103 +82,108 @@ function publish() {
   });
 }
 
-function escapeHtml(value) {
-  return String(value).replace(/[&<>"']/g, function (char) {
-    return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char];
-  });
+function ringFeature(latitude, longitude) {
+  var steps = 64;
+  var coords = [];
+  var cos = Math.cos(latitude * Math.PI / 180) || 1e-6;
+  for (var i = 0; i <= steps; i += 1) {
+    var angle = 2 * Math.PI * i / steps;
+    coords.push([
+      longitude + Math.cos(angle) * 120 / (111320 * cos),
+      latitude + Math.sin(angle) * 120 / 110540
+    ]);
+  }
+  return { type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} };
 }
 
-map = L.map('map', { zoomControl: false, attributionControl: true, minZoom: 3, maxZoom: 20 });
-L.tileLayer(${tileUrl}, {
-  attribution: ${attribution},
-  subdomains: ${subdomains},
-  maxZoom: 20
-}).addTo(map);
-markers = L.layerGroup().addTo(map);
-userLayer = L.layerGroup().addTo(map);
-map.on('moveend', publish);
-map.on('zoomend', publish);
+function clearMarkers() {
+  markerObjs.forEach(function (marker) { marker.remove(); });
+  markerObjs = [];
+}
 
 window.__pp = {
   init: function (latitude, longitude, zoom, header, drawer) {
-    opticalY = opticalCenterY(header, drawer);
-    var center = centerForOptical([latitude, longitude], zoom, opticalY);
-    map.setView(center, zoom);
+    map.jumpTo({ center: [longitude, latitude], zoom: zoom, padding: paddingFor(header, drawer) });
     viewReady = true;
-    var attributionNode = document.querySelector('.leaflet-bottom');
-    if (attributionNode) attributionNode.style.bottom = (drawer + NAV + 6) + 'px';
+    liftAttribution(drawer);
     publish();
   },
   sync: function (payload) {
-    markers.clearLayers();
-    userLayer.clearLayers();
+    clearMarkers();
     (payload.markers || []).forEach(function (pin) {
-      var icon = L.divIcon({
-        className: 'pp-pin',
-        html: '<div class="pp-head' + (pin.selected ? ' pp-selected' : '') + '"></div><div class="pp-tip-dot' + (pin.selected ? ' pp-selected' : '') + '"></div>',
-        iconSize: [22, 28],
-        iconAnchor: [11, 26]
-      });
-      var marker = L.marker([pin.latitude, pin.longitude], { icon: icon, title: pin.title, zIndexOffset: pin.selected ? 800 : 0 });
-      marker.bindTooltip(escapeHtml(pin.label), {
-        permanent: true,
-        direction: pin.labelAnchor || 'top',
-        className: pin.selected ? 'pp-tip pp-tip-selected' : 'pp-tip',
-        offset: [0, -4]
-      });
-      marker.on('click', function (event) {
-        L.DomEvent.stopPropagation(event);
+      var el = document.createElement('div');
+      el.className = 'pp-marker' + (pin.selected ? ' pp-selected' : '');
+      var head = document.createElement('div');
+      head.className = 'pp-head';
+      var stem = document.createElement('div');
+      stem.className = 'pp-tip-dot';
+      var tip = document.createElement('div');
+      tip.className = 'pp-tip pp-tip-' + (pin.labelAnchor || 'top');
+      tip.textContent = pin.label || '';
+      el.appendChild(head);
+      el.appendChild(stem);
+      el.appendChild(tip);
+      el.addEventListener('click', function (event) {
+        event.stopPropagation();
         post({ type: 'select', id: pin.id });
       });
-      marker.addTo(markers);
-      if (pin.selected) {
-        L.circle([pin.trueLatitude, pin.trueLongitude], {
-          radius: 120,
-          color: '#22d3ee',
-          weight: 1.5,
-          dashArray: '4 6',
-          fillColor: '#22d3ee',
-          fillOpacity: 0.08
-        }).addTo(markers);
-      }
+      markerObjs.push(new maplibregl.Marker({ element: el, anchor: 'bottom' }).setLngLat([pin.longitude, pin.latitude]).addTo(map));
     });
-    if (payload.self) {
-      L.circleMarker([payload.self.latitude, payload.self.longitude], {
-        radius: 7,
-        color: '#ffffff',
-        weight: 2,
-        fillColor: '#38bdf8',
-        fillOpacity: 1
-      }).addTo(userLayer);
+    var selected = (payload.markers || []).find(function (pin) { return pin.selected; });
+    var ring = map.getSource('ring');
+    if (ring) ring.setData(selected ? ringFeature(selected.trueLatitude, selected.trueLongitude) : EMPTY);
+    var selfSource = map.getSource('self');
+    if (selfSource && payload.self) {
+      selfSource.setData({
+        type: 'Feature',
+        geometry: { type: 'Point', coordinates: [payload.self.longitude, payload.self.latitude] },
+        properties: {}
+      });
     }
-    if (payload.dragging) map.dragging.disable();
-    else map.dragging.enable();
-    var attributionNode = document.querySelector('.leaflet-bottom');
-    if (attributionNode && payload.attributionBottom != null) {
-      attributionNode.style.bottom = payload.attributionBottom + 'px';
+    if (payload.dragging) map.dragPan.disable();
+    else map.dragPan.enable();
+    if (payload.attributionBottom != null) {
+      var nodes = document.querySelectorAll('.maplibregl-ctrl-bottom-right, .maplibregl-ctrl-bottom-left');
+      for (var i = 0; i < nodes.length; i += 1) nodes[i].style.bottom = payload.attributionBottom + 'px';
     }
   },
   focus: function (latitude, longitude, zoom) {
     if (!viewReady) return;
-    var optical = opticalY == null ? map.getSize().y / 2 : opticalY;
-    map.flyTo(centerForOptical([latitude, longitude], zoom, optical), zoom, { duration: 0.55 });
+    map.flyTo({ center: [longitude, latitude], zoom: zoom, duration: 550 });
   },
   setOptical: function (header, drawer) {
     if (!viewReady) return;
-    var next = opticalCenterY(header, drawer);
-    var previous = opticalY;
-    opticalY = next;
-    var attributionNode = document.querySelector('.leaflet-bottom');
-    if (attributionNode) attributionNode.style.bottom = (drawer + NAV + 6) + 'px';
-    if (previous == null || Math.abs(next - previous) < 0.5) return;
-    map.panBy([0, -(next - previous)], { animate: false });
+    map.easeTo({ padding: paddingFor(header, drawer), duration: 0 });
+    liftAttribution(drawer);
   },
   invalidate: function () {
-    map.invalidateSize();
+    map.resize();
   }
 };
 
-post({ type: 'ready' });
+map.on('load', function () {
+  map.addSource('ring', { type: 'geojson', data: EMPTY });
+  map.addLayer({
+    id: 'ring',
+    type: 'line',
+    source: 'ring',
+    paint: { 'line-color': '#22d3ee', 'line-width': 1.5, 'line-dasharray': [1.5, 1.5] }
+  });
+  map.addSource('self', { type: 'geojson', data: EMPTY });
+  map.addLayer({
+    id: 'self-dot',
+    type: 'circle',
+    source: 'self',
+    paint: {
+      'circle-radius': 7,
+      'circle-color': '#38bdf8',
+      'circle-stroke-width': 2,
+      'circle-stroke-color': '#ffffff'
+    }
+  });
+  map.on('moveend', publish);
+  post({ type: 'ready' });
+});
 </script>
 </body>
 </html>`;

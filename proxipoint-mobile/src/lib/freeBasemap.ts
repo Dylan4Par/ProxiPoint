@@ -5,12 +5,11 @@ export interface GeoPoint {
   longitude: number;
 }
 
-// CARTO's dark raster basemap. It is free, needs no API key, and is built from
-// OpenStreetMap data. The tile policy requires the attribution below to stay visible.
-export const FREE_DARK_TILE_URL = 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png';
-export const FREE_DARK_TILE_SUBDOMAINS = 'abcd';
-export const FREE_DARK_TILE_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+// OpenFreeMap's dark style. It is free, needs no API key, and is built from
+// OpenStreetMap. MapLibre's attribution control has to stay visible.
+export const FREE_DARK_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
+export const MAPLIBRE_JS_URL = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.js';
+export const MAPLIBRE_CSS_URL = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.css';
 
 export const DISCOVERY_MAP_ZOOM = 15;
 
@@ -125,6 +124,20 @@ export function buildMarkerPayload(
 
 export function scriptJson(value: unknown): string {
   return JSON.stringify(value).replace(/</g, '\\u003c');
+}
+
+export function circlePolygon(center: GeoPoint, radiusMeters: number, steps = 64): GeoPoint[] {
+  const count = Math.max(8, steps);
+  const cos = Math.cos((center.latitude * Math.PI) / 180) || 1e-6;
+  const ring: GeoPoint[] = [];
+  for (let index = 0; index <= count; index += 1) {
+    const angle = (2 * Math.PI * index) / count;
+    ring.push({
+      latitude: center.latitude + (Math.sin(angle) * radiusMeters) / 110540,
+      longitude: center.longitude + (Math.cos(angle) * radiusMeters) / (111320 * cos),
+    });
+  }
+  return ring;
 }
 
 export function escapeHtml(value: string): string {

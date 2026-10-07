@@ -130,7 +130,7 @@ export const DiscoveryLeafletMap: React.FC = () => {
         ref={webRef}
         style={styles.map}
         originWhitelist={['*']}
-        source={{ html: DOCUMENT, baseUrl: 'https://basemaps.cartocdn.com' }}
+        source={{ html: DOCUMENT, baseUrl: 'https://tiles.openfreemap.org' }}
         onMessage={handleMessage}
         javaScriptEnabled
         domStorageEnabled

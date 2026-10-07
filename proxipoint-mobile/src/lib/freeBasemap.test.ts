@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   DISCOVERY_MAP_ZOOM,
-  FREE_DARK_TILE_ATTRIBUTION,
-  FREE_DARK_TILE_URL,
+  FREE_DARK_STYLE_URL,
+  MAPLIBRE_CSS_URL,
+  MAPLIBRE_JS_URL,
   buildMarkerPayload,
+  circlePolygon,
   declutterScaleForZoom,
   fanPins,
   localPixel,
@@ -15,12 +17,13 @@ import {
 import { nodeInsideViewport } from '../stores/useDiscoveryStore';
 import type { DiscoveryNode } from '../stores/useDiscoveryStore';
 
-test('the basemap is a keyless CARTO dark tile set with OpenStreetMap attribution', () => {
-  assert.match(FREE_DARK_TILE_URL, /^https:\/\/\{s\}\.basemaps\.cartocdn\.com\/dark_all\//);
-  assert.equal(FREE_DARK_TILE_URL.includes('api_key'), false);
-  assert.equal(FREE_DARK_TILE_URL.includes('token'), false);
-  assert.match(FREE_DARK_TILE_ATTRIBUTION, /OpenStreetMap/);
-  assert.match(FREE_DARK_TILE_ATTRIBUTION, /CARTO/);
+test('the basemap is OpenFreeMap dark and needs no API key', () => {
+  assert.equal(FREE_DARK_STYLE_URL, 'https://tiles.openfreemap.org/styles/dark');
+  assert.equal(FREE_DARK_STYLE_URL.includes('api_key'), false);
+  assert.equal(FREE_DARK_STYLE_URL.includes('token'), false);
+  assert.equal(FREE_DARK_STYLE_URL.includes('cartocdn'), false);
+  assert.match(MAPLIBRE_JS_URL, /^https:\/\/cdn\.jsdelivr\.net\/npm\/maplibre-gl@/);
+  assert.match(MAPLIBRE_CSS_URL, /^https:\/\/cdn\.jsdelivr\.net\/npm\/maplibre-gl@/);
   assert.equal(DISCOVERY_MAP_ZOOM, 15);
 });
 
@@ -70,6 +73,13 @@ test('identical downtown coordinates fan into separate pins', () => {
   assert.equal(markers[0].label, 'LiveMusic');
   assert.notEqual(markers[0].latitude, markers[1].latitude);
   assert.equal(scriptJson({ title: '</script>' }).includes('<'), false);
+});
+
+test('a 120 meter ring sits around the coordinate and closes', () => {
+  const ring = circlePolygon({ latitude: 40.0176, longitude: -105.2793 }, 120);
+  assert.equal(ring[0].latitude, ring[ring.length - 1].latitude);
+  assert.ok(ring[16].latitude > 40.0176);
+  assert.ok(ring[0].longitude > -105.2793);
 });
 
 test('geographic viewport bounds keep a pin and drop one outside the frame', () => {
