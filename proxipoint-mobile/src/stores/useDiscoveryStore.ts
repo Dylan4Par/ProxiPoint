@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { assignedTags, eventMatchesMapFilter } from '../lib/beaconDrop';
+import type { BeaconInvite } from '../lib/beaconInvite';
 import { beaconWindowStatus, clampDuration, clampStart, type BeaconVisibility } from '../lib/beaconSchedule';
 import { cardListBounds, DISCOVERY_PIXELS_PER_METER, pointInBounds } from '../lib/discoveryFocus';
 import { calculateDistanceMeters } from '../lib/locationFilter';
@@ -38,6 +39,7 @@ export interface DiscoveryNode {
   x: number;
   y: number;
   visibility?: BeaconVisibility;
+  invites?: BeaconInvite[];
   startsAt?: string;
   durationMinutes?: number;
   regionName?: string;
@@ -129,6 +131,7 @@ export interface DropBeaconDraft {
   latitude: number;
   longitude: number;
   visibility: BeaconVisibility;
+  invites?: BeaconInvite[];
   startsAt: string;
   durationMinutes: number;
   regionName?: string;
@@ -328,6 +331,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         x,
         y,
         visibility: draft.visibility === 'private' ? 'private' : 'public',
+        invites: draft.visibility === 'private' ? draft.invites ?? [] : [],
         startsAt: scheduled.start.toISOString(),
         durationMinutes: duration.minutes,
         regionName: draft.regionName?.trim() || undefined,

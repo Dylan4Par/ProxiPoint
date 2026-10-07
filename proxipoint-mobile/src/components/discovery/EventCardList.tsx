@@ -9,6 +9,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { presentAssignedTag } from '../../lib/beaconDrop';
+import { inviteSummary } from '../../lib/beaconInvite';
 import { formatDuration, formatStartLabel } from '../../lib/beaconSchedule';
 import type { AppearancePalette } from '../../lib/appearance';
 import { useAppearanceStore } from '../../stores/useAppearanceStore';
@@ -53,6 +54,7 @@ export const EventCardList: React.FC = () => {
       startsAt: undefined,
       durationMinutes: undefined,
       visibility: undefined,
+      invites: undefined,
     };
 
   const animateDrawer = (toExpanded: boolean) => {
@@ -104,6 +106,9 @@ export const EventCardList: React.FC = () => {
             {formatStartLabel(new Date(item.startsAt), new Date())}
             {' · '}
             {formatDuration(item.durationMinutes ?? 60)}
+            {item.visibility === 'private' && inviteSummary(item.invites)
+              ? ` · ${inviteSummary(item.invites)}`
+              : ''}
           </Text>
         ) : null}
 
@@ -176,6 +181,9 @@ export const EventCardList: React.FC = () => {
                 {formatStartLabel(new Date(selectedNode.startsAt), new Date())}
                 {' · '}
                 {formatDuration(selectedNode.durationMinutes ?? 60)}
+                {selectedNode.visibility === 'private' && inviteSummary(selectedNode.invites)
+                  ? ` · ${inviteSummary(selectedNode.invites)}`
+                  : ''}
               </Text>
             ) : null}
           </View>
