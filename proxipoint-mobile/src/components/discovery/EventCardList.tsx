@@ -86,6 +86,11 @@ export const EventCardList: React.FC = () => {
       >
         <Text style={styles.tagText}>{tagFor(item)}</Text>
         <Text style={styles.titleText}>{item.title}</Text>
+        {item.regionName ? (
+          <Text style={styles.regionText} numberOfLines={2}>
+            {item.regionChain || item.regionName}
+          </Text>
+        ) : null}
         <Text style={styles.hostText} numberOfLines={2}>{item.venue}</Text>
         {item.startsAt ? (
           <Text style={styles.scheduleText} numberOfLines={1}>
@@ -152,6 +157,11 @@ export const EventCardList: React.FC = () => {
             <Text numberOfLines={1} style={styles.collapsedTitle}>
               {selectedNode.title}
             </Text>
+            {selectedNode.regionName ? (
+              <Text numberOfLines={1} style={styles.collapsedRegion}>
+                {selectedNode.regionName}
+              </Text>
+            ) : null}
             {selectedNode.startsAt ? (
               <Text numberOfLines={1} style={styles.collapsedSchedule}>
                 {selectedNode.visibility === 'private' ? 'Private' : 'Public'}
@@ -230,6 +240,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginTop: 1,
   },
+  collapsedRegion: {
+    color: '#22d3ee',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 2,
+  },
   collapsedSchedule: {
     color: '#67e8f9',
     fontSize: 11,
@@ -268,6 +284,12 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
     fontSize: 14,
     fontWeight: '700',
+  },
+  regionText: {
+    color: '#22d3ee',
+    fontSize: 12,
+    fontWeight: '700',
+    marginTop: 4,
   },
   hostText: {
     color: '#64748b',

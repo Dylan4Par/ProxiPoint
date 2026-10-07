@@ -38,6 +38,8 @@ export interface DiscoveryNode {
   visibility?: BeaconVisibility;
   startsAt?: string;
   durationMinutes?: number;
+  regionName?: string;
+  regionChain?: string;
 }
 
 export interface PreviewPin {
@@ -125,6 +127,8 @@ export interface DropBeaconDraft {
   visibility: BeaconVisibility;
   startsAt: string;
   durationMinutes: number;
+  regionName?: string;
+  regionChain?: string;
 }
 const VENUE_POOL = [
   'Central Park Plaza',
@@ -306,6 +310,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         visibility: draft.visibility === 'private' ? 'private' : 'public',
         startsAt: scheduled.start.toISOString(),
         durationMinutes: duration.minutes,
+        regionName: draft.regionName?.trim() || undefined,
+        regionChain: draft.regionChain?.trim() || undefined,
       };
 
       const selectedTag =

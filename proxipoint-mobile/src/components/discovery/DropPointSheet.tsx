@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { MAX_BEACON_CHANNELS, toggleChannel } from '../../lib/beaconDrop';
 import { isSameVerifiedQuery, type VerifiedAddress } from '../../lib/addressVerify';
+import { regionLabel, type RegionMatch } from '../../lib/regions';
 import {
   MAX_DURATION_MINUTES,
   MIN_DURATION_MINUTES,
@@ -21,6 +22,7 @@ import {
   type BeaconVisibility,
 } from '../../lib/beaconSchedule';
 import { readCurrentPosition, verifyAddressQuery, verifyCoordinates } from '../../services/addressVerify';
+import { lookupContainingRegions } from '../../services/regionLookup';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 export const DropPointSheet: React.FC = () => {
@@ -39,6 +41,7 @@ export const DropPointSheet: React.FC = () => {
   const [limitNote, setLimitNote] = useState('');
   const [address, setAddress] = useState('');
   const [verified, setVerified] = useState<VerifiedAddress | null>(null);
+  const [regions, setRegions] = useState<RegionMatch[]>([]);
   const [status, setStatus] = useState<'idle' | 'checking' | 'verified'>('idle');
   const [error, setError] = useState('');
   const [locating, setLocating] = useState(false);
@@ -61,6 +64,7 @@ export const DropPointSheet: React.FC = () => {
       setLimitNote('');
       setAddress('');
       setVerified(null);
+      setRegions([]);
       setStatus('idle');
       setError('');
       setLocating(false);
@@ -73,13 +77,17 @@ export const DropPointSheet: React.FC = () => {
     wasOpen.current = open;
   }, [open, selectedTag]);
 
-  const applyVerified = (next: VerifiedAddress | null, query: string) => {
+  const applyVerified = async (next: VerifiedAddress | null, query: string, id: number) => {
     if (!next) {
       setVerified(null);
+      setRegions([]);
       setStatus('idle');
       setError('That address could not be verified. Try a street and city.');
       return;
     }
+    const matches = await lookupContainingRegions(next.latitude, next.longitude);
+    if (id !== requestId.current) return;
+    setRegions(matches);
     setVerified({ ...next, query });
     setStatus('verified');
     setError('');
@@ -99,7 +107,7 @@ export const DropPointSheet: React.FC = () => {
     try {
       const result = await verifyAddressQuery(query);
       if (id !== requestId.current) return;
-      applyVerified(result, query);
+      await applyVerified(result, query, id);
     } catch {
       if (id !== requestId.current) return;
       setVerified(null);
@@ -132,9 +140,7 @@ export const DropPointSheet: React.FC = () => {
       setSelfCoordinates({ latitude: next.latitude, longitude: next.longitude });
       placePreviewPin({ latitude: next.latitude, longitude: next.longitude });
       setAddress(next.label);
-      setVerified({ ...next, query: next.label });
-      setStatus('verified');
-      setError('');
+      await applyVerified(next, next.label, id);
     } catch (err) {
       if (id !== requestId.current) return;
       setVerified(null);
@@ -159,6 +165,7 @@ export const DropPointSheet: React.FC = () => {
     requestId.current += 1;
     setAddress(text);
     setVerified(null);
+    setRegions([]);
     setStatus('idle');
     setError('');
     setLocating(false);
@@ -193,6 +200,8 @@ export const DropPointSheet: React.FC = () => {
       addressLabel: verified.label,
       latitude: verified.latitude,
       longitude: verified.longitude,
+      regionName: regions[0]?.name,
+      regionChain: regionLabel(regions),
       visibility,
       startsAt: startsAt.toISOString(),
       durationMinutes,
@@ -328,6 +337,9 @@ export const DropPointSheet: React.FC = () => {
 
         {addressVerified && verified ? (
           <Text style={styles.verifiedText}>Verified · {verified.label}</Text>
+        ) : null}
+        {addressVerified && regions.length > 0 ? (
+          <Text style={styles.verifiedText}>In {regionLabel(regions)}</Text>
         ) : null}
         {previewPin ? (
           <Text style={styles.verifiedText}>Pin placed on the map at your current position.</Text>
