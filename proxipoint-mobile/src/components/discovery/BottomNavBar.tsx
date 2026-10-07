@@ -1,7 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { NAV_HEIGHT } from '../../lib/mapViewport';
+import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 export const BottomNavBar: React.FC = () => {
+  const dropSheetOpen = useDiscoveryStore((state) => state.dropSheetOpen);
+  const setDropSheetOpen = useDiscoveryStore((state) => state.setDropSheetOpen);
+
   return (
     <View style={styles.navWrapper}>
       {/* 1. Discover Button with Scaled Compass */}
@@ -19,16 +24,22 @@ export const BottomNavBar: React.FC = () => {
       </TouchableOpacity>
 
       {/* 2. Drop Point Button with Matched 34px Badge */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Drop Point"
+        onPress={() => setDropSheetOpen(true)}
+      >
         <View style={styles.iconContainer}>
-          <View style={styles.dropPointBadge}>
+          <View style={[styles.dropPointBadge, dropSheetOpen && styles.dropPointBadgeOpen]}>
             <View style={styles.pinHead}>
               <View style={styles.pinHole} />
             </View>
             <View style={styles.pinTip} />
           </View>
         </View>
-        <Text style={styles.navLabel}>Drop Point</Text>
+        <Text style={[styles.navLabel, dropSheetOpen && styles.navLabelActive]}>Drop Point</Text>
       </TouchableOpacity>
 
       {/* 3. Activity Button with Scaled Bell Icon */}
@@ -49,7 +60,7 @@ export const BottomNavBar: React.FC = () => {
 
 const styles = StyleSheet.create({
   navWrapper: {
-    height: 72,
+    height: NAV_HEIGHT,
     backgroundColor: '#0a0f1d',
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -138,6 +149,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#22d3ee',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  dropPointBadgeOpen: {
+    backgroundColor: '#e0f2fe',
   },
   pinHead: {
     width: 12,

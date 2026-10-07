@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -7,175 +7,386 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  Platform,
+  GestureResponderEvent,
 } from 'react-native';
+import {
+  BEACON_WORLD,
+  Camera,
+  NAV_HEIGHT,
+  Point,
+  WORLD_SIZE,
+  clampScale,
+  opticalCenter,
+  panToCenter,
+  viewportBounds,
+  zoomAboutFocal,
+} from '../../lib/mapViewport';
+import { DECLUTTER_CLEAR_SCALE, DeclutteredPin, LabelAnchor, declutterPins } from '../../lib/pinDeclutter';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
-const { width, height } = Dimensions.get('window');
-const CANVAS_HEIGHT = height * 0.52;
+const GRID = [300, 600, 900];
+const { width: WINDOW_WIDTH, height: WINDOW_HEIGHT } = Dimensions.get('window');
 
-// Beacon world coordinates inside 1400x1400 world
-const BEACON_WORLD_X = 480;
-const BEACON_WORLD_Y = 480;
-const WORLD_OFFSET = 200; // top: -200, left: -200
+const INITIAL_OPTICAL = opticalCenter({
+  canvasWidth: WINDOW_WIDTH,
+  canvasHeight: WINDOW_HEIGHT,
+  headerHeight: 112,
+  drawerHeight: 215,
+  navHeight: NAV_HEIGHT,
+});
+const INITIAL_CAMERA = panToCenter(BEACON_WORLD, INITIAL_OPTICAL, 1);
 
-// Exact offset needed to place (BEACON_WORLD_X, BEACON_WORLD_Y) at (width / 2, CANVAS_HEIGHT / 2)
-const CENTER_OFFSET_X = width / 2 - (BEACON_WORLD_X - WORLD_OFFSET);
-const CENTER_OFFSET_Y = CANVAS_HEIGHT / 2 - (BEACON_WORLD_Y - WORLD_OFFSET);
+function touchSpan(touches: { pageX: number; pageY: number }[]): number {
+  return Math.hypot(touches[0].pageX - touches[1].pageX, touches[0].pageY - touches[1].pageY);
+}
+
+function labelOffset(anchor: LabelAnchor): { left: number; top: number } {
+  switch (anchor) {
+    case 'right':
+      return { left: 16, top: -10 };
+    case 'bottom':
+      return { left: -34, top: 20 };
+    case 'left':
+      return { left: -86, top: -10 };
+    default:
+      return { left: -34, top: -30 };
+  }
+}
 
 export const DiscoveryMapCanvas: React.FC = () => {
-  const nodes = useDiscoveryStore((s) => s.nodes);
-  const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
-  const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
-  const setViewportBounds = useDiscoveryStore((s) => s.setViewportBounds);
+  const nodes = useDiscoveryStore((state) => state.nodes);
+  const selectedNodeId = useDiscoveryStore((state) => state.selectedNodeId);
+  const selectNodeFromPin = useDiscoveryStore((state) => state.selectNodeFromPin);
+  const setViewportBounds = useDiscoveryStore((state) => state.setViewportBounds);
+  const focusToken = useDiscoveryStore((state) => state.focusToken);
+  const drawerHeight = useDiscoveryStore((state) => state.drawerHeight);
+  const headerHeight = useDiscoveryStore((state) => state.headerHeight);
 
   const nodeList = Object.values(nodes || {});
+  const [canvasSize, setCanvasSize] = useState({ width: WINDOW_WIDTH, height: WINDOW_HEIGHT });
+  const [camera, setCamera] = useState<Camera>(INITIAL_CAMERA);
+  const cameraRef = useRef(camera);
+  const canvasSizeRef = useRef(canvasSize);
+  const opticalRef = useRef(INITIAL_OPTICAL);
+  const pageOrigin = useRef({ x: 0, y: 0 });
+  const canvasRef = useRef<View>(null);
+  const springRef = useRef<Animated.CompositeAnimation | null>(null);
+  const applyCameraRef = useRef<(next: Camera) => void>(() => {});
 
-  const pan = useRef(new Animated.ValueXY({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y })).current;
-  const currentPan = useRef({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y });
+  canvasSizeRef.current = canvasSize;
 
-  const calculateBounds = (offsetX: number, offsetY: number) => {
-    const minX = -offsetX - 40;
-    const maxX = -offsetX + width + 40;
-    const minY = -offsetY - 40;
-    const maxY = -offsetY + CANVAS_HEIGHT + 40;
-    setViewportBounds({ minX, maxX, minY, maxY });
-  };
+  const applyCamera = useCallback(
+    (next: Camera) => {
+      const safe = { panX: next.panX, panY: next.panY, scale: clampScale(next.scale) };
+      cameraRef.current = safe;
+      setCamera(safe);
+      const size = canvasSizeRef.current;
+      setViewportBounds(viewportBounds(safe, size.width, size.height, 48));
+    },
+    [setViewportBounds],
+  );
+  applyCameraRef.current = applyCamera;
+
+  const springCameraTo = useCallback(
+    (target: Camera) => {
+      springRef.current?.stop();
+      const from = { ...cameraRef.current };
+      const progress = new Animated.Value(0);
+      const animation = Animated.spring(progress, {
+        toValue: 1,
+        useNativeDriver: false,
+        friction: 8,
+        tension: 42,
+      });
+      const listener = progress.addListener(({ value }) => {
+        applyCameraRef.current({
+          panX: from.panX + (target.panX - from.panX) * value,
+          panY: from.panY + (target.panY - from.panY) * value,
+          scale: from.scale + (target.scale - from.scale) * value,
+        });
+      });
+      springRef.current = animation;
+      animation.start(({ finished }) => {
+        progress.removeListener(listener);
+        if (finished) applyCameraRef.current(target);
+      });
+    },
+    [],
+  );
 
   useEffect(() => {
-    calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
+    const nextOptical = opticalCenter({
+      canvasWidth: canvasSize.width,
+      canvasHeight: canvasSize.height,
+      headerHeight,
+      drawerHeight,
+      navHeight: NAV_HEIGHT,
+    });
+    const previous = opticalRef.current;
+    const dx = nextOptical.x - previous.x;
+    const dy = nextOptical.y - previous.y;
+    opticalRef.current = nextOptical;
+    if (dx === 0 && dy === 0) return;
+    const current = cameraRef.current;
+    applyCamera({ ...current, panX: current.panX + dx, panY: current.panY + dy });
+  }, [applyCamera, canvasSize, drawerHeight, headerHeight]);
+
+  useEffect(() => {
+    if (focusToken === 0) return;
+    const state = useDiscoveryStore.getState();
+    const node = state.selectedNodeId ? state.nodes[state.selectedNodeId] : undefined;
+    if (!node) return;
+    const targetScale = Math.max(cameraRef.current.scale, DECLUTTER_CLEAR_SCALE);
+    springCameraTo(panToCenter({ x: node.x, y: node.y }, opticalRef.current, targetScale));
+  }, [focusToken, springCameraTo]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    const node = canvasRef.current as unknown as HTMLElement | null;
+    if (!node || typeof node.addEventListener !== 'function') return;
+    const onWheel = (event: WheelEvent) => {
+      event.preventDefault();
+      const rect = node.getBoundingClientRect();
+      const focal = { x: event.clientX - rect.left, y: event.clientY - rect.top };
+      const factor = event.deltaY > 0 ? 0.92 : 1.08;
+      const current = cameraRef.current;
+      applyCameraRef.current(zoomAboutFocal(current, current.scale * factor, focal));
+    };
+    node.addEventListener('wheel', onWheel, { passive: false });
+    return () => node.removeEventListener('wheel', onWheel);
   }, []);
 
-  const handleRecenter = () => {
-    Animated.spring(pan, {
-      toValue: { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y },
-      useNativeDriver: false,
-      friction: 7,
-      tension: 40,
-    }).start();
-    currentPan.current = { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y };
-    calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
-  };
+  const focalFrom = (touches: { pageX: number; pageY: number }[]): Point => ({
+    x: (touches[0].pageX + touches[1].pageX) / 2 - pageOrigin.current.x,
+    y: (touches[0].pageY + touches[1].pageY) / 2 - pageOrigin.current.y,
+  });
+
+  const gestureOrigin = useRef<Camera | null>(null);
+  const pinchState = useRef<{ distance: number; focal: Point } | null>(null);
 
   const panResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4;
+      onMoveShouldSetPanResponder: (_, gesture) =>
+        Math.abs(gesture.dx) > 4 || Math.abs(gesture.dy) > 4 || gesture.numberActiveTouches > 1,
+      onPanResponderGrant: (event: GestureResponderEvent) => {
+        springRef.current?.stop();
+        gestureOrigin.current = { ...cameraRef.current };
+        const touches = event.nativeEvent.touches;
+        pinchState.current =
+          touches.length >= 2
+            ? { distance: touchSpan(touches), focal: focalFrom(touches) }
+            : null;
       },
-      onPanResponderGrant: () => {
-        pan.setOffset({ x: currentPan.current.x, y: currentPan.current.y });
-        pan.setValue({ x: 0, y: 0 });
+      onPanResponderMove: (event, gesture) => {
+        const touches = event.nativeEvent.touches;
+        if (touches.length >= 2) {
+          const distance = touchSpan(touches);
+          const focal = focalFrom(touches);
+          if (!pinchState.current || pinchState.current.distance <= 0) {
+            pinchState.current = { distance, focal };
+            gestureOrigin.current = { ...cameraRef.current };
+            return;
+          }
+          const origin = gestureOrigin.current ?? cameraRef.current;
+          const zoomed = zoomAboutFocal(
+            origin,
+            origin.scale * (distance / pinchState.current.distance),
+            pinchState.current.focal,
+          );
+          applyCameraRef.current({
+            ...zoomed,
+            panX: zoomed.panX + (focal.x - pinchState.current.focal.x),
+            panY: zoomed.panY + (focal.y - pinchState.current.focal.y),
+          });
+          return;
+        }
+
+        if (pinchState.current) {
+          pinchState.current = null;
+          gestureOrigin.current = {
+            ...cameraRef.current,
+            panX: cameraRef.current.panX - gesture.dx,
+            panY: cameraRef.current.panY - gesture.dy,
+          };
+        }
+        const origin = gestureOrigin.current ?? cameraRef.current;
+        applyCameraRef.current({
+          ...origin,
+          panX: origin.panX + gesture.dx,
+          panY: origin.panY + gesture.dy,
+        });
       },
-      onPanResponderMove: Animated.event([null, { dx: pan.x, dy: pan.y }], {
-        useNativeDriver: false,
-        listener: (_, gestureState) => {
-          const projectedX = currentPan.current.x + gestureState.dx;
-          const projectedY = currentPan.current.y + gestureState.dy;
-          calculateBounds(projectedX, projectedY);
-        },
-      }),
-      onPanResponderRelease: (_, gestureState) => {
-        currentPan.current.x += gestureState.dx;
-        currentPan.current.y += gestureState.dy;
-        pan.flattenOffset();
-        calculateBounds(currentPan.current.x, currentPan.current.y);
+      onPanResponderRelease: () => {
+        pinchState.current = null;
+        gestureOrigin.current = null;
       },
-    })
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderTerminate: () => {
+        pinchState.current = null;
+        gestureOrigin.current = null;
+      },
+    }),
   ).current;
 
+  const placedPins = useMemo(
+    () => declutterPins(
+      Object.values(nodes).map((node) => ({ id: node.id, x: node.x, y: node.y })),
+      camera.scale,
+    ),
+    [nodes, camera.scale],
+  );
+  const placement = useMemo(() => {
+    const map = new Map<string, DeclutteredPin>();
+    placedPins.forEach((pin) => map.set(pin.id, pin));
+    return map;
+  }, [placedPins]);
+
+  const handleRecenter = () => {
+    springCameraTo(panToCenter(BEACON_WORLD, opticalRef.current, 1));
+  };
+
+  const showAllRings = camera.scale >= DECLUTTER_CLEAR_SCALE;
+
   return (
-    <View style={styles.canvasContainer} {...panResponder.panHandlers}>
-      <Animated.View
+    <View
+      ref={canvasRef}
+      style={styles.canvasContainer}
+      {...panResponder.panHandlers}
+      onLayout={(event) => {
+        const { width, height } = event.nativeEvent.layout;
+        setCanvasSize((current) =>
+          current.width === width && current.height === height ? current : { width, height },
+        );
+        requestAnimationFrame(() => {
+          canvasRef.current?.measureInWindow((x, y) => {
+            pageOrigin.current = { x, y };
+          });
+        });
+      }}
+    >
+      <View
+        pointerEvents="box-none"
         style={[
-          styles.interactiveWorld,
+          styles.world,
           {
-            transform: [{ translateX: pan.x }, { translateY: pan.y }],
+            width: WORLD_SIZE * camera.scale,
+            height: WORLD_SIZE * camera.scale,
+            left: camera.panX,
+            top: camera.panY,
           },
         ]}
       >
-        {/* Tactical Grid Overlay */}
-        <View style={styles.gridLineH1} />
-        <View style={styles.gridLineH2} />
-        <View style={styles.gridLineH3} />
-        <View style={styles.gridLineV1} />
-        <View style={styles.gridLineV2} />
-        <View style={styles.gridLineV3} />
+        {GRID.map((coord) => (
+          <View
+            key={`h-${coord}`}
+            style={[styles.gridLineH, { top: coord * camera.scale }]}
+          />
+        ))}
+        {GRID.map((coord) => (
+          <View
+            key={`v-${coord}`}
+            style={[styles.gridLineV, { left: coord * camera.scale }]}
+          />
+        ))}
 
-        {/* Diagonal Arteries */}
-        <View style={styles.roadDiagonal1} />
-        <View style={styles.roadDiagonal2} />
+        <View
+          style={[
+            styles.roadDiagonal1,
+            {
+              top: 100 * camera.scale,
+              left: 200 * camera.scale,
+              height: 900 * camera.scale,
+            },
+          ]}
+        />
+        <View
+          style={[
+            styles.roadDiagonal2,
+            {
+              top: 200 * camera.scale,
+              right: 300 * camera.scale,
+              height: 800 * camera.scale,
+            },
+          ]}
+        />
 
-        {/* User Beacon Reticle (Origin: 480, 480) */}
-        <View style={styles.userBeaconContainer}>
+        <View
+          style={[
+            styles.userBeaconContainer,
+            {
+              top: BEACON_WORLD.y * camera.scale - 17,
+              left: BEACON_WORLD.x * camera.scale - 17,
+            },
+          ]}
+        >
           <View style={styles.userPulseRing} />
           <View style={styles.userCoreDot} />
         </View>
 
-        {/* Interactive Event Nodes */}
         {nodeList.map((item) => {
           const isSelected = item.id === selectedNodeId;
-          const posX = item.x ?? 480;
-          const posY = item.y ?? 480;
+          const pin = placement.get(item.id) ?? {
+            id: item.id,
+            x: item.x,
+            y: item.y,
+            labelAnchor: 'top' as const,
+          };
+          const showRings = isSelected || showAllRings;
 
           return (
             <View
               key={item.id}
+              pointerEvents="box-none"
               style={[
-                styles.nodeCluster,
-                { top: posY - 75, left: posX - 75 },
+                styles.nodeAnchor,
+                {
+                  top: pin.y * camera.scale,
+                  left: pin.x * camera.scale,
+                  zIndex: isSelected ? 8 : 4,
+                },
               ]}
             >
-              {/* Outer Tactical Ring */}
-              <View
-                style={[
-                  styles.ring500m,
-                  isSelected && styles.ringSelected,
-                ]}
-              >
-                <Text style={styles.ringLabelTop}>500m</Text>
-              </View>
+              {showRings ? (
+                <>
+                  <View style={[styles.ring500m, isSelected && styles.ringSelected]}>
+                    <Text style={styles.ringLabelTop}>500m</Text>
+                  </View>
+                  <View style={[styles.ring250m, isSelected && styles.ringInnerSelected]}>
+                    <Text style={styles.ringLabelInner}>250m</Text>
+                  </View>
+                </>
+              ) : null}
 
-              {/* Inner Tactical Ring */}
-              <View
-                style={[
-                  styles.ring250m,
-                  isSelected && styles.ringInnerSelected,
-                ]}
-              >
-                <Text style={styles.ringLabelInner}>250m</Text>
-              </View>
-
-              {/* Center Pin Marker */}
               <TouchableOpacity
                 activeOpacity={0.8}
-                onPress={() => setSelectedNodeId(item.id)}
+                accessibilityLabel={item.title}
+                onPress={() => selectNodeFromPin(item.id)}
                 style={styles.pinWrapper}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
-                <View
-                  style={[
-                    styles.pinHead,
-                    isSelected && styles.pinHeadSelected,
-                  ]}
-                >
+                <View style={[styles.pinHead, isSelected && styles.pinHeadSelected]}>
                   <View style={styles.pinDot} />
                 </View>
-                <View
-                  style={[
-                    styles.pinTip,
-                    isSelected && styles.pinTipSelected,
-                  ]}
-                />
+                <View style={[styles.pinTip, isSelected && styles.pinTipSelected]} />
               </TouchableOpacity>
+
+              <View pointerEvents="none" style={[styles.pinLabelWrap, labelOffset(pin.labelAnchor)]}>
+                <Text style={[styles.pinLabel, isSelected && styles.pinLabelSelected]} numberOfLines={1}>
+                  {item.tag.replace('#', '')}
+                </Text>
+              </View>
             </View>
           );
         })}
-      </Animated.View>
+      </View>
 
-      {/* Pure View-based Tactical Crosshair Recenter Button */}
       <TouchableOpacity
-        style={styles.crosshairBtn}
+        style={[styles.crosshairBtn, { bottom: drawerHeight + NAV_HEIGHT + 14 }]}
         activeOpacity={0.7}
         onPress={handleRecenter}
+        accessibilityLabel="Recenter map"
       >
         <View style={styles.crosshairCircleOuter}>
           <View style={styles.crosshairCircleInner} />
@@ -183,6 +394,10 @@ export const DiscoveryMapCanvas: React.FC = () => {
           <View style={styles.crosshairLineH} />
         </View>
       </TouchableOpacity>
+
+      <View pointerEvents="none" style={[styles.zoomReadout, { bottom: drawerHeight + NAV_HEIGHT + 22 }]}>
+        <Text style={styles.zoomText}>{camera.scale < DECLUTTER_CLEAR_SCALE ? 'WIDE' : 'CLOSE'} · {camera.scale.toFixed(2)}x</Text>
+      </View>
     </View>
   );
 };
@@ -194,41 +409,39 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     position: 'relative',
   },
-  interactiveWorld: {
-    width: 1400,
-    height: 1400,
+  world: {
     position: 'absolute',
-    top: -WORLD_OFFSET,
-    left: -WORLD_OFFSET,
   },
-  gridLineH1: { position: 'absolute', top: 300, left: 0, right: 0, height: 1, backgroundColor: '#1e293b' },
-  gridLineH2: { position: 'absolute', top: 600, left: 0, right: 0, height: 1, backgroundColor: '#1e293b' },
-  gridLineH3: { position: 'absolute', top: 900, left: 0, right: 0, height: 1, backgroundColor: '#1e293b' },
-  gridLineV1: { position: 'absolute', left: 300, top: 0, bottom: 0, width: 1, backgroundColor: '#1e293b' },
-  gridLineV2: { position: 'absolute', left: 600, top: 0, bottom: 0, width: 1, backgroundColor: '#1e293b' },
-  gridLineV3: { position: 'absolute', left: 900, top: 0, bottom: 0, width: 1, backgroundColor: '#1e293b' },
+  gridLineH: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    height: 1,
+    backgroundColor: '#1e293b',
+  },
+  gridLineV: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    width: 1,
+    backgroundColor: '#1e293b',
+  },
   roadDiagonal1: {
     position: 'absolute',
-    top: 100,
-    left: 200,
     width: 8,
-    height: 900,
     backgroundColor: '#172554',
     transform: [{ rotate: '32deg' }],
   },
   roadDiagonal2: {
     position: 'absolute',
-    top: 200,
-    right: 300,
     width: 10,
-    height: 800,
     backgroundColor: '#172554',
     transform: [{ rotate: '-40deg' }],
   },
   userBeaconContainer: {
     position: 'absolute',
-    top: BEACON_WORLD_Y,
-    left: BEACON_WORLD_X,
+    width: 34,
+    height: 34,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 5,
@@ -250,18 +463,20 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(56, 189, 248, 0.4)',
     backgroundColor: 'rgba(56, 189, 248, 0.15)',
   },
-  nodeCluster: {
+  nodeAnchor: {
     position: 'absolute',
+    width: 0,
+    height: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    width: 150,
-    height: 150,
-    zIndex: 4,
+    overflow: 'visible',
   },
   ring500m: {
     position: 'absolute',
     width: 140,
     height: 140,
+    left: -70,
+    top: -70,
     borderRadius: 70,
     borderWidth: 1,
     borderColor: 'rgba(6, 182, 212, 0.35)',
@@ -277,6 +492,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     width: 84,
     height: 84,
+    left: -42,
+    top: -42,
     borderRadius: 42,
     borderWidth: 1.5,
     borderColor: 'rgba(6, 182, 212, 0.65)',
@@ -304,10 +521,13 @@ const styles = StyleSheet.create({
     marginTop: -5,
   },
   pinWrapper: {
+    position: 'absolute',
+    left: -18,
+    top: -28,
+    width: 36,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 6,
-    padding: 6,
   },
   pinHead: {
     width: 22,
@@ -344,9 +564,27 @@ const styles = StyleSheet.create({
   pinTipSelected: {
     borderTopColor: '#38bdf8',
   },
+  pinLabelWrap: {
+    position: 'absolute',
+    width: 72,
+    backgroundColor: 'rgba(8, 15, 29, 0.92)',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.35)',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+  },
+  pinLabel: {
+    color: '#bae6fd',
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+  },
+  pinLabelSelected: {
+    color: '#ffffff',
+  },
   crosshairBtn: {
     position: 'absolute',
-    top: 14,
     right: 14,
     width: 38,
     height: 38,
@@ -358,10 +596,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     zIndex: 20,
     elevation: 4,
-    shadowColor: '#38bdf8',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
   },
   crosshairCircleOuter: {
     width: 20,
@@ -371,7 +605,6 @@ const styles = StyleSheet.create({
     borderColor: '#38bdf8',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
   crosshairCircleInner: {
     width: 4,
@@ -392,5 +625,21 @@ const styles = StyleSheet.create({
     height: 2,
     backgroundColor: '#38bdf8',
     borderRadius: 1,
+  },
+  zoomReadout: {
+    position: 'absolute',
+    left: 14,
+    backgroundColor: 'rgba(8, 15, 29, 0.8)',
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+  },
+  zoomText: {
+    color: '#7dd3fc',
+    fontSize: 10,
+    fontWeight: '700',
+    letterSpacing: 0.6,
   },
 });
