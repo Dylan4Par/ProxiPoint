@@ -130,7 +130,7 @@ export const DiscoveryLeafletMap: React.FC = () => {
         ref={webRef}
         style={styles.map}
         originWhitelist={['*']}
-        source={{ html: DOCUMENT, baseUrl: 'https://tiles.openfreemap.org' }}
+        source={{ html: DOCUMENT, baseUrl: 'https://server.arcgisonline.com' }}
         onMessage={handleMessage}
         javaScriptEnabled
         domStorageEnabled

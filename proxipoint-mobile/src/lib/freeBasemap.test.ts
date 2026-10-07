@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   DISCOVERY_MAP_ZOOM,
-  FREE_DARK_STYLE_URL,
-  MAPLIBRE_CSS_URL,
-  MAPLIBRE_JS_URL,
+  FREE_DARK_LABEL_URL,
+  FREE_DARK_TILE_URL,
+  FREE_MAP_ATTRIBUTION,
   buildMarkerPayload,
   circlePolygon,
   declutterScaleForZoom,
@@ -17,13 +17,13 @@ import {
 import { nodeInsideViewport } from '../stores/useDiscoveryStore';
 import type { DiscoveryNode } from '../stores/useDiscoveryStore';
 
-test('the basemap is OpenFreeMap dark and needs no API key', () => {
-  assert.equal(FREE_DARK_STYLE_URL, 'https://tiles.openfreemap.org/styles/dark');
-  assert.equal(FREE_DARK_STYLE_URL.includes('api_key'), false);
-  assert.equal(FREE_DARK_STYLE_URL.includes('token'), false);
-  assert.equal(FREE_DARK_STYLE_URL.includes('cartocdn'), false);
-  assert.match(MAPLIBRE_JS_URL, /^https:\/\/cdn\.jsdelivr\.net\/npm\/maplibre-gl@/);
-  assert.match(MAPLIBRE_CSS_URL, /^https:\/\/cdn\.jsdelivr\.net\/npm\/maplibre-gl@/);
+test('the basemap is a keyless Esri dark canvas with street labels', () => {
+  assert.match(FREE_DARK_TILE_URL, /World_Dark_Gray_Base\/MapServer\/tile\/\{z\}\/\{y\}\/\{x\}$/);
+  assert.match(FREE_DARK_LABEL_URL, /World_Dark_Gray_Reference\/MapServer\/tile\/\{z\}\/\{y\}\/\{x\}$/);
+  assert.equal(FREE_DARK_TILE_URL.includes('api_key'), false);
+  assert.equal(FREE_DARK_TILE_URL.includes('token'), false);
+  assert.match(FREE_MAP_ATTRIBUTION, /Esri/);
+  assert.match(FREE_MAP_ATTRIBUTION, /OpenStreetMap/);
   assert.equal(DISCOVERY_MAP_ZOOM, 15);
 });
 

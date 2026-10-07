@@ -5,11 +5,16 @@ export interface GeoPoint {
   longitude: number;
 }
 
-// OpenFreeMap's dark style. It is free, needs no API key, and is built from
-// OpenStreetMap. MapLibre's attribution control has to stay visible.
-export const FREE_DARK_STYLE_URL = 'https://tiles.openfreemap.org/styles/dark';
-export const MAPLIBRE_JS_URL = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.js';
-export const MAPLIBRE_CSS_URL = 'https://cdn.jsdelivr.net/npm/maplibre-gl@5.6.1/dist/maplibre-gl.css';
+// Esri's dark gray canvas. It is free, needs no API key, and includes
+// OpenStreetMap data. The tile path is z/y/x. Attribution has to stay visible.
+export const FREE_DARK_TILE_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}';
+export const FREE_DARK_LABEL_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}';
+export const FREE_MAP_ATTRIBUTION =
+  '© Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS user community';
+export const LEAFLET_CSS_URL = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
+export const LEAFLET_JS_URL = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
 
 export const DISCOVERY_MAP_ZOOM = 15;
 
