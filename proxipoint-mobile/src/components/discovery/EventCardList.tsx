@@ -128,7 +128,9 @@ export const EventCardList: React.FC = () => {
             </View>
 
             <TouchableOpacity
-              style={styles.rsvpBtn}
+              accessibilityRole="button"
+              accessibilityState={{ selected: item.isRsvpd }}
+              style={[styles.rsvpBtn, item.isRsvpd && styles.rsvpBtnActive]}
               onPress={() => toggleRsvp(item.id)}
             >
               <Text style={[styles.rsvpIcon, item.isRsvpd && styles.rsvpIconActive]}>✓</Text>
@@ -392,7 +394,16 @@ function createCardStyles(c: AppearancePalette) {
   },
   rsvpBtn: {
     alignItems: 'center',
-    paddingHorizontal: 6,
+    justifyContent: 'center',
+    minWidth: 46,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderWidth: 1.5,
+    borderRadius: 8,
+    borderColor: c.textMuted,
+  },
+  rsvpBtnActive: {
+    borderColor: c.accentBright,
   },
   rsvpIcon: {
     color: c.textMuted,
