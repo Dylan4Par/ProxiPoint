@@ -12,6 +12,7 @@ function resetStore() {
     drawerSnap: 'peek',
     focusToken: 0,
     dropSheetOpen: false,
+    eventDetailId: null,
     tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
   });
 }
@@ -32,6 +33,7 @@ test('tapping a pin opens the sheet to single-card peek', () => {
   assert.equal(state.selectedNodeId, 'event-2');
   assert.equal(state.drawerSnap, 'peek');
   assert.equal(state.focusToken, 0);
+  assert.equal(state.eventDetailId, null);
 });
 
 test('tapping a card selects it and requests a camera center', () => {
@@ -42,6 +44,13 @@ test('tapping a card selects it and requests a camera center', () => {
   assert.equal(state.selectedNodeId, 'event-3');
   assert.equal(state.drawerSnap, 'collapsed');
   assert.equal(state.focusToken, 1);
+  assert.equal(state.eventDetailId, 'event-3');
+  const detail = state.nodes['event-3'];
+  assert.match(detail.url, /^https:\/\//);
+  assert.ok(detail.pictures.length >= 2);
+  useDiscoveryStore.getState().closeEventDetail();
+  assert.equal(useDiscoveryStore.getState().eventDetailId, null);
+  assert.equal(useDiscoveryStore.getState().selectedNodeId, 'event-3');
 });
 
 test('dropping a beacon adds a live node and peeks its card', () => {
@@ -67,4 +76,7 @@ test('dropping a beacon adds a live node and peeks its card', () => {
   assert.equal(node.isRsvpd, true);
   assert.ok(state.tags.includes('#Pickup'));
   assert.ok(node.distanceMeters >= 0);
+  assert.match(node.url, /google\.com\/maps\/search/);
+  assert.equal(node.pictures.length, 2);
+  assert.ok(node.summary.includes('Night Market'));
 });

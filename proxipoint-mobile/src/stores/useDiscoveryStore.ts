@@ -1,5 +1,10 @@
 import { create } from 'zustand';
 import { DRAWER_PEEK, type DrawerSnap } from '../lib/drawerSnap';
+import {
+  SEED_EVENT_DETAILS,
+  templateEventDetails,
+  type EventDetailFields,
+} from '../lib/eventDetails';
 
 export interface InboundProximityNode {
   id: string;
@@ -32,6 +37,11 @@ export interface DiscoveryNode {
   batteryPct?: number;
   x: number;
   y: number;
+  summary: string;
+  url: string;
+  pictures: EventDetailFields['pictures'];
+  startsAt: string;
+  endsAt: string;
 }
 
 export interface ViewportBounds {
@@ -76,6 +86,7 @@ export interface DiscoveryState {
   focusToken: number;
   dropSheetOpen: boolean;
   drawerDragging: boolean;
+  eventDetailId: string | null;
 
   // Setters & Actions
   setSocketConnected: (connected: boolean) => void;
@@ -91,6 +102,7 @@ export interface DiscoveryState {
   setHeaderHeight: (height: number) => void;
   selectNodeFromCard: (id: string) => void;
   selectNodeFromPin: (id: string) => void;
+  closeEventDetail: () => void;
   setDropSheetOpen: (open: boolean) => void;
   dropBeacon: (draft: DropBeaconDraft) => string;
   addTag: (tag: string) => void;
@@ -257,6 +269,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 45,
     isRsvpd: true,
     radii: [250, 500],
+    ...SEED_EVENT_DETAILS['event-1'],
   }),
   'event-2': placedSeed({
     id: 'event-2',
@@ -270,6 +283,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 12,
     isRsvpd: true,
     radii: [250, 500],
+    ...SEED_EVENT_DETAILS['event-2'],
   }),
   'event-3': placedSeed({
     id: 'event-3',
@@ -283,6 +297,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 38,
     isRsvpd: false,
     radii: [500, 1000],
+    ...SEED_EVENT_DETAILS['event-3'],
   }),
 };
 
@@ -299,6 +314,7 @@ const DOWNTOWN_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 64,
     isRsvpd: false,
     radii: [250, 500],
+    ...SEED_EVENT_DETAILS['downtown-1'],
   }),
   'downtown-2': placedSeed({
     id: 'downtown-2',
@@ -312,6 +328,7 @@ const DOWNTOWN_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 28,
     isRsvpd: false,
     radii: [250, 500],
+    ...SEED_EVENT_DETAILS['downtown-2'],
   }),
   'downtown-3': placedSeed({
     id: 'downtown-3',
@@ -325,6 +342,7 @@ const DOWNTOWN_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 16,
     isRsvpd: true,
     radii: [250, 500],
+    ...SEED_EVENT_DETAILS['downtown-3'],
   }),
 };
 
@@ -363,6 +381,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   focusToken: 0,
   dropSheetOpen: false,
   drawerDragging: false,
+  eventDetailId: null,
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
@@ -383,7 +402,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       selectedNodeId: id,
       selectedEventId: id,
       focusToken: state.focusToken + 1,
+      eventDetailId: id,
     })),
+  closeEventDetail: () => set({ eventDetailId: null }),
   selectNodeFromPin: (id) =>
     set({
       selectedNodeId: id,
@@ -411,11 +432,13 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         state.selfCoordinates.longitude,
       );
       const eta = etaForDistance(distanceMeters);
+      const title = draft.title.trim() || 'Dropped beacon';
+      const venue = draft.venue.trim() || 'Field beacon';
       const node: DiscoveryNode = {
         id,
         tag,
-        title: draft.title.trim() || 'Dropped beacon',
-        venue: draft.venue.trim() || 'Field beacon',
+        title,
+        venue,
         latitude: draft.latitude,
         longitude: draft.longitude,
         distanceMeters,
@@ -428,6 +451,14 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         radii: [250, 500],
         x,
         y,
+        ...templateEventDetails({
+          id,
+          title,
+          venue,
+          tag,
+          latitude: draft.latitude,
+          longitude: draft.longitude,
+        }),
       };
       return {
         nodes: { ...state.nodes, [id]: node },
@@ -483,6 +514,26 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         const { x, y } = toCanvasCoordinates(node.latitude, node.longitude, selfLat, selfLon);
         const meta = enrichNodeMetadata(node.id, node.distance_meters);
 
+        const title = node.title || existing?.title || meta.title;
+        const tag = node.category ? `#${node.category.replace('#', '')}` : existing?.tag || meta.tag;
+        const venue = node.host || existing?.venue || meta.venue;
+        const details =
+          existing?.summary && existing.url && existing.pictures && existing.startsAt && existing.endsAt
+            ? {
+                summary: existing.summary,
+                url: existing.url,
+                pictures: existing.pictures,
+                startsAt: existing.startsAt,
+                endsAt: existing.endsAt,
+              }
+            : templateEventDetails({
+                id: node.id,
+                title,
+                venue,
+                tag,
+                latitude: node.latitude,
+                longitude: node.longitude,
+              });
         nextNodes[node.id] = {
           id: node.id,
           distanceMeters: Math.round(node.distance_meters),
@@ -491,9 +542,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           status: node.status || meta.status,
           statusColor: meta.statusColor,
           batteryPct: node.battery_pct,
-          title: node.title || existing?.title || meta.title,
-          tag: node.category ? `#${node.category.replace('#', '')}` : existing?.tag || meta.tag,
-          venue: node.host || existing?.venue || meta.venue,
+          title,
+          tag,
+          venue,
           attendeeCount: node.attendees_count ?? existing?.attendeeCount ?? meta.attendeeCount,
           eta: meta.eta,
           etaMode: meta.etaMode,
@@ -501,6 +552,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           isRsvpd: existing ? existing.isRsvpd : false,
           x,
           y,
+          ...details,
         };
       });
 
