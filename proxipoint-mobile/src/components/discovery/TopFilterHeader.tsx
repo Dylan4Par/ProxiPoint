@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -29,6 +29,38 @@ export const TopFilterHeader: React.FC = () => {
   // Tag Editor Modal State
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
+  const channelScrollRef = useRef<ScrollView>(null);
+  const channelScrollX = useRef(0);
+  const suppressChannelPress = useRef(false);
+
+  const beginChannelPan = (event: { nativeEvent?: { pageX?: number } }) => {
+    const startX = event.nativeEvent?.pageX ?? 0;
+    const origin = channelScrollX.current;
+    let moved = false;
+    const onMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.pageX - startX;
+      if (Math.abs(dx) > 4) moved = true;
+      if (!moved) return;
+      channelScrollRef.current?.scrollTo({ x: Math.max(0, origin - dx), animated: false });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (moved) {
+        suppressChannelPress.current = true;
+        window.setTimeout(() => {
+          suppressChannelPress.current = false;
+        }, 0);
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const selectChannel = (tag: string) => {
+    if (suppressChannelPress.current) return;
+    setSelectedTag(tag);
+  };
 
   const handleAddNewTag = () => {
     if (newTagInput.trim()) {
@@ -76,8 +108,16 @@ export const TopFilterHeader: React.FC = () => {
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
       <ScrollView
         horizontal
+        ref={channelScrollRef}
+        testID="channel-scroller"
         showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={(scrollEvent) => {
+          channelScrollX.current = scrollEvent.nativeEvent.contentOffset.x;
+        }}
+        onMouseDown={beginChannelPan}
         contentContainerStyle={styles.tagScrollContainer}
+        style={styles.tagScroll}
       >
         {tags.map((tag) => {
           const isActive = selectedTag === tag;
@@ -85,7 +125,7 @@ export const TopFilterHeader: React.FC = () => {
             <TouchableOpacity
               key={tag}
               style={[styles.tagPill, isActive && styles.tagPillActive]}
-              onPress={() => setSelectedTag(tag)}
+              onPress={() => selectChannel(tag)}
             >
               <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
                 {tag}
@@ -315,6 +355,11 @@ const styles = StyleSheet.create({
   segmentTextActive: {
     color: '#38bdf8',
     fontWeight: '700',
+  },
+  tagScroll: {
+    flexGrow: 0,
+    cursor: 'grab',
+    userSelect: 'none',
   },
   tagScrollContainer: {
     paddingHorizontal: 16,
