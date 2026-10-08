@@ -55,9 +55,21 @@ export const EventDetailPanel: React.FC<{
       <Text testID="event-details" style={styles.body}>
         {details}
       </Text>
-      <Text style={styles.meta}>
-        {node.distanceMeters}m away · {node.eta} · {node.attendeeCount} going
-      </Text>
+      <View style={styles.goingRow}>
+        <Text style={styles.metaInline}>
+          {node.distanceMeters}m away · {node.eta}
+        </Text>
+        <View style={styles.goingField} testID="event-going-stack">
+          <View style={styles.avatarStack}>
+            <View style={[styles.avatar, { backgroundColor: '#f97316' }]} />
+            <View style={[styles.avatar, { backgroundColor: '#3b82f6', marginLeft: -10 }]} />
+            <View style={[styles.avatarCount, { marginLeft: -10 }]}>
+              <Text style={styles.avatarCountText}>{node.attendeeCount}+</Text>
+            </View>
+          </View>
+          <Text style={styles.goingText}>{node.attendeeCount} going</Text>
+        </View>
+      </View>
 
       <Text style={styles.section}>Source</Text>
       {source ? (
@@ -138,6 +150,54 @@ function createStyles(c: AppearancePalette) {
       fontSize: 13,
       fontWeight: '600',
       marginTop: 6,
+    },
+    goingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 10,
+    },
+    metaInline: {
+      color: c.textMuted,
+      fontSize: 13,
+      fontWeight: '600',
+    },
+    goingField: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    goingText: {
+      color: c.text,
+      fontSize: 13,
+      fontWeight: '700',
+    },
+    avatarStack: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    avatar: {
+      width: 26,
+      height: 26,
+      borderRadius: 13,
+      borderWidth: 2,
+      borderColor: c.drawer,
+    },
+    avatarCount: {
+      width: 28,
+      height: 26,
+      borderRadius: 13,
+      backgroundColor: c.pull,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 2,
+      borderColor: c.drawer,
+    },
+    avatarCountText: {
+      color: c.text,
+      fontSize: 9,
+      fontWeight: '800',
     },
     section: {
       color: c.text,
