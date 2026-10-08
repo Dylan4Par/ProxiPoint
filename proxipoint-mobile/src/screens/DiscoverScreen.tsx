@@ -6,6 +6,7 @@ import { DiscoveryMapCanvas } from '../components/discovery/DiscoveryMapCanvas';
 import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
 import { EventCardList } from '../components/discovery/EventCardList';
 import { DropPointSheet } from '../components/discovery/DropPointSheet';
+import { ActivitySheet } from '../components/discovery/ActivitySheet';
 import { BottomNavBar } from '../components/discovery/BottomNavBar';
 import { useAppearanceStore } from '../stores/useAppearanceStore';
 
@@ -22,6 +23,7 @@ export const DiscoverScreen: React.FC = () => {
         <DiscoveryMapCanvas />
         <EventCardList />
         <DropPointSheet />
+        <ActivitySheet />
       </View>
       <BottomNavBar />
     </SafeAreaView>

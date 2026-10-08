@@ -42,6 +42,7 @@ export interface DiscoveryNode {
   invites?: BeaconInvite[];
   startsAt?: string;
   durationMinutes?: number;
+  hostName?: string;
   regionName?: string;
   regionChain?: string;
 }
@@ -187,6 +188,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     etaMode: 'walk',
     attendeeCount: 45,
     isRsvpd: true,
+    hostName: 'The Midnight Owls',
     radii: [250, 500],
     x: 266,
     y: 459,
@@ -208,6 +210,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     etaMode: 'walk',
     attendeeCount: 12,
     isRsvpd: true,
+    hostName: 'Central Park Eats',
     radii: [250, 500],
     x: 670,
     y: 438,
@@ -229,6 +232,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     etaMode: 'walk',
     attendeeCount: 38,
     isRsvpd: false,
+    hostName: 'Boulder Devs',
     radii: [500, 1000],
     x: 480,
     y: 314,
@@ -334,6 +338,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         invites: draft.visibility === 'private' ? draft.invites ?? [] : [],
         startsAt: scheduled.start.toISOString(),
         durationMinutes: duration.minutes,
+        hostName: state.deviceId,
         regionName: draft.regionName?.trim() || undefined,
         regionChain: draft.regionChain?.trim() || undefined,
       };
@@ -416,6 +421,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           etaMode: meta.etaMode,
           radii: [250, 500],
           isRsvpd: existing ? existing.isRsvpd : false,
+          startsAt: existing?.startsAt,
+          hostName: existing?.hostName || node.host,
           x,
           y,
         };

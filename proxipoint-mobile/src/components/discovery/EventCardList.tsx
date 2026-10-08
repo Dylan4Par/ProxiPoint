@@ -135,6 +135,7 @@ export const EventCardList: React.FC = () => {
             <TouchableOpacity
               accessibilityRole="button"
               accessibilityState={{ selected: item.isRsvpd }}
+              testID={`rsvp-button-${item.id}`}
               style={[styles.rsvpBtn, item.isRsvpd && styles.rsvpBtnActive]}
               onPress={() => toggleRsvp(item.id)}
             >

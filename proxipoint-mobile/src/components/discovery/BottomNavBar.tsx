@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import Svg, { Circle, Defs, Ellipse, LinearGradient, Path, Stop } from 'react-native-svg';
 import { useAppearanceStore } from '../../stores/useAppearanceStore';
+import { useActivityStore, useActivityNotice } from '../../stores/useActivityStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 const ICON = 40;
@@ -96,6 +97,9 @@ const ActivityIcon: React.FC = () => (
 export const BottomNavBar: React.FC = () => {
   const dropSheetOpen = useDiscoveryStore((s) => s.dropSheetOpen);
   const setDropSheetOpen = useDiscoveryStore((s) => s.setDropSheetOpen);
+  const activityOpen = useActivityStore((s) => s.open);
+  const setActivityOpen = useActivityStore((s) => s.setOpen);
+  const { unread } = useActivityNotice();
   const colors = useAppearanceStore((s) => s.colors);
 
   return (
@@ -122,11 +126,26 @@ export const BottomNavBar: React.FC = () => {
         <Text style={[styles.navLabel, { color: dropSheetOpen ? colors.navLabelActive : colors.navLabel }]}>Drop Point</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        testID="activity-button"
+        accessibilityRole="button"
+        accessibilityLabel={unread.length > 0 ? `Activity, ${unread.length} notifications` : 'Activity'}
+        onPress={() => {
+          setDropSheetOpen(false);
+          setActivityOpen(!activityOpen);
+        }}
+      >
         <View style={styles.iconContainer}>
           <ActivityIcon />
+          {unread.length > 0 ? (
+            <View style={styles.notice} testID="activity-badge">
+              <Text style={styles.noticeText}>{unread.length > 99 ? '99+' : unread.length}</Text>
+            </View>
+          ) : null}
         </View>
-        <Text style={[styles.navLabel, { color: colors.navLabel }]}>Activity</Text>
+        <Text style={[styles.navLabel, { color: activityOpen ? colors.navLabelActive : colors.navLabel }]}>Activity</Text>
       </TouchableOpacity>
     </View>
   );
@@ -154,6 +173,27 @@ const styles = StyleSheet.create({
     height: ICON,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+  },
+  notice: {
+    position: 'absolute',
+    top: -2,
+    right: -6,
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    paddingHorizontal: 4,
+    backgroundColor: '#ef4444',
+    borderWidth: 1.5,
+    borderColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noticeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: '800',
+    lineHeight: 12,
   },
   navLabel: {
     color: '#94a3b8',
