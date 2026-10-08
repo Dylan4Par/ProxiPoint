@@ -196,7 +196,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
         {/* User Beacon Reticle (Origin: 480, 480) */}
         <View style={styles.userBeaconContainer}>
           <View style={styles.userPulseRing} />
-          <View style={styles.userCoreDot} />
+          <View style={styles.userCoreDot} testID="user-center-dot" />
         </View>
 
         {/* Interactive Event Nodes */}
@@ -368,7 +368,7 @@ const styles = StyleSheet.create({
     borderRadius: 7,
     backgroundColor: '#facc15',
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: '#000000',
   },
   userPulseRing: {
     position: 'absolute',
