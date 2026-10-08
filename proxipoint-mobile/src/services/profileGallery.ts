@@ -1,3 +1,4 @@
+import { decodeAvatarPayload, writeStoredAvatar } from '../lib/profileAvatar';
 import {
   applyEmojiReaction,
   localGallery,
@@ -13,6 +14,8 @@ interface ProfileResponse {
   following?: number;
   followers?: number;
   activities?: number;
+  avatarType?: string;
+  avatarBase64?: string;
   photos?: Array<{
     id?: string;
     eventTitle?: string;
@@ -59,12 +62,21 @@ export async function loadHostGallery(handle: string): Promise<HostGallery> {
       .map((photo) => mapPhoto(photo, fallback.photos.find((item) => item.id === photo.id)))
       .filter((photo): photo is HostPhoto => photo !== null);
     if (photos.length === 0) return fallback;
+    let avatarUri = fallback.avatarUri;
+    if (body.avatarBase64 && body.avatarType) {
+      const decoded = decodeAvatarPayload(body.avatarType, body.avatarBase64);
+      if (!decoded.error) {
+        avatarUri = decoded.dataUri;
+        writeStoredAvatar(body.handle || fallback.handle, avatarUri);
+      }
+    }
     return {
       handle: body.handle || fallback.handle,
       displayName: body.displayName || fallback.displayName,
       following: body.following ?? fallback.following,
       followers: body.followers ?? fallback.followers,
       activities: body.activities ?? photos.length,
+      avatarUri,
       photos,
     };
   } catch {

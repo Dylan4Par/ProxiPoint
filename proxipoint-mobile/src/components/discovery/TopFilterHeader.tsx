@@ -12,6 +12,8 @@ import {
 import type { AppearancePalette } from '../../lib/appearance';
 import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { useOperatorAvatar } from '../../stores/useProfileAvatarStore';
+import { OperatorAvatar } from './OperatorAvatar';
 import { ProfileSettings } from './ProfileSettings';
 
 export const TopFilterHeader: React.FC = () => {
@@ -70,6 +72,7 @@ export const TopFilterHeader: React.FC = () => {
   };
 
   const profileInitial = callsign.trim().charAt(0).toUpperCase() || 'R';
+  const avatarUri = useOperatorAvatar(callsign);
 
   const handleAddNewTag = () => {
     if (newTagInput.trim()) {
@@ -88,9 +91,15 @@ export const TopFilterHeader: React.FC = () => {
           onPress={() => setSettingsOpen(true)}
           activeOpacity={0.8}
         >
-          <View style={styles.avatarInner}>
-            <Text style={styles.avatarInitial}>{profileInitial}</Text>
-          </View>
+          <OperatorAvatar
+            uri={avatarUri}
+            initial={profileInitial}
+            size={36}
+            backgroundColor={colors.inset}
+            color={colors.accentBright}
+            fontSize={16}
+            style={styles.avatarInner}
+          />
           <View style={styles.onlineBadge} />
         </TouchableOpacity>
 

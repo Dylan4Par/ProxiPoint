@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { Image, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ChevronLeft, ChevronRight, List, MapPin, RotateCcw } from 'lucide-react-native';
+import { Camera, ChevronLeft, ChevronRight, List, MapPin, RotateCcw } from 'lucide-react-native';
+import { OperatorAvatar } from './OperatorAvatar';
+import { useOperatorAvatar, useProfileAvatarStore } from '../../stores/useProfileAvatarStore';
 import {
   REACTION_EMOJI,
   formatEventWhen,
@@ -23,8 +25,14 @@ const BUBBLES: { x: `${number}%`; y: number; size: number; color: string }[] = [
   { x: '88%', y: 108, size: 26, color: '#a16207' },
 ];
 
-export const HostProfile: React.FC<{ callsign: string; onBack: () => void }> = ({ callsign, onBack }) => {
+export const HostProfile: React.FC<{
+  callsign: string;
+  onBack: () => void;
+  onPickAvatar: () => void;
+  avatarError?: string;
+}> = ({ callsign, onBack, onPickAvatar, avatarError = '' }) => {
   const [gallery, setGallery] = useState<HostGallery | null>(null);
+  const uploadedAvatar = useOperatorAvatar(callsign);
   const [following, setFollowing] = useState(false);
   const [openList, setOpenList] = useState<ListId | null>(null);
   const [note, setNote] = useState('');
@@ -40,12 +48,17 @@ export const HostProfile: React.FC<{ callsign: string; onBack: () => void }> = (
     };
   }, [callsign]);
 
+  useEffect(() => {
+    if (gallery?.avatarUri) useProfileAvatarStore.getState().remember(callsign, gallery.avatarUri);
+  }, [callsign, gallery?.avatarUri]);
+
   if (!gallery) {
     return <View style={styles.page} testID="host-profile" />;
   }
 
   const latest = gallery.photos[0];
   const initial = gallery.displayName.trim().charAt(0).toUpperCase() || 'R';
+  const avatarUri = uploadedAvatar || gallery.avatarUri;
 
   const react = (emoji: string) => {
     if (!latest) return;
@@ -75,14 +88,33 @@ export const HostProfile: React.FC<{ callsign: string; onBack: () => void }> = (
             </View>
           </View>
           <View style={styles.avatarWrap}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarInitial}>{initial}</Text>
-            </View>
-            <View style={styles.avatarBadge}>
-              <Text style={styles.avatarBadgeText}>{gallery.activities}</Text>
-            </View>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Upload profile picture"
+              testID="host-avatar-upload"
+              onPress={onPickAvatar}
+              style={styles.avatarHit}
+            >
+              <OperatorAvatar
+                uri={avatarUri}
+                initial={initial}
+                size={92}
+                backgroundColor="#0f172a"
+                color="#f8fafc"
+                fontSize={36}
+                style={styles.avatar}
+                testID="profile-avatar-image"
+              />
+              <View style={styles.cameraBadge}>
+                <Camera color="#f8fafc" size={14} strokeWidth={2.4} />
+              </View>
+              <View style={styles.avatarBadge}>
+                <Text style={styles.avatarBadgeText}>{gallery.activities}</Text>
+              </View>
+            </TouchableOpacity>
           </View>
           <Text style={styles.name}>{gallery.displayName}</Text>
+          {avatarError ? <Text style={styles.avatarError}>{avatarError}</Text> : null}
           <View style={styles.statsRow}>
             <Stat label="Following" value={gallery.following} />
             <Stat label="Followers" value={gallery.followers} />
@@ -252,15 +284,33 @@ const styles = StyleSheet.create({
     marginTop: 28,
     zIndex: 2,
   },
+  avatarHit: {
+    position: 'relative',
+  },
   avatar: {
-    width: 92,
-    height: 92,
-    borderRadius: 46,
-    backgroundColor: '#0f172a',
     borderWidth: 3,
+    borderColor: '#f8fafc',
+  },
+  cameraBadge: {
+    position: 'absolute',
+    left: -4,
+    bottom: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#111827',
+    borderWidth: 2,
     borderColor: '#f8fafc',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  avatarError: {
+    color: '#fecaca',
+    textAlign: 'center',
+    fontSize: 12,
+    fontWeight: '600',
+    marginTop: 8,
+    paddingHorizontal: 16,
   },
   avatarInitial: {
     color: '#f8fafc',

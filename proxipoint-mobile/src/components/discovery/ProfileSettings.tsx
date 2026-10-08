@@ -23,7 +23,10 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import type { AppearanceMode, AppearancePalette } from '../../lib/appearance';
+import { useOperatorAvatar } from '../../stores/useProfileAvatarStore';
+import { chooseAvatarFile, saveProfileAvatar } from '../../services/profileAvatar';
 import { HostProfile } from './HostProfile';
+import { OperatorAvatar } from './OperatorAvatar';
 
 type SettingsPage = 'menu' | 'profile' | 'friends' | 'edit' | 'faqs';
 type SectionId = 'app' | 'privacy' | 'plans' | 'integrations';
@@ -75,7 +78,16 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   const [openSection, setOpenSection] = useState<SectionId | null>(null);
   const [friendQuery, setFriendQuery] = useState('');
   const [friends, setFriends] = useState<string[]>([]);
+  const [avatarError, setAvatarError] = useState('');
+  const avatarUri = useOperatorAvatar(callsign);
   const initial = callsign.trim().charAt(0).toUpperCase() || 'R';
+
+  const pickAvatar = async () => {
+    setAvatarError('');
+    const file = await chooseAvatarFile();
+    if (!file) return;
+    setAvatarError(await saveProfileAvatar(callsign, file));
+  };
 
   useEffect(() => {
     if (!visible) return;
@@ -103,7 +115,7 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
     <Modal visible={visible} animationType="slide" onRequestClose={goBack}>
       <View style={styles.page} testID="profile-settings">
         {page === 'profile' ? (
-          <HostProfile callsign={callsign} onBack={goBack} />
+          <HostProfile callsign={callsign} onBack={goBack} onPickAvatar={() => { void pickAvatar(); }} avatarError={avatarError} />
         ) : (
         <>
         <View style={styles.header}>
@@ -126,6 +138,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               styles={styles}
               colors={colors}
               initial={initial}
+              avatarUri={avatarUri}
+              onPickAvatar={() => { void pickAvatar(); }}
               callsign={callsign}
               openSection={openSection}
               onToggle={toggleSection}
@@ -206,6 +220,8 @@ type MenuPageProps = {
   styles: ReturnType<typeof createSettingsStyles>;
   colors: AppearancePalette;
   initial: string;
+  avatarUri: string;
+  onPickAvatar: () => void;
   callsign: string;
   openSection: SectionId | null;
   onToggle: (id: SectionId) => void;
@@ -222,6 +238,8 @@ const MenuPage: React.FC<MenuPageProps> = ({
   styles,
   colors,
   initial,
+  avatarUri,
+  onPickAvatar,
   callsign,
   openSection,
   onToggle,
@@ -235,9 +253,22 @@ const MenuPage: React.FC<MenuPageProps> = ({
 }) => (
   <View>
     <View style={styles.identityRow}>
-      <View style={styles.profileAvatar}>
-        <Text style={styles.profileInitial}>{initial}</Text>
-      </View>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel="Upload profile picture"
+        testID="settings-avatar-upload"
+        onPress={onPickAvatar}
+      >
+        <OperatorAvatar
+          uri={avatarUri}
+          initial={initial}
+          size={58}
+          backgroundColor={colors.inset}
+          color={colors.accentBright}
+          fontSize={22}
+          style={styles.profileAvatar}
+        />
+      </TouchableOpacity>
       <Text style={styles.profileName} numberOfLines={1}>{callsign}</Text>
       <TouchableOpacity
         accessibilityRole="button"

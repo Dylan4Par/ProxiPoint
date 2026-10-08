@@ -2,6 +2,7 @@ package profile
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"log"
@@ -13,6 +14,11 @@ import (
 type reactRequest struct {
 	Actor string `json:"actor"`
 	Emoji string `json:"emoji"`
+}
+
+type avatarRequest struct {
+	ContentType string `json:"contentType"`
+	ImageBase64 string `json:"imageBase64"`
 }
 
 func Handle(store Store) http.HandlerFunc {
@@ -43,6 +49,35 @@ func Handle(store Store) http.HandlerFunc {
 			}
 			if err != nil {
 				log.Printf("profile read: %v", err)
+				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+				return
+			}
+			writeJSON(w, profile)
+			return
+		}
+
+		if len(parts) == 2 && parts[1] == "avatar" && r.Method == http.MethodPost {
+			var body avatarRequest
+			if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 3<<20)).Decode(&body); err != nil {
+				http.Error(w, "Bad Request", http.StatusBadRequest)
+				return
+			}
+			raw, err := base64.StdEncoding.DecodeString(strings.TrimSpace(body.ImageBase64))
+			if err != nil {
+				http.Error(w, "Image only", http.StatusBadRequest)
+				return
+			}
+			profile, err := store.SetAvatar(ctx, parts[0], body.ContentType, raw)
+			if errors.Is(err, errAvatarType) {
+				http.Error(w, "Image only", http.StatusBadRequest)
+				return
+			}
+			if errors.Is(err, errNotFound) {
+				http.Error(w, "Not Found", http.StatusNotFound)
+				return
+			}
+			if err != nil {
+				log.Printf("profile avatar: %v", err)
 				http.Error(w, "Internal Server Error", http.StatusInternalServerError)
 				return
 			}

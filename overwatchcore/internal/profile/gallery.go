@@ -50,12 +50,15 @@ type Photo struct {
 }
 
 type HostProfile struct {
-	Handle      string  `json:"handle"`
-	DisplayName string  `json:"displayName"`
-	Following   int     `json:"following"`
-	Followers   int     `json:"followers"`
-	Activities  int     `json:"activities"`
-	Photos      []Photo `json:"photos"`
+	Handle       string  `json:"handle"`
+	DisplayName  string  `json:"displayName"`
+	Following    int     `json:"following"`
+	Followers    int     `json:"followers"`
+	Activities   int     `json:"activities"`
+	Avatar       []byte  `json:"-"`
+	AvatarType   string  `json:"avatarType,omitempty"`
+	AvatarBase64 string  `json:"avatarBase64,omitempty"`
+	Photos       []Photo `json:"photos"`
 }
 
 const demoHandle = "Ranger-F0A5ACCF"

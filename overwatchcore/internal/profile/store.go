@@ -15,6 +15,7 @@ var errNotFound = errors.New("profile not found")
 type Store interface {
 	Profile(ctx context.Context, handle string) (HostProfile, error)
 	React(ctx context.Context, handle, photoID, actor, emoji string) (Photo, error)
+	SetAvatar(ctx context.Context, handle, contentType string, image []byte) (HostProfile, error)
 }
 
 type MemoryStore struct {
@@ -60,12 +61,34 @@ func (s *MemoryStore) React(_ context.Context, handle, photoID, actor, emoji str
 	return Photo{}, errNotFound
 }
 
+func (s *MemoryStore) SetAvatar(_ context.Context, handle, contentType string, image []byte) (HostProfile, error) {
+	if err := validateAvatar(contentType, image); err != nil {
+		return HostProfile{}, err
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	key := strings.ToLower(strings.TrimSpace(handle))
+	profile, ok := s.profiles[key]
+	if !ok {
+		return HostProfile{}, errNotFound
+	}
+	profile.Avatar = append([]byte(nil), image...)
+	profile.AvatarType = contentType
+	s.profiles[key] = profile
+	return publicProfile(profile), nil
+}
+
 func publicProfile(profile HostProfile) HostProfile {
 	out := profile
 	out.Photos = make([]Photo, len(profile.Photos))
 	for i, photo := range profile.Photos {
 		out.Photos[i] = publicPhoto(photo)
 	}
+	if len(profile.Avatar) > 0 {
+		out.AvatarBase64 = base64.StdEncoding.EncodeToString(profile.Avatar)
+		out.AvatarType = profile.AvatarType
+	}
+	out.Avatar = nil
 	return out
 }
 
@@ -86,6 +109,7 @@ func cloneProfile(profile HostProfile) HostProfile {
 		out.Photos[i].Image = append([]byte(nil), photo.Image...)
 		out.Photos[i].Reactions = append([]Reaction(nil), photo.Reactions...)
 	}
+	out.Avatar = append([]byte(nil), profile.Avatar...)
 	return out
 }
 
@@ -151,9 +175,9 @@ func seedDatabase(ctx context.Context, db *sql.DB, profile HostProfile) error {
 func (s *PostGISStore) Profile(ctx context.Context, handle string) (HostProfile, error) {
 	var profile HostProfile
 	err := s.db.QueryRowContext(ctx, `
-		SELECT handle, display_name, following_count, follower_count, activity_count
+		SELECT handle, display_name, following_count, follower_count, activity_count, avatar, avatar_type
 		FROM profiles WHERE lower(handle) = lower($1)`, strings.TrimSpace(handle),
-	).Scan(&profile.Handle, &profile.DisplayName, &profile.Following, &profile.Followers, &profile.Activities)
+	).Scan(&profile.Handle, &profile.DisplayName, &profile.Following, &profile.Followers, &profile.Activities, &profile.Avatar, &profile.AvatarType)
 	if errors.Is(err, sql.ErrNoRows) {
 		return HostProfile{}, errNotFound
 	}
@@ -248,4 +272,24 @@ func (s *PostGISStore) React(ctx context.Context, handle, photoID, actor, emoji 
 		}
 	}
 	return Photo{}, errNotFound
+}
+
+func (s *PostGISStore) SetAvatar(ctx context.Context, handle, contentType string, image []byte) (HostProfile, error) {
+	if err := validateAvatar(contentType, image); err != nil {
+		return HostProfile{}, err
+	}
+	result, err := s.db.ExecContext(ctx, `
+		UPDATE profiles SET avatar = $2, avatar_type = $3 WHERE lower(handle) = lower($1)`,
+		strings.TrimSpace(handle), image, contentType)
+	if err != nil {
+		return HostProfile{}, err
+	}
+	updated, err := result.RowsAffected()
+	if err != nil {
+		return HostProfile{}, err
+	}
+	if updated == 0 {
+		return HostProfile{}, errNotFound
+	}
+	return s.Profile(ctx, handle)
 }

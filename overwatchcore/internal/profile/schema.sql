@@ -3,8 +3,13 @@ CREATE TABLE IF NOT EXISTS profiles (
     display_name TEXT NOT NULL,
     following_count INT NOT NULL DEFAULT 0,
     follower_count INT NOT NULL DEFAULT 0,
-    activity_count INT NOT NULL DEFAULT 0
+    activity_count INT NOT NULL DEFAULT 0,
+    avatar BYTEA,
+    avatar_type TEXT NOT NULL DEFAULT ''
 );
+
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar BYTEA;
+ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_type TEXT NOT NULL DEFAULT '';
 
 CREATE TABLE IF NOT EXISTS profile_photos (
     id TEXT PRIMARY KEY,

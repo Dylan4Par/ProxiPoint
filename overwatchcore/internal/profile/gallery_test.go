@@ -55,6 +55,32 @@ func TestSchemaStoresImageBytes(t *testing.T) {
 	if strings.Contains(sqlText, "comment") {
 		t.Fatal("photo reactions must not store comment text")
 	}
+	if !strings.Contains(sqlText, "avatar BYTEA") {
+		t.Fatal("profiles must store an uploaded avatar")
+	}
+}
+
+func TestAvatarUploadStoresImageBytes(t *testing.T) {
+	store := NewMemoryStore()
+	png := scenePNG(nightStage)
+	updated, err := store.SetAvatar(context.Background(), "Ranger-F0A5ACCF", "image/png", png)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if updated.AvatarType != "image/png" || len(updated.AvatarBase64) < 100 || len(updated.Avatar) != 0 {
+		t.Fatalf("avatar was not stored as image bytes, type %s b64 %d raw %d", updated.AvatarType, len(updated.AvatarBase64), len(updated.Avatar))
+	}
+
+	if _, err := store.SetAvatar(context.Background(), "Ranger-F0A5ACCF", "text/plain", png); err == nil {
+		t.Fatal("non-image uploads must be rejected")
+	}
+	if _, err := store.SetAvatar(context.Background(), "Ranger-F0A5ACCF", "image/png", []byte("not-a-png")); err == nil {
+		t.Fatal("invalid image bytes must be rejected")
+	}
+	huge := make([]byte, maxAvatarBytes+1)
+	if _, err := store.SetAvatar(context.Background(), "Ranger-F0A5ACCF", "image/png", huge); err == nil {
+		t.Fatal("oversized uploads must be rejected")
+	}
 }
 
 func hasReaction(reactions []Reaction, actor, emoji string) bool {

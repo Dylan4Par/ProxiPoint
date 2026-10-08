@@ -1,3 +1,5 @@
+import { readStoredAvatar } from './profileAvatar';
+
 export const REACTION_EMOJI = ['🔥', '👏', '😂', '🎉', '✨', '👀'] as const;
 
 export type ReactionEmoji = (typeof REACTION_EMOJI)[number];
@@ -23,6 +25,7 @@ export interface HostGallery {
   following: number;
   followers: number;
   activities: number;
+  avatarUri: string;
   photos: HostPhoto[];
 }
 
@@ -76,6 +79,7 @@ export function localGallery(handle: string): HostGallery {
     following: 6,
     followers: 14,
     activities: 2,
+    avatarUri: readStoredAvatar(name),
     photos: [
       {
         id: 'photo-owls',
