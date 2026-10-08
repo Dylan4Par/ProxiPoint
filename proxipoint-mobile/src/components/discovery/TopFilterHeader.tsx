@@ -12,6 +12,7 @@ import {
 import type { AppearancePalette } from '../../lib/appearance';
 import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { ProfileSettings } from './ProfileSettings';
 
 export const TopFilterHeader: React.FC = () => {
   const activeTab = useDiscoveryStore((s) => s.activeTab);
@@ -68,6 +69,8 @@ export const TopFilterHeader: React.FC = () => {
     setSelectedTag(tag);
   };
 
+  const profileInitial = callsign.trim().charAt(0).toUpperCase() || 'R';
+
   const handleAddNewTag = () => {
     if (newTagInput.trim()) {
       addTag(newTagInput);
@@ -86,7 +89,7 @@ export const TopFilterHeader: React.FC = () => {
           activeOpacity={0.8}
         >
           <View style={styles.avatarInner}>
-            <Text style={styles.avatarInitial}>R</Text>
+            <Text style={styles.avatarInitial}>{profileInitial}</Text>
           </View>
           <View style={styles.onlineBadge} />
         </TouchableOpacity>
@@ -215,97 +218,19 @@ export const TopFilterHeader: React.FC = () => {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Settings Modal Sheet */}
-      <Modal
+      <ProfileSettings
         visible={settingsOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setSettingsOpen(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setSettingsOpen(false)}>
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalCard}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Node & Profile Settings</Text>
-                  <TouchableOpacity onPress={() => setSettingsOpen(false)}>
-                    <Text style={styles.modalCloseText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Appearance</Text>
-                  <View style={styles.modeTrack} accessibilityRole="radiogroup">
-                    <TouchableOpacity
-                      testID="appearance-day"
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: mode === 'day' }}
-                      style={[styles.modeOption, mode === 'day' && styles.modeOptionSelected]}
-                      onPress={() => setMode('day')}
-                    >
-                      <Text style={[styles.modeOptionText, mode === 'day' && styles.modeOptionTextSelected]}>Day</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      testID="appearance-night"
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: mode === 'night' }}
-                      style={[styles.modeOption, mode === 'night' && styles.modeOptionSelected]}
-                      onPress={() => setMode('night')}
-                    >
-                      <Text style={[styles.modeOptionText, mode === 'night' && styles.modeOptionTextSelected]}>Night</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Device Callsign / Handle</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={callsign}
-                    onChangeText={setCallsign}
-                    placeholder="e.g. Ranger-F0A5ACCF"
-                    placeholderTextColor={colors.textDim}
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Tenant ID (UUID)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={tenantId}
-                    onChangeText={setTenantId}
-                    autoCapitalize="none"
-                    placeholderTextColor={colors.textDim}
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Ingest WebSocket URL</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={serverUrl}
-                    onChangeText={setServerUrl}
-                    autoCapitalize="none"
-                    placeholderTextColor={colors.textDim}
-                  />
-                </View>
-
-                <View style={styles.statusBox}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusBoxText}>Engine: overwatchcore-ingest :8080</Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={() => setSettingsOpen(false)}
-                >
-                  <Text style={styles.saveBtnText}>Save & Apply</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        onClose={() => setSettingsOpen(false)}
+        callsign={callsign}
+        onChangeCallsign={setCallsign}
+        tenantId={tenantId}
+        onChangeTenantId={setTenantId}
+        serverUrl={serverUrl}
+        onChangeServerUrl={setServerUrl}
+        mode={mode}
+        onChangeMode={setMode}
+        colors={colors}
+      />
     </View>
   );
 };
@@ -541,47 +466,6 @@ function createHeaderStyles(c: AppearancePalette) {
     fontWeight: '700',
     paddingHorizontal: 2,
   },
-  fieldGroup: {
-    marginBottom: 14,
-  },
-  fieldLabel: {
-    color: c.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
-  textInput: {
-    backgroundColor: c.surface,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: c.border,
-    color: c.text,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    fontFamily: 'monospace',
-  },
-  statusBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: c.statusBox,
-    padding: 10,
-    borderRadius: 8,
-    gap: 8,
-    marginVertical: 10,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10b981',
-  },
-  statusBoxText: {
-    color: c.accentBright,
-    fontSize: 11,
-    fontWeight: '600',
-  },
   saveBtn: {
     backgroundColor: c.accent,
     paddingVertical: 12,
@@ -593,33 +477,6 @@ function createHeaderStyles(c: AppearancePalette) {
     color: c.onAccent,
     fontSize: 14,
     fontWeight: '700',
-  },
-  modeTrack: {
-    flexDirection: 'row',
-    backgroundColor: c.inset,
-    borderRadius: 12,
-    padding: 3,
-    borderWidth: 1,
-    borderColor: c.border,
-    gap: 4,
-  },
-  modeOption: {
-    flex: 1,
-    minHeight: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 9,
-  },
-  modeOptionSelected: {
-    backgroundColor: c.accent,
-  },
-  modeOptionText: {
-    color: c.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  modeOptionTextSelected: {
-    color: c.onAccent,
   },
 });
 }
