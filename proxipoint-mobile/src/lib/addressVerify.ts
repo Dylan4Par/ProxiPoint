@@ -1,8 +1,11 @@
+import { classifyPlaceTier, type PlaceTier } from './spatialBoundary';
+
 export interface VerifiedAddress {
   query: string;
   label: string;
   latitude: number;
   longitude: number;
+  placeType: PlaceTier;
 }
 
 export interface PhotonProperties {
@@ -14,6 +17,9 @@ export interface PhotonProperties {
   county?: string;
   country?: string;
   postcode?: string;
+  type?: string;
+  osm_key?: string;
+  osm_value?: string;
 }
 
 export interface PhotonFeature {
@@ -47,6 +53,7 @@ export function interpretPhotonFeatures(query: string, features: PhotonFeature[]
     label,
     latitude,
     longitude,
+    placeType: classifyPlaceTier(feature.properties),
   };
 }
 

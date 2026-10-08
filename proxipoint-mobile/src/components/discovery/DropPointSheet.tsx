@@ -29,6 +29,8 @@ import {
   type BeaconVisibility,
 } from '../../lib/beaconSchedule';
 import { ALERT_RADIUS_PRESETS, DURATION_PRESETS, clampAlertRadius } from '../../lib/dropPointMenu';
+import { resolveBoundary } from '../../lib/spatialBoundary';
+import { publishBeacon } from '../../services/beaconPipeline';
 import { readCurrentPosition, verifyAddressQuery, verifyCoordinates } from '../../services/addressVerify';
 import { lookupContainingRegions } from '../../services/regionLookup';
 import type { AppearancePalette } from '../../lib/appearance';
@@ -48,6 +50,7 @@ export const DropPointSheet: React.FC = () => {
   const addTag = useDiscoveryStore((s) => s.addTag);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   const dropBeacon = useDiscoveryStore((s) => s.dropBeacon);
+  const deviceId = useDiscoveryStore((s) => s.deviceId);
   const setSelfCoordinates = useDiscoveryStore((s) => s.setSelfCoordinates);
   const previewPin = useDiscoveryStore((s) => s.previewPin);
   const placePreviewPin = useDiscoveryStore((s) => s.placePreviewPin);
@@ -69,6 +72,7 @@ export const DropPointSheet: React.FC = () => {
   const [whenMode, setWhenMode] = useState<'live' | 'schedule'>('live');
   const [radiusPreset, setRadiusPreset] = useState<250 | 500 | 1000 | 'custom'>(500);
   const [customRadius, setCustomRadius] = useState('750');
+  const radiusTouched = useRef(false);
   const [invites, setInvites] = useState<BeaconInvite[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteKind, setInviteKind] = useState<InviteKind>('facebook');
@@ -101,6 +105,7 @@ export const DropPointSheet: React.FC = () => {
       setWhenMode('live');
       setRadiusPreset(500);
       setCustomRadius('750');
+      radiusTouched.current = false;
       setInvites([]);
       setInviteOpen(false);
       setInviteKind('facebook');
@@ -129,6 +134,15 @@ export const DropPointSheet: React.FC = () => {
     setVerified({ ...next, query });
     setStatus('verified');
     setError('');
+    if (!radiusTouched.current && next.placeType) {
+      const boundary = resolveBoundary(next.latitude, next.longitude, next.placeType, null);
+      const preset = ALERT_RADIUS_PRESETS.find((choice) => choice.meters === boundary.radiusMeters);
+      if (preset) setRadiusPreset(preset.meters);
+      else {
+        setRadiusPreset('custom');
+        setCustomRadius(String(boundary.radiusMeters));
+      }
+    }
   };
 
   const verifyTypedAddress = async () => {
@@ -173,6 +187,7 @@ export const DropPointSheet: React.FC = () => {
         label: 'Current position',
         latitude: coords.latitude,
         longitude: coords.longitude,
+        placeType: 'address',
       };
       const next = result ?? fallback;
       setSelfCoordinates({ latitude: next.latitude, longitude: next.longitude });
@@ -243,6 +258,20 @@ export const DropPointSheet: React.FC = () => {
       if (!locating && address.trim().length >= 3) void verifyTypedAddress();
       return;
     }
+    const starts = whenMode === 'live' ? new Date() : startsAt;
+    const expires = new Date(starts.getTime() + durationMinutes * 60 * 1000);
+    void publishBeacon({
+      hostId: deviceId,
+      label: verified.label,
+      channels,
+      latitude: verified.latitude,
+      longitude: verified.longitude,
+      placeType: verified.placeType,
+      customRadiusMeters: alertRadius,
+      startsAt: starts.toISOString(),
+      expiresAt: expires.toISOString(),
+      trackedTags: tags.filter((tag) => tag !== 'All'),
+    });
     dropBeacon({
       place: verified.label,
       tags: channels,
@@ -563,7 +592,10 @@ export const DropPointSheet: React.FC = () => {
                 accessibilityRole="button"
                 accessibilityState={{ selected }}
                 style={[styles.choiceChip, selected && styles.choiceChipSelected]}
-                onPress={() => setRadiusPreset(choice.meters)}
+                onPress={() => {
+                  radiusTouched.current = true;
+                  setRadiusPreset(choice.meters);
+                }}
               >
                 <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{choice.label}</Text>
               </TouchableOpacity>
@@ -574,7 +606,10 @@ export const DropPointSheet: React.FC = () => {
             accessibilityRole="button"
             accessibilityState={{ selected: radiusPreset === 'custom' }}
             style={[styles.choiceChip, radiusPreset === 'custom' && styles.choiceChipSelected]}
-            onPress={() => setRadiusPreset('custom')}
+            onPress={() => {
+              radiusTouched.current = true;
+              setRadiusPreset('custom');
+            }}
           >
             <Text style={[styles.choiceText, radiusPreset === 'custom' && styles.choiceTextSelected]}>Custom</Text>
           </TouchableOpacity>
@@ -583,7 +618,10 @@ export const DropPointSheet: React.FC = () => {
           <TextInput
             testID="drop-radius-custom-input"
             value={customRadius}
-            onChangeText={setCustomRadius}
+            onChangeText={(value) => {
+              radiusTouched.current = true;
+              setCustomRadius(value);
+            }}
             keyboardType="number-pad"
             placeholder="750"
             placeholderTextColor={colors.textDim}
