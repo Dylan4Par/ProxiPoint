@@ -107,7 +107,13 @@ export const BottomNavBar: React.FC = () => {
       <TouchableOpacity
         style={styles.navItem}
         activeOpacity={0.7}
-        onPress={() => setDropSheetOpen(false)}
+        testID="discover-button"
+        accessibilityRole="button"
+        accessibilityLabel="Discover"
+        onPress={() => {
+          setActivityOpen(false);
+          setDropSheetOpen(false);
+        }}
       >
         <View style={styles.iconContainer}>
           <DiscoverIcon />
@@ -118,7 +124,13 @@ export const BottomNavBar: React.FC = () => {
       <TouchableOpacity
         style={styles.navItem}
         activeOpacity={0.7}
-        onPress={() => setDropSheetOpen(true)}
+        testID="drop-point-button"
+        accessibilityRole="button"
+        accessibilityLabel="Drop Point"
+        onPress={() => {
+          setActivityOpen(false);
+          setDropSheetOpen(true);
+        }}
       >
         <View style={styles.iconContainer}>
           <DropPointIcon />
