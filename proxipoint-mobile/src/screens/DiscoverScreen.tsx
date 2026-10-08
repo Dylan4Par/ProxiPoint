@@ -9,9 +9,11 @@ import { DropPointSheet } from '../components/discovery/DropPointSheet';
 import { ActivitySheet } from '../components/discovery/ActivitySheet';
 import { BottomNavBar } from '../components/discovery/BottomNavBar';
 import { useAppearanceStore } from '../stores/useAppearanceStore';
+import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 
 export const DiscoverScreen: React.FC = () => {
   const colors = useAppearanceStore((s) => s.colors);
+  const detailOpen = useDiscoveryStore((s) => Boolean(s.detailNodeId));
   // Live duplex telemetry socket hook
   useProximitySocket();
 
@@ -20,7 +22,9 @@ export const DiscoverScreen: React.FC = () => {
       <StatusBar barStyle={colors.statusBar} translucent backgroundColor="transparent" />
       <View style={styles.stage}>
         <TopFilterHeader />
-        <DiscoveryMapCanvas />
+        <View style={detailOpen ? styles.mapPeek : styles.mapFlex}>
+          <DiscoveryMapCanvas />
+        </View>
         <EventCardList />
         <DropPointSheet />
         <ActivitySheet />
@@ -38,5 +42,12 @@ const styles = StyleSheet.create({
   stage: {
     flex: 1,
     position: 'relative',
+  },
+  mapFlex: {
+    flex: 1,
+    minHeight: 0,
+  },
+  mapPeek: {
+    height: 132,
   },
 });

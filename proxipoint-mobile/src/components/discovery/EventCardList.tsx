@@ -14,6 +14,7 @@ import { formatDuration, formatStartLabel } from '../../lib/beaconSchedule';
 import type { AppearancePalette } from '../../lib/appearance';
 import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
+import { EventDetailPanel } from './EventDetailPanel';
 
 const EXPANDED_HEIGHT = 360;
 const COLLAPSED_HEIGHT = 96;
@@ -22,9 +23,11 @@ export const EventCardList: React.FC = () => {
   const getVisibleNodes = useDiscoveryStore((s) => s.getVisibleNodes);
   const toggleRsvp = useDiscoveryStore((s) => s.toggleRsvp);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
-  const focusCard = useDiscoveryStore((s) => s.focusCard);
+  const openCardDetail = useDiscoveryStore((s) => s.openCardDetail);
+  const closeCardDetail = useDiscoveryStore((s) => s.closeCardDetail);
+  const detailNodeId = useDiscoveryStore((s) => s.detailNodeId);
+  const nodes = useDiscoveryStore((s) => s.nodes);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
-  useDiscoveryStore((s) => s.nodes);
   useDiscoveryStore((s) => s.activeTab);
   useDiscoveryStore((s) => s.viewportBounds);
   useDiscoveryStore((s) => s.selfCoordinates);
@@ -37,6 +40,9 @@ export const EventCardList: React.FC = () => {
 
   const [isExpanded, setIsExpanded] = useState(true);
   const animatedHeight = useRef(new Animated.Value(EXPANDED_HEIGHT)).current;
+  const detailNode = detailNodeId ? nodes[detailNodeId] : undefined;
+  const detailOpenRef = useRef(false);
+  detailOpenRef.current = Boolean(detailNode);
 
   const selectedNode =
     visibleNodes.find((e) => e.id === selectedNodeId) ||
@@ -74,6 +80,12 @@ export const EventCardList: React.FC = () => {
       },
       onPanResponderRelease: (_, gestureState) => {
         if (gestureState.dy > 30) {
+          if (detailOpenRef.current) {
+            useDiscoveryStore.getState().closeCardDetail();
+            animatedHeight.setValue(EXPANDED_HEIGHT);
+            setIsExpanded(true);
+            return;
+          }
           animateDrawer(false);
         } else if (gestureState.dy < -30) {
           animateDrawer(true);
@@ -88,7 +100,8 @@ export const EventCardList: React.FC = () => {
     return (
       <TouchableOpacity
         activeOpacity={0.9}
-        onPress={() => focusCard(item.id)}
+        testID={`event-card-${item.id}`}
+        onPress={() => openCardDetail(item.id)}
         style={[styles.card, isSelected && styles.cardSelected]}
       >
         <Text style={styles.tagText}>{tagFor(item)}</Text>
@@ -155,11 +168,30 @@ export const EventCardList: React.FC = () => {
     );
   };
 
+  const showList = () => {
+    animatedHeight.setValue(EXPANDED_HEIGHT);
+    setIsExpanded(true);
+    closeCardDetail();
+  };
+
   return (
-    <Animated.View style={[styles.drawerContainer, { height: animatedHeight }]}>
+    <Animated.View style={[styles.drawerContainer, detailNode ? styles.drawerDetail : { height: animatedHeight }]}>
       <View {...panResponder.panHandlers} style={styles.headerDraggable}>
         <View style={styles.pullBar} />
 
+        {detailNode ? (
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Back to events"
+            testID="event-detail-back"
+            activeOpacity={0.8}
+            onPress={showList}
+            style={styles.collapsedHeaderRow}
+          >
+            <Text style={styles.backLabel}>Events</Text>
+            <Text style={styles.chevronToggle}>▾</Text>
+          </TouchableOpacity>
+        ) : (
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() => animateDrawer(!isExpanded)}
@@ -190,9 +222,17 @@ export const EventCardList: React.FC = () => {
           </View>
           <Text style={styles.chevronToggle}>{isExpanded ? '▾' : '▴'}</Text>
         </TouchableOpacity>
+        )}
       </View>
 
-      {isExpanded && (
+      {detailNode ? (
+        <EventDetailPanel
+          node={detailNode}
+          tagLabel={tagFor(detailNode)}
+          colors={colors}
+          onRsvp={() => toggleRsvp(detailNode.id)}
+        />
+      ) : isExpanded && (
         <FlatList
           testID="event-card-list"
           style={styles.list}
@@ -223,6 +263,15 @@ function createCardStyles(c: AppearancePalette) {
     borderColor: c.border,
     overflow: 'hidden',
     flexDirection: 'column',
+  },
+  drawerDetail: {
+    flex: 1,
+    minHeight: 0,
+  },
+  backLabel: {
+    color: c.text,
+    fontSize: 15,
+    fontWeight: '800',
   },
   list: {
     flex: 1,

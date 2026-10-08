@@ -62,6 +62,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
   const pan = useRef(new Animated.ValueXY({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y })).current;
   const currentPan = useRef({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y });
   const canvasSize = useRef({ width, height: CANVAS_HEIGHT });
+  const pendingFocus = useRef(false);
 
   const calculateBounds = (offsetX: number, offsetY: number) => {
     const { width: canvasWidth, height: canvasHeight } = canvasSize.current;
@@ -92,6 +93,7 @@ export const DiscoveryMapCanvas: React.FC = () => {
     const selectedId = useDiscoveryStore.getState().selectedNodeId;
     const node = selectedId ? useDiscoveryStore.getState().nodes[selectedId] : null;
     if (!node) return;
+    pendingFocus.current = true;
     moveTo(node.x, node.y);
   }, [mapFocusToken]);
 
@@ -154,7 +156,19 @@ export const DiscoveryMapCanvas: React.FC = () => {
       onLayout={(event) => {
         const { width: layoutWidth, height: layoutHeight } = event.nativeEvent.layout;
         if (layoutWidth > 0 && layoutHeight > 0) {
+          const changed =
+            canvasSize.current.width !== layoutWidth || canvasSize.current.height !== layoutHeight;
           canvasSize.current = { width: layoutWidth, height: layoutHeight };
+          if (changed && pendingFocus.current) {
+            pendingFocus.current = false;
+            const selectedId = useDiscoveryStore.getState().selectedNodeId;
+            const node = selectedId ? useDiscoveryStore.getState().nodes[selectedId] : null;
+            if (node) {
+              moveTo(node.x, node.y);
+              return;
+            }
+          }
+          pendingFocus.current = false;
           calculateBounds(currentPan.current.x, currentPan.current.y);
         }
       }}

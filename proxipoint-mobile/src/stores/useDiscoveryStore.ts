@@ -45,6 +45,8 @@ export interface DiscoveryNode {
   hostName?: string;
   regionName?: string;
   regionChain?: string;
+  details?: string;
+  sourceUrl?: string;
 }
 
 export interface PreviewPin {
@@ -75,6 +77,7 @@ export interface DiscoveryState {
   nodes: Record<string, DiscoveryNode>;
   selectedNodeId: string | null;
   selectedEventId: string;
+  detailNodeId: string | null;
   mapFocusToken: number;
   activeTab: 'Nearby' | 'RSVPd';
   selectedTag: string;
@@ -89,6 +92,8 @@ export interface DiscoveryState {
   setSelectedNodeId: (id: string | null) => void;
   setSelectedEventId: (id: string) => void;
   focusCard: (id: string) => void;
+  openCardDetail: (id: string) => void;
+  closeCardDetail: () => void;
   setActiveTab: (tab: 'Nearby' | 'RSVPd') => void;
   setSelectedTag: (tag: string) => void;
   setDropSheetOpen: (open: boolean) => void;
@@ -178,7 +183,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     tag: '#LiveMusic',
     tags: ['#LiveMusic', '#FoodTrucks', '#ArtWalk'],
     title: 'The Midnight Owls • Live at The Rusty Anchor',
-    venue: 'Title, Host',
+    venue: 'The Rusty Anchor',
     latitude: 40.017458,
     longitude: -105.283779,
     distanceMeters: 478,
@@ -194,6 +199,9 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     y: 459,
     regionName: DOWNTOWN_REGION,
     regionChain: DOWNTOWN_CHAIN,
+    details:
+      'The Midnight Owls are on stage now at The Rusty Anchor in Downtown Boulder. Doors are open, and the set shares the block with food trucks and the art walk. It is a short walk from the Pearl Street side of downtown.',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=The+Rusty+Anchor+Boulder+CO',
   },
   'event-2': {
     id: 'event-2',
@@ -216,6 +224,9 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     y: 438,
     regionName: DOWNTOWN_REGION,
     regionChain: DOWNTOWN_CHAIN,
+    details:
+      'Taco Tuesday truck rally at Central Park Plaza. Trucks line the plaza and the rally starts in about 15 minutes. The first channel on the map is Food Trucks.',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Central+Park+Plaza+Boulder+CO',
   },
   'event-3': {
     id: 'event-3',
@@ -238,6 +249,9 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     y: 314,
     regionName: DOWNTOWN_REGION,
     regionChain: DOWNTOWN_CHAIN,
+    details:
+      'Boulder Devs hosts a monthly Go and Kotlin social, Code & Coffee, at Downtown Tech Lab. It starts tomorrow at 18:00. The meetup is public and listed on the Tech Meetup channel.',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Downtown+Boulder+CO',
   },
 };
 
@@ -256,6 +270,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   nodes: INITIAL_SEED_NODES,
   selectedNodeId: 'event-1',
   selectedEventId: 'event-1',
+  detailNodeId: null,
   mapFocusToken: 0,
   activeTab: 'Nearby',
   selectedTag: 'All',
@@ -273,7 +288,16 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       selectedNodeId: id,
       selectedEventId: id || 'event-1',
       mapFocusToken: state.mapFocusToken + 1,
+      detailNodeId: state.detailNodeId ? id : null,
     })),
+  openCardDetail: (id) =>
+    set((state) => ({
+      selectedNodeId: id,
+      selectedEventId: id || state.selectedEventId,
+      mapFocusToken: state.mapFocusToken + 1,
+      detailNodeId: id,
+    })),
+  closeCardDetail: () => set({ detailNodeId: null }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
   setDropSheetOpen: (dropSheetOpen) =>
@@ -422,6 +446,13 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           radii: [250, 500],
           isRsvpd: existing ? existing.isRsvpd : false,
           startsAt: existing?.startsAt,
+          durationMinutes: existing?.durationMinutes,
+          visibility: existing?.visibility,
+          invites: existing?.invites,
+          regionName: existing?.regionName,
+          regionChain: existing?.regionChain,
+          details: existing?.details,
+          sourceUrl: existing?.sourceUrl,
           hostName: existing?.hostName || node.host,
           x,
           y,
