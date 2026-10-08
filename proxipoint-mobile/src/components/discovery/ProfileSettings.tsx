@@ -23,6 +23,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import type { AppearanceMode, AppearancePalette } from '../../lib/appearance';
+import { HostProfile } from './HostProfile';
 
 type SettingsPage = 'menu' | 'profile' | 'friends' | 'edit' | 'faqs';
 type SectionId = 'app' | 'privacy' | 'plans' | 'integrations';
@@ -101,6 +102,10 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={goBack}>
       <View style={styles.page} testID="profile-settings">
+        {page === 'profile' ? (
+          <HostProfile callsign={callsign} onBack={goBack} />
+        ) : (
+        <>
         <View style={styles.header}>
           <TouchableOpacity
             accessibilityRole="button"
@@ -132,16 +137,6 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
               serverUrl={serverUrl}
               onChangeServerUrl={onChangeServerUrl}
             />
-          ) : null}
-
-          {page === 'profile' ? (
-            <View style={styles.subpage}>
-              <View style={styles.profileAvatarLg}>
-                <Text style={styles.profileInitialLg}>{initial}</Text>
-              </View>
-              <Text style={styles.profileNameLg}>{callsign}</Text>
-              <Text style={styles.onlineText}>Online</Text>
-            </View>
           ) : null}
 
           {page === 'friends' ? (
@@ -200,6 +195,8 @@ export const ProfileSettings: React.FC<ProfileSettingsProps> = ({
             </View>
           ) : null}
         </ScrollView>
+        </>
+        )}
       </View>
     </Modal>
   );

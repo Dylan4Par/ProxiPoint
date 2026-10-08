@@ -10,13 +10,14 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/profile"
 	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/regions"
 	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/telemetry"
 )
 
 func main() {
 	addr := getenv("ADDR", ":8080")
-	nearby, districts := openIndexes()
+	nearby, districts, profiles := openIndexes()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
@@ -26,6 +27,7 @@ func main() {
 	mux.HandleFunc("/api/v1/telemetry/ping", telemetry.HandleTelemetryHTTP(nearby))
 	mux.HandleFunc("/api/v1/telemetry/ws", telemetry.HandleTelemetryWS(nearby))
 	mux.HandleFunc("/api/v1/regions/lookup", regions.HandleLookup(districts))
+	mux.HandleFunc("/api/v1/profiles/", profile.Handle(profiles))
 
 	server := &http.Server{
 		Addr:              addr,
@@ -38,11 +40,11 @@ func main() {
 	}
 }
 
-func openIndexes() (telemetry.NearbyQuerier, regions.Querier) {
+func openIndexes() (telemetry.NearbyQuerier, regions.Querier, profile.Store) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		log.Printf("DATABASE_URL unset; using in-memory geofence and region indexes")
-		return telemetry.NewDemoIndex(), regions.NewMemoryIndex()
+		log.Printf("DATABASE_URL unset; using in-memory geofence, region, and profile stores")
+		return telemetry.NewDemoIndex(), regions.NewMemoryIndex(), profile.NewMemoryStore()
 	}
 
 	db, err := sql.Open("pgx", dsn)
@@ -63,8 +65,11 @@ func openIndexes() (telemetry.NearbyQuerier, regions.Querier) {
 	if err := regions.EnsureSchema(ctx, db); err != nil {
 		log.Fatalf("migrate regions: %v", err)
 	}
+	if err := profile.EnsureSchema(ctx, db); err != nil {
+		log.Fatalf("migrate profiles: %v", err)
+	}
 	log.Printf("connected to PostGIS")
-	return telemetry.NewPostGISIndex(db), regions.NewPostGISIndex(db)
+	return telemetry.NewPostGISIndex(db), regions.NewPostGISIndex(db), profile.NewPostGISStore(db)
 }
 
 func getenv(key, fallback string) string {
