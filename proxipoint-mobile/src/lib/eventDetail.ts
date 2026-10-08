@@ -55,7 +55,13 @@ export function eventDetailsText(event: EventDetailInput): string {
   const when = event.status?.trim() ? ` ${event.status.trim()}.` : '';
   const place = event.regionName?.trim() ? ` ${event.regionName.trim()}.` : '';
   const visibility =
-    event.visibility === 'private' ? ' This drop is private.' : event.visibility === 'public' ? ' This drop is public.' : '';
+    event.visibility === 'private'
+      ? ' This drop is private.'
+      : event.visibility === 'tag-network'
+        ? ' This drop alerts people tracking its tags.'
+        : event.visibility === 'public'
+          ? ' This drop is public.'
+          : '';
   const channels = (event.tags && event.tags.length > 0 ? event.tags : event.tag ? [event.tag] : [])
     .map((tag) => tag.trim())
     .filter(Boolean);

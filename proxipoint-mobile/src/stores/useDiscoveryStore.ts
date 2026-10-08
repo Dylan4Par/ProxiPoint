@@ -35,6 +35,7 @@ export interface DiscoveryNode {
   attendeeCount: number;
   isRsvpd: boolean;
   radii: number[];
+  alertRadiusMeters?: number;
   batteryPct?: number;
   x: number;
   y: number;
@@ -140,6 +141,8 @@ export interface DropBeaconDraft {
   invites?: BeaconInvite[];
   startsAt: string;
   durationMinutes: number;
+  live?: boolean;
+  alertRadiusMeters?: number;
   regionName?: string;
   regionChain?: string;
 }
@@ -337,8 +340,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       }
       const etaMinutes = Math.max(1, Math.round(distanceMeters / 80));
       const now = new Date();
-      const scheduled = clampStart(new Date(draft.startsAt), now);
+      const scheduled = draft.live ? { start: now } : clampStart(new Date(draft.startsAt), now);
       const duration = clampDuration(draft.durationMinutes);
+      const alertRadius = Number.isFinite(draft.alertRadiusMeters) ? Math.round(draft.alertRadiusMeters as number) : 500;
       const windowStatus = beaconWindowStatus(scheduled.start, now);
       const node: DiscoveryNode = {
         id,
@@ -355,10 +359,12 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         etaMode: distanceMeters > 1000 ? 'drive' : 'walk',
         attendeeCount: 1,
         isRsvpd: false,
-        radii: [250, 500],
+        radii: [alertRadius],
+        alertRadiusMeters: alertRadius,
         x,
         y,
-        visibility: draft.visibility === 'private' ? 'private' : 'public',
+        visibility:
+          draft.visibility === 'private' ? 'private' : draft.visibility === 'tag-network' ? 'tag-network' : 'public',
         invites: draft.visibility === 'private' ? draft.invites ?? [] : [],
         startsAt: scheduled.start.toISOString(),
         durationMinutes: duration.minutes,

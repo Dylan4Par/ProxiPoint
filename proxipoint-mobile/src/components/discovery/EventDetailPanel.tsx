@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Linking, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import type { AppearancePalette } from '../../lib/appearance';
 import { inviteSummary } from '../../lib/beaconInvite';
-import { formatDuration, formatStartLabel } from '../../lib/beaconSchedule';
+import { formatDuration, formatStartLabel, visibilityLabel } from '../../lib/beaconSchedule';
 import { directionsUrl, eventDetailsText, eventSourceUrl } from '../../lib/eventDetail';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
 
@@ -29,7 +29,7 @@ export const EventDetailPanel: React.FC<{
   const directions = directionsUrl(node.latitude, node.longitude, node.etaMode);
   const details = eventDetailsText(node);
   const schedule = node.startsAt
-    ? `${node.visibility === 'private' ? 'Private' : 'Public'} · ${formatStartLabel(new Date(node.startsAt), new Date())} · ${formatDuration(node.durationMinutes ?? 60)}`
+    ? `${visibilityLabel(node.visibility)} · ${formatStartLabel(new Date(node.startsAt), new Date())} · ${formatDuration(node.durationMinutes ?? 60)}`
     : node.status;
 
   return (

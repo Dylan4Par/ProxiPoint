@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { presentAssignedTag } from '../../lib/beaconDrop';
 import { inviteSummary } from '../../lib/beaconInvite';
-import { formatDuration, formatStartLabel } from '../../lib/beaconSchedule';
+import { formatDuration, formatStartLabel, visibilityLabel } from '../../lib/beaconSchedule';
 import type { AppearancePalette } from '../../lib/appearance';
 import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
@@ -114,7 +114,7 @@ export const EventCardList: React.FC = () => {
         <Text style={styles.hostText} numberOfLines={2}>{item.venue}</Text>
         {item.startsAt ? (
           <Text style={styles.scheduleText} numberOfLines={1}>
-            {item.visibility === 'private' ? 'Private' : 'Public'}
+            {visibilityLabel(item.visibility)}
             {' · '}
             {formatStartLabel(new Date(item.startsAt), new Date())}
             {' · '}
@@ -209,7 +209,7 @@ export const EventCardList: React.FC = () => {
             ) : null}
             {selectedNode.startsAt ? (
               <Text numberOfLines={1} style={styles.collapsedSchedule}>
-                {selectedNode.visibility === 'private' ? 'Private' : 'Public'}
+                {visibilityLabel(selectedNode.visibility)}
                 {' · '}
                 {formatStartLabel(new Date(selectedNode.startsAt), new Date())}
                 {' · '}

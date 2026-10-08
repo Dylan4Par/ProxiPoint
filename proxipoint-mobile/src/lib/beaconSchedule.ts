@@ -2,7 +2,7 @@ export const DURATION_STEP_MINUTES = 15;
 export const MIN_DURATION_MINUTES = 15;
 export const MAX_DURATION_MINUTES = 24 * 60;
 
-export type BeaconVisibility = 'public' | 'private';
+export type BeaconVisibility = 'public' | 'tag-network' | 'private';
 export type ScheduleLimit = 'none' | 'past' | 'month' | 'duration';
 
 export interface ClampedStart {
@@ -80,6 +80,12 @@ export function formatStartLabel(start: Date, now: Date): string {
   }
   const time = start.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   return `${day} ${time}`;
+}
+
+export function visibilityLabel(visibility: BeaconVisibility | undefined): string {
+  if (visibility === 'private') return 'Private';
+  if (visibility === 'tag-network') return 'Tag Network';
+  return 'Public';
 }
 
 export function beaconWindowStatus(startsAt: Date, now: Date): { status: string; statusColor: string } {

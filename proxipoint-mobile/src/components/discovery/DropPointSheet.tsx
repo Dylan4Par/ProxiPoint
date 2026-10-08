@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
 } from 'react-native';
+import { Calendar, Globe, LocateFixed, Lock, Radio, Rocket, Search } from 'lucide-react-native';
 import { MAX_BEACON_CHANNELS, toggleChannel } from '../../lib/beaconDrop';
 import {
   LINKED_FACEBOOK_ACCOUNTS,
@@ -21,25 +22,30 @@ import {
 import { isSameVerifiedQuery, type VerifiedAddress } from '../../lib/addressVerify';
 import { regionLabel, type RegionMatch } from '../../lib/regions';
 import {
-  MAX_DURATION_MINUTES,
-  MIN_DURATION_MINUTES,
   clampDuration,
   clampStart,
   earliestStart,
-  formatDuration,
   formatStartLabel,
   type BeaconVisibility,
 } from '../../lib/beaconSchedule';
+import { ALERT_RADIUS_PRESETS, DURATION_PRESETS, clampAlertRadius } from '../../lib/dropPointMenu';
 import { readCurrentPosition, verifyAddressQuery, verifyCoordinates } from '../../services/addressVerify';
 import { lookupContainingRegions } from '../../services/regionLookup';
 import type { AppearancePalette } from '../../lib/appearance';
 import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
+const VISIBILITY_MODES: { id: BeaconVisibility; label: string; Icon: typeof Lock }[] = [
+  { id: 'private', label: 'Private', Icon: Lock },
+  { id: 'tag-network', label: 'Tag Network', Icon: Radio },
+  { id: 'public', label: 'Public', Icon: Globe },
+];
+
 export const DropPointSheet: React.FC = () => {
   const open = useDiscoveryStore((s) => s.dropSheetOpen);
   const setDropSheetOpen = useDiscoveryStore((s) => s.setDropSheetOpen);
   const tags = useDiscoveryStore((s) => s.tags);
+  const addTag = useDiscoveryStore((s) => s.addTag);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   const dropBeacon = useDiscoveryStore((s) => s.dropBeacon);
   const setSelfCoordinates = useDiscoveryStore((s) => s.setSelfCoordinates);
@@ -49,8 +55,9 @@ export const DropPointSheet: React.FC = () => {
   const colors = useAppearanceStore((s) => s.colors);
   const styles = useMemo(() => createDropStyles(colors), [colors]);
 
-  const [place, setPlace] = useState('');
   const [channels, setChannels] = useState<string[]>([]);
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTag, setNewTag] = useState('');
   const [limitNote, setLimitNote] = useState('');
   const [address, setAddress] = useState('');
   const [verified, setVerified] = useState<VerifiedAddress | null>(null);
@@ -58,7 +65,10 @@ export const DropPointSheet: React.FC = () => {
   const [status, setStatus] = useState<'idle' | 'checking' | 'verified'>('idle');
   const [error, setError] = useState('');
   const [locating, setLocating] = useState(false);
-  const [visibility, setVisibility] = useState<BeaconVisibility>('public');
+  const [visibility, setVisibility] = useState<BeaconVisibility>('tag-network');
+  const [whenMode, setWhenMode] = useState<'live' | 'schedule'>('live');
+  const [radiusPreset, setRadiusPreset] = useState<250 | 500 | 1000 | 'custom'>(500);
+  const [customRadius, setCustomRadius] = useState('750');
   const [invites, setInvites] = useState<BeaconInvite[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteKind, setInviteKind] = useState<InviteKind>('facebook');
@@ -68,18 +78,18 @@ export const DropPointSheet: React.FC = () => {
   const [startsAt, setStartsAt] = useState(() => earliestStart(new Date()));
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [scheduleNote, setScheduleNote] = useState('');
-  const [trackWidth, setTrackWidth] = useState(1);
   const requestId = useRef(0);
   const wasOpen = useRef(false);
 
   const channelOptions = tags.filter((tag) => tag !== 'All');
   const addressVerified = status === 'verified' && isSameVerifiedQuery(verified, address);
-  const canDrop = place.trim().length > 0 && channels.length > 0 && addressVerified && !locating;
+  const alertRadius = radiusPreset === 'custom' ? clampAlertRadius(Number(customRadius)) : radiusPreset;
 
   useEffect(() => {
     if (open && !wasOpen.current) {
-      setPlace('');
       setChannels(selectedTag !== 'All' ? [selectedTag] : []);
+      setAddingTag(false);
+      setNewTag('');
       setLimitNote('');
       setAddress('');
       setVerified(null);
@@ -87,7 +97,10 @@ export const DropPointSheet: React.FC = () => {
       setStatus('idle');
       setError('');
       setLocating(false);
-      setVisibility('public');
+      setVisibility('tag-network');
+      setWhenMode('live');
+      setRadiusPreset(500);
+      setCustomRadius('750');
       setInvites([]);
       setInviteOpen(false);
       setInviteKind('facebook');
@@ -205,22 +218,33 @@ export const DropPointSheet: React.FC = () => {
     else setScheduleNote('');
   };
 
-  const changeDuration = (minutes: number) => {
-    const next = clampDuration(minutes);
-    setDurationMinutes(next.minutes);
-    setScheduleNote(next.limit === 'duration' ? 'Duration runs from 15 minutes to 24 hours, in 15 minute steps.' : '');
+  const chooseDuration = (minutes: number) => {
+    setDurationMinutes(clampDuration(minutes).minutes);
+    setScheduleNote('');
   };
 
-  const setDurationFromTrack = (locationX: number) => {
-    const ratio = Math.min(1, Math.max(0, locationX / Math.max(trackWidth, 1)));
-    const raw = MIN_DURATION_MINUTES + ratio * (MAX_DURATION_MINUTES - MIN_DURATION_MINUTES);
-    changeDuration(raw);
+  const commitNewTag = () => {
+    const clean = newTag.trim();
+    if (!clean) return;
+    const tagged = clean.startsWith('#') ? clean : `#${clean}`;
+    addTag(tagged);
+    onToggleChannel(tagged);
+    setNewTag('');
+    setAddingTag(false);
   };
 
   const onDrop = () => {
-    if (!canDrop || !verified) return;
+    if (channels.length === 0) {
+      setError('Choose at least one channel.');
+      return;
+    }
+    if (!addressVerified || !verified || locating) {
+      setError('Verify the place, or use your current position.');
+      if (!locating && address.trim().length >= 3) void verifyTypedAddress();
+      return;
+    }
     dropBeacon({
-      place,
+      place: verified.label,
       tags: channels,
       addressLabel: verified.label,
       latitude: verified.latitude,
@@ -229,8 +253,10 @@ export const DropPointSheet: React.FC = () => {
       regionChain: regionLabel(regions),
       visibility,
       invites: visibility === 'private' ? invites : [],
-      startsAt: startsAt.toISOString(),
+      live: whenMode === 'live',
+      startsAt: whenMode === 'live' ? new Date().toISOString() : startsAt.toISOString(),
       durationMinutes,
+      alertRadiusMeters: alertRadius,
     });
   };
 
@@ -253,7 +279,7 @@ export const DropPointSheet: React.FC = () => {
           onPress={() => setDropSheetOpen(false)}
           style={styles.closeBtn}
         >
-          <Text style={styles.closeText}>✕</Text>
+          <Text style={styles.closeText}>[×]</Text>
         </TouchableOpacity>
       </View>
 
@@ -265,23 +291,22 @@ export const DropPointSheet: React.FC = () => {
         showsVerticalScrollIndicator
       >
         <View style={styles.visibilityTrack} accessibilityRole="tablist">
-          <View style={[styles.visibilityThumb, visibility === 'public' && styles.visibilityThumbPublic]} />
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityState={{ selected: visibility === 'private' }}
-            style={styles.visibilityHalf}
-            onPress={() => setVisibility('private')}
-          >
-            <Text style={[styles.visibilityText, visibility === 'private' && styles.visibilityTextSelected]}>Private</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityState={{ selected: visibility === 'public' }}
-            style={styles.visibilityHalf}
-            onPress={() => setVisibility('public')}
-          >
-            <Text style={[styles.visibilityText, visibility === 'public' && styles.visibilityTextSelected]}>Public</Text>
-          </TouchableOpacity>
+          {VISIBILITY_MODES.map(({ id, label, Icon }) => {
+            const selected = visibility === id;
+            return (
+              <TouchableOpacity
+                key={id}
+                testID={`drop-visibility-${id}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                style={[styles.visibilityChoice, selected && styles.visibilityChoiceSelected]}
+                onPress={() => setVisibility(id)}
+              >
+                <Icon size={14} color={selected ? '#082f49' : colors.textMuted} />
+                <Text style={[styles.visibilityText, selected && styles.visibilityTextSelected]}>{label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
 
         {visibility === 'private' ? (
@@ -445,25 +470,44 @@ export const DropPointSheet: React.FC = () => {
           </View>
         ) : null}
 
-        <Text style={styles.subtitle}>
-          Publish a live beacon at a verified address or your current position. It joins the map and opens in the card sheet.
-        </Text>
-
-        <Text style={styles.fieldLabel}>HOST / PLACE</Text>
-        <TextInput
-          value={place}
-          onChangeText={setPlace}
-          placeholder="Pearl Street Mall"
-          placeholderTextColor={colors.textDim}
-          style={styles.input}
-        />
-
-        <View style={styles.channelHeading}>
-          <Text style={styles.fieldLabel}>CHANNEL</Text>
-          <Text style={styles.channelCount}>
-            {channels.length}/{MAX_BEACON_CHANNELS}
-          </Text>
+        <Text style={styles.fieldLabel}>WHERE</Text>
+        <View style={styles.whereField}>
+          <Search size={16} color={colors.textMuted} />
+          <TextInput
+            testID="drop-where-input"
+            value={address}
+            onChangeText={onChangeAddress}
+            onBlur={() => {
+              if (address.trim().length >= 3) void verifyTypedAddress();
+            }}
+            onSubmitEditing={() => void verifyTypedAddress()}
+            placeholder="Pearl Street Mall, Boulder, CO"
+            placeholderTextColor={colors.textDim}
+            autoCapitalize="words"
+            style={styles.whereInput}
+          />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="Use my current position"
+            testID="drop-current-position"
+            style={styles.whereTarget}
+            onPress={() => void useCurrentPosition()}
+            disabled={status === 'checking'}
+          >
+            {locating ? (
+              <ActivityIndicator color={colors.accent} size="small" />
+            ) : (
+              <LocateFixed size={18} color={colors.textMuted} />
+            )}
+          </TouchableOpacity>
         </View>
+        {status === 'checking' && !locating ? <Text style={styles.hintText}>Checking that address…</Text> : null}
+        {addressVerified && verified ? <Text style={styles.verifiedText}>Verified · {verified.label}</Text> : null}
+        {addressVerified && regions.length > 0 ? <Text style={styles.verifiedText}>In {regionLabel(regions)}</Text> : null}
+        {previewPin ? <Text style={styles.verifiedText}>Pin placed on the map at your current position.</Text> : null}
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+
+        <Text style={styles.fieldLabel}>CHANNELS & PROXIMITY RADIUS</Text>
         <View style={styles.channelWrap}>
           {channelOptions.map((channel) => {
             const selected = channels.includes(channel);
@@ -480,120 +524,152 @@ export const DropPointSheet: React.FC = () => {
               </TouchableOpacity>
             );
           })}
+          <TouchableOpacity
+            accessibilityRole="button"
+            testID="drop-add-tags"
+            style={styles.addTagChip}
+            onPress={() => setAddingTag((openPanel) => !openPanel)}
+          >
+            <Text style={styles.addTagText}>+ Add Tags</Text>
+          </TouchableOpacity>
         </View>
+        {addingTag ? (
+          <View style={styles.addTagRow}>
+            <TextInput
+              testID="drop-new-tag-input"
+              value={newTag}
+              onChangeText={setNewTag}
+              onSubmitEditing={commitNewTag}
+              placeholder="#ArtWalk"
+              placeholderTextColor={colors.textDim}
+              autoCapitalize="none"
+              style={styles.addTagInput}
+            />
+            <TouchableOpacity accessibilityRole="button" style={styles.inviteAddBtn} onPress={commitNewTag}>
+              <Text style={styles.inviteAddText}>Add</Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
         {limitNote ? <Text style={styles.limitNote}>{limitNote}</Text> : null}
 
-        <Text style={styles.fieldLabel}>ADDRESS</Text>
-        <TextInput
-          value={address}
-          onChangeText={onChangeAddress}
-          onSubmitEditing={() => void verifyTypedAddress()}
-          placeholder="123 Pearl St, Boulder, CO"
-          placeholderTextColor={colors.textDim}
-          autoCapitalize="words"
-          multiline
-          style={[styles.input, styles.addressInput]}
-        />
-
-        <View style={styles.actionRow}>
+        <Text style={styles.alertCopy}>Alert users tracking these tags within:</Text>
+        <View style={styles.choiceRow}>
+          {ALERT_RADIUS_PRESETS.map((choice) => {
+            const selected = radiusPreset === choice.meters;
+            return (
+              <TouchableOpacity
+                key={choice.meters}
+                testID={`drop-radius-${choice.meters}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                style={[styles.choiceChip, selected && styles.choiceChipSelected]}
+                onPress={() => setRadiusPreset(choice.meters)}
+              >
+                <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{choice.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
           <TouchableOpacity
+            testID="drop-radius-custom"
             accessibilityRole="button"
-            style={[styles.secondaryBtn, status === 'checking' && !locating && styles.secondaryBtnBusy]}
-            onPress={() => void verifyTypedAddress()}
-            disabled={status === 'checking'}
+            accessibilityState={{ selected: radiusPreset === 'custom' }}
+            style={[styles.choiceChip, radiusPreset === 'custom' && styles.choiceChipSelected]}
+            onPress={() => setRadiusPreset('custom')}
           >
-            {status === 'checking' && !locating ? (
-              <ActivityIndicator color={colors.accent} size="small" />
-            ) : (
-              <Text style={styles.secondaryBtnText}>{addressVerified ? 'Verified' : 'Verify address'}</Text>
-            )}
+            <Text style={[styles.choiceText, radiusPreset === 'custom' && styles.choiceTextSelected]}>Custom</Text>
+          </TouchableOpacity>
+        </View>
+        {radiusPreset === 'custom' ? (
+          <TextInput
+            testID="drop-radius-custom-input"
+            value={customRadius}
+            onChangeText={setCustomRadius}
+            keyboardType="number-pad"
+            placeholder="750"
+            placeholderTextColor={colors.textDim}
+            style={styles.customRadiusInput}
+          />
+        ) : null}
+
+        <Text style={styles.fieldLabel}>WHEN</Text>
+        <View style={styles.whenRow}>
+          <TouchableOpacity
+            testID="drop-when-live"
+            accessibilityRole="button"
+            accessibilityState={{ selected: whenMode === 'live' }}
+            style={[styles.whenChoice, whenMode === 'live' && styles.whenChoiceSelected]}
+            onPress={() => setWhenMode('live')}
+          >
+            <Rocket size={16} color={whenMode === 'live' ? colors.text : colors.textMuted} />
+            <Text style={[styles.whenText, whenMode === 'live' && styles.whenTextSelected]}>Live Now</Text>
           </TouchableOpacity>
           <TouchableOpacity
+            testID="drop-when-schedule"
             accessibilityRole="button"
-            style={styles.secondaryBtn}
-            onPress={() => void useCurrentPosition()}
-            disabled={status === 'checking'}
+            accessibilityState={{ selected: whenMode === 'schedule' }}
+            style={[styles.whenChoice, whenMode === 'schedule' && styles.whenChoiceSelected]}
+            onPress={() => setWhenMode('schedule')}
           >
-            {locating ? (
-              <ActivityIndicator color={colors.accent} size="small" />
-            ) : (
-              <Text style={styles.secondaryBtnText}>Use my current position</Text>
-            )}
+            <Calendar size={16} color={whenMode === 'schedule' ? colors.text : colors.textMuted} />
+            <Text style={[styles.whenText, whenMode === 'schedule' && styles.whenTextSelected]}>Schedule</Text>
           </TouchableOpacity>
         </View>
-
-        {addressVerified && verified ? (
-          <Text style={styles.verifiedText}>Verified · {verified.label}</Text>
-        ) : null}
-        {addressVerified && regions.length > 0 ? (
-          <Text style={styles.verifiedText}>In {regionLabel(regions)}</Text>
-        ) : null}
-        {previewPin ? (
-          <Text style={styles.verifiedText}>Pin placed on the map at your current position.</Text>
-        ) : null}
-        {error ? <Text style={styles.errorText}>{error}</Text> : null}
-
-        <Text style={styles.fieldLabel}>STARTS</Text>
-        <View style={styles.stepperRow}>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous day" style={styles.stepperBtn} onPress={() => changeStart(-24 * 60)}>
-            <Text style={styles.stepperBtnText}>− day</Text>
-          </TouchableOpacity>
-          <Text style={styles.stepperValue}>{startLabel}</Text>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next day" style={styles.stepperBtn} onPress={() => changeStart(24 * 60)}>
-            <Text style={styles.stepperBtnText}>+ day</Text>
-          </TouchableOpacity>
-        </View>
-        {scheduleNote ? <Text style={styles.limitNote}>{scheduleNote}</Text> : null}
-        <View style={styles.stepperRow}>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="15 minutes earlier" style={styles.stepperBtn} onPress={() => changeStart(-15)}>
-            <Text style={styles.stepperBtnText}>− 15m</Text>
-          </TouchableOpacity>
-          <Text style={styles.stepperHint}>15 min steps</Text>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="15 minutes later" style={styles.stepperBtn} onPress={() => changeStart(15)}>
-            <Text style={styles.stepperBtnText}>+ 15m</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.channelHeading}>
-          <Text style={styles.fieldLabel}>DURATION</Text>
-          <Text style={styles.channelCount}>{formatDuration(durationMinutes)}</Text>
-        </View>
-        <View style={styles.stepperRow}>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Shorten duration" style={styles.stepperBtn} onPress={() => changeDuration(durationMinutes - 15)}>
-            <Text style={styles.stepperBtnText}>− 15m</Text>
-          </TouchableOpacity>
-          <View
-            accessibilityRole="adjustable"
-            accessibilityLabel="Duration"
-            style={styles.durationTrack}
-            onLayout={(event) => setTrackWidth(event.nativeEvent.layout.width)}
-            onStartShouldSetResponder={() => true}
-            onResponderRelease={(event) => setDurationFromTrack(event.nativeEvent.locationX)}
-          >
-            <View
-              style={[
-                styles.durationFill,
-                { width: `${((durationMinutes - MIN_DURATION_MINUTES) / (MAX_DURATION_MINUTES - MIN_DURATION_MINUTES)) * 100}%` },
-              ]}
-            />
+        {whenMode === 'schedule' ? (
+          <View>
+            <View style={styles.stepperRow}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Previous day" style={styles.stepperBtn} onPress={() => changeStart(-24 * 60)}>
+                <Text style={styles.stepperBtnText}>− day</Text>
+              </TouchableOpacity>
+              <Text style={styles.stepperValue}>{startLabel}</Text>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Next day" style={styles.stepperBtn} onPress={() => changeStart(24 * 60)}>
+                <Text style={styles.stepperBtnText}>+ day</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.stepperRow}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="15 minutes earlier" style={styles.stepperBtn} onPress={() => changeStart(-15)}>
+                <Text style={styles.stepperBtnText}>− 15m</Text>
+              </TouchableOpacity>
+              <Text style={styles.stepperHint}>15 min steps, within one month</Text>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="15 minutes later" style={styles.stepperBtn} onPress={() => changeStart(15)}>
+                <Text style={styles.stepperBtnText}>+ 15m</Text>
+              </TouchableOpacity>
+            </View>
+            {scheduleNote ? <Text style={styles.limitNote}>{scheduleNote}</Text> : null}
           </View>
-          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Lengthen duration" style={styles.stepperBtn} onPress={() => changeDuration(durationMinutes + 15)}>
-            <Text style={styles.stepperBtnText}>+ 15m</Text>
-          </TouchableOpacity>
+        ) : null}
+
+        <View style={styles.durationRow}>
+          <Text style={styles.durationLabel}>Duration:</Text>
+          {DURATION_PRESETS.map((choice) => {
+            const selected = durationMinutes === choice.minutes;
+            return (
+              <TouchableOpacity
+                key={choice.minutes}
+                testID={`drop-duration-${choice.minutes}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                style={[styles.choiceChip, selected && styles.choiceChipSelected]}
+                onPress={() => chooseDuration(choice.minutes)}
+              >
+                <Text style={[styles.choiceText, selected && styles.choiceTextSelected]}>{choice.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-        <Text style={styles.endsText}>Ends {formatStartLabel(endsAt, new Date())}. Up to 24 hours, within one month.</Text>
+        {whenMode === 'schedule' ? (
+          <Text style={styles.endsText}>Ends {formatStartLabel(endsAt, new Date())}.</Text>
+        ) : null}
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          testID="drop-beacon-button"
+          style={styles.dropBtn}
+          onPress={onDrop}
+        >
+          <Text style={styles.dropBtnText}>DROP BEACON</Text>
+        </TouchableOpacity>
       </ScrollView>
       </View>
-
-      <TouchableOpacity
-        accessibilityRole="button"
-        accessibilityState={{ disabled: !canDrop }}
-        style={[styles.dropBtn, !canDrop && styles.dropBtnDisabled]}
-        onPress={onDrop}
-        disabled={!canDrop}
-      >
-        <Text style={styles.dropBtnText}>Drop beacon</Text>
-      </TouchableOpacity>
     </View>
   );
 };
@@ -619,36 +695,32 @@ function createDropStyles(c: AppearancePalette) {
   },
   visibilityTrack: {
     marginTop: 14,
-    height: 42,
-    borderRadius: 21,
+    minHeight: 44,
+    borderRadius: 22,
     backgroundColor: c.input,
     borderWidth: 1,
-    borderColor: c.navBorder,
+    borderColor: c.border,
     flexDirection: 'row',
-    position: 'relative',
-    overflow: 'hidden',
+    alignItems: 'center',
+    padding: 3,
+    gap: 2,
   },
-  visibilityThumb: {
-    position: 'absolute',
-    top: 3,
-    bottom: 3,
-    left: 3,
-    width: '48%',
-    borderRadius: 18,
-    backgroundColor: '#22d3ee',
-  },
-  visibilityThumbPublic: {
-    left: '50%',
-  },
-  visibilityHalf: {
+  visibilityChoice: {
     flex: 1,
+    minHeight: 36,
+    borderRadius: 18,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 1,
+    gap: 5,
+    paddingHorizontal: 4,
+  },
+  visibilityChoiceSelected: {
+    backgroundColor: '#22d3ee',
   },
   visibilityText: {
     color: c.textMuted,
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '800',
   },
   visibilityTextSelected: {
@@ -882,14 +954,18 @@ function createDropStyles(c: AppearancePalette) {
     marginTop: 2,
   },
   closeBtn: {
-    width: 32,
-    height: 32,
+    minWidth: 40,
+    height: 30,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 6,
   },
   closeText: {
     color: c.textMuted,
-    fontSize: 18,
+    fontSize: 14,
     fontWeight: '700',
   },
   scrollWrap: {
@@ -912,11 +988,156 @@ function createDropStyles(c: AppearancePalette) {
     marginBottom: 16,
   },
   fieldLabel: {
-    color: c.textDim,
+    color: c.textMuted,
     fontSize: 11,
-    fontWeight: '700',
-    letterSpacing: 0.6,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginTop: 16,
     marginBottom: 8,
+  },
+  whereField: {
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.input,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 12,
+    paddingRight: 6,
+    gap: 8,
+  },
+  whereInput: {
+    flex: 1,
+    color: c.text,
+    fontSize: 14,
+    paddingVertical: 10,
+  },
+  whereTarget: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hintText: {
+    color: c.textDim,
+    fontSize: 12,
+    marginTop: 6,
+  },
+  alertCopy: {
+    color: c.text,
+    fontSize: 14,
+    fontWeight: '600',
+    marginTop: 8,
+    marginBottom: 10,
+  },
+  choiceRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  choiceChip: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.inset,
+  },
+  choiceChipSelected: {
+    backgroundColor: '#22d3ee',
+    borderColor: '#67e8f9',
+  },
+  choiceText: {
+    color: c.textMuted,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  choiceTextSelected: {
+    color: '#082f49',
+  },
+  customRadiusInput: {
+    marginTop: 8,
+    backgroundColor: c.input,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    color: c.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
+    maxWidth: 140,
+  },
+  whenRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  whenChoice: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.inset,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  whenChoiceSelected: {
+    borderColor: '#22d3ee',
+    backgroundColor: 'rgba(34, 211, 238, 0.08)',
+  },
+  whenText: {
+    color: c.textMuted,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  whenTextSelected: {
+    color: c.text,
+  },
+  durationRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 14,
+  },
+  durationLabel: {
+    color: c.text,
+    fontSize: 14,
+    fontWeight: '700',
+    marginRight: 2,
+  },
+  addTagChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.inset,
+  },
+  addTagText: {
+    color: c.text,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  addTagRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  addTagInput: {
+    flex: 1,
+    backgroundColor: c.input,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+    color: c.text,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 15,
   },
   input: {
     backgroundColor: c.input,
@@ -1014,15 +1235,13 @@ function createDropStyles(c: AppearancePalette) {
     marginBottom: 8,
   },
   dropBtn: {
-    marginHorizontal: 18,
-    marginBottom: 14,
+    marginTop: 22,
+    marginBottom: 8,
     backgroundColor: '#22d3ee',
-    borderRadius: 12,
-    minHeight: 48,
+    borderRadius: 14,
+    minHeight: 52,
     alignItems: 'center',
     justifyContent: 'center',
-    flexShrink: 0,
-    zIndex: 2,
   },
   dropBtnDisabled: {
     opacity: 0.4,
@@ -1031,6 +1250,7 @@ function createDropStyles(c: AppearancePalette) {
     color: '#082f49',
     fontSize: 16,
     fontWeight: '800',
+    letterSpacing: 0.6,
   },
 });
 }
