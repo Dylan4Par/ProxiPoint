@@ -16,6 +16,8 @@ test('preview script draws a glowing cyan radial perimeter and flies to the anch
   assert.match(script, /geofence-glow/);
   assert.match(script, /map\.flyTo/);
   assert.match(script, /duration: 0\.6/);
+  assert.match(script, /map\.on\('click'/);
+  assert.match(script, /proxipoint-map-pick/);
   assert.equal(zoomForRadius(300), 16);
   assert.equal(zoomForRadius(8000), 12);
 });

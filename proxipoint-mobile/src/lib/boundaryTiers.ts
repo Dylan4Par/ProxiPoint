@@ -77,11 +77,13 @@ export function resolveBoundaryTiers(params: ResolveTierParams = {}): BoundaryTi
   const semantic = inferPlaceType(placeName, params.placeType);
   const recommended = getRecommendedTier(semantic);
   const compact = compactPlaceLabel(placeName);
+  // A street address stays on the generic tier names. Named venues can retitle the matching chip.
+  const nameTheChip = semantic !== 'address';
 
   const labels: Record<BoundaryTierLevel, string> = {
-    micro: recommended === 'micro' && compact ? compact : 'Venue / Micro',
-    neighborhood: recommended === 'neighborhood' && compact ? compact : 'Neighborhood',
-    metro: recommended === 'metro' && compact ? compact : 'City Limits',
+    micro: recommended === 'micro' && compact && nameTheChip ? compact : 'Venue / Micro',
+    neighborhood: recommended === 'neighborhood' && compact && nameTheChip ? compact : 'Neighborhood',
+    metro: recommended === 'metro' && compact && nameTheChip ? compact : 'City Limits',
   };
 
   const icons: Record<BoundaryTierLevel, string> = {

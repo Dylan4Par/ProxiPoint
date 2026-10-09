@@ -5,6 +5,7 @@ export const ESRI_STREET_TILE_URL =
 
 export const LEAFLET_STYLESHEET = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 export const LEAFLET_SCRIPT = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
+export const MAP_PICK_MESSAGE = 'proxipoint-map-pick';
 
 export interface MapDocumentCenter {
   latitude: number;
@@ -52,6 +53,16 @@ export function buildPreviewGeofenceScript(): string {
         previewCircle = null;
       }
     };
+    map.on('click', function(event) {
+      var payload = {
+        type: '${MAP_PICK_MESSAGE}',
+        latitude: event.latlng.lat,
+        longitude: event.latlng.lng
+      };
+      if (window.parent && window.parent !== window) {
+        window.parent.postMessage(payload, '*');
+      }
+    });
   `;
 }
 

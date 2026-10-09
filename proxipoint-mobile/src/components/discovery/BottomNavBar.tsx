@@ -2,15 +2,29 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
 interface BottomNavBarProps {
+  onDiscover?: () => void;
   onDropPoint?: () => void;
+  onActivity?: () => void;
   dropActive?: boolean;
 }
 
-export const BottomNavBar: React.FC<BottomNavBarProps> = ({ onDropPoint, dropActive = false }) => {
+export const BottomNavBar: React.FC<BottomNavBarProps> = ({
+  onDiscover,
+  onDropPoint,
+  onActivity,
+  dropActive = false,
+}) => {
   return (
     <View style={styles.navWrapper}>
       {/* 1. Discover Button with Scaled Compass */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        onPress={onDiscover}
+        testID="nav-discover"
+        accessibilityRole="button"
+        accessibilityLabel="Discover"
+      >
         <View style={styles.iconContainer}>
           <View style={styles.compassBadge}>
             <View style={styles.compassNeedleWrap}>
@@ -20,11 +34,18 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ onDropPoint, dropAct
             </View>
           </View>
         </View>
-        <Text style={[styles.navLabel, styles.navLabelActive]}>Discover</Text>
+        <Text style={[styles.navLabel, !dropActive && styles.navLabelActive]}>Discover</Text>
       </TouchableOpacity>
 
       {/* 2. Drop Point Button with Matched 34px Badge */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7} onPress={onDropPoint}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        onPress={onDropPoint}
+        testID="nav-drop"
+        accessibilityRole="button"
+        accessibilityLabel="Drop Point"
+      >
         <View style={styles.iconContainer}>
           <View style={styles.dropPointBadge}>
             <View style={styles.pinHead}>
@@ -37,7 +58,14 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ onDropPoint, dropAct
       </TouchableOpacity>
 
       {/* 3. Activity Button with Scaled Bell Icon */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        onPress={onActivity}
+        testID="nav-activity"
+        accessibilityRole="button"
+        accessibilityLabel="Activity"
+      >
         <View style={styles.iconContainer}>
           <View style={styles.bellWrapper}>
             <View style={styles.bellCap} />

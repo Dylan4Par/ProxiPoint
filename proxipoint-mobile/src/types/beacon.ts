@@ -42,6 +42,7 @@ export interface PreviewGeofence {
 
 export interface DropBeaconInput {
   title: string;
+  description?: string;
   tags: string;
   visibility: BeaconVisibility;
   venue: string;
@@ -50,6 +51,8 @@ export interface DropBeaconInput {
   isLiveNow: boolean;
   duration: BeaconDuration;
   scheduledStart: string;
+  /** Exact span posted as duration_hours. Preset duration stays for older callers. */
+  durationHours?: number;
   radiusMeters?: number;
   tierLevel?: BoundaryTierLevel;
 }
@@ -57,4 +60,20 @@ export interface DropBeaconInput {
 export interface BeaconDraft extends DropBeaconInput {
   radiusMeters: number;
   tierLevel: BoundaryTierLevel;
+}
+
+export interface BeaconCreatePayload {
+  title: string;
+  description?: string;
+  venue: string;
+  channels: string[];
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  visibility: BeaconVisibility;
+  duration_hours: number;
+}
+
+export interface PersistedBeacon extends BeaconCreatePayload {
+  id: string;
 }
