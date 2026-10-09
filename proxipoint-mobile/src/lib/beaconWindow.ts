@@ -21,6 +21,13 @@ export function liveBeaconWindow(now = new Date()): { startsAt: Date; endsAt: Da
   return { startsAt, endsAt: addHours(startsAt, 1) };
 }
 
+/** Keep a Live Now beacon starting at the current minute, preserving its length. */
+export function slideLiveWindow(now: Date, durationMs: number): { startsAt: Date; endsAt: Date } {
+  const startsAt = snapToMinute(now);
+  const span = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : HOUR_MS;
+  return { startsAt, endsAt: snapToMinute(new Date(startsAt.getTime() + span)) };
+}
+
 export function formatBeaconDate(date: Date): string {
   return `${WEEKDAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
 }

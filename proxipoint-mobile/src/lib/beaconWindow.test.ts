@@ -8,6 +8,7 @@ import {
   formatBeaconDate,
   formatBeaconTime,
   liveBeaconWindow,
+  slideLiveWindow,
   presetForHours,
   windowDurationHours,
 } from './beaconWindow';
@@ -22,6 +23,22 @@ test('live window starts on the current minute and ends one hour later', () => {
   assert.equal(formatBeaconTime(window.endsAt), '3:00 PM');
   assert.equal(windowDurationHours(window.startsAt, window.endsAt), 1);
   assert.equal(window.startsAt.getSeconds(), 0);
+});
+
+test('a live beacon follows the clock and keeps the chosen length', () => {
+  const first = slideLiveWindow(new Date(2026, 9, 9, 20, 0, 40), 60 * 60 * 1000);
+  assert.equal(formatBeaconTime(first.startsAt), '8:00 PM');
+  assert.equal(formatBeaconTime(first.endsAt), '9:00 PM');
+
+  const later = slideLiveWindow(new Date(2026, 9, 9, 20, 4, 10), 60 * 60 * 1000);
+  assert.equal(formatBeaconDate(later.startsAt), 'Fri, Oct 9');
+  assert.equal(formatBeaconTime(later.startsAt), '8:04 PM');
+  assert.equal(formatBeaconTime(later.endsAt), '9:04 PM');
+
+  const custom = slideLiveWindow(new Date(2026, 9, 10, 0, 2), 90 * 60 * 1000);
+  assert.equal(formatBeaconDate(custom.startsAt), 'Sat, Oct 10');
+  assert.equal(formatBeaconTime(custom.startsAt), '12:02 AM');
+  assert.equal(formatBeaconTime(custom.endsAt), '1:32 AM');
 });
 
 test('changing the start leaves Live Now and keeps the end after it', () => {

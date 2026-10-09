@@ -50,6 +50,7 @@ import {
   formatBeaconStart,
   formatBeaconTime,
   liveBeaconWindow,
+  slideLiveWindow,
   presetForHours,
   toDateInputValue,
   toTimeInputValue,
@@ -79,6 +80,8 @@ function WhenChip({
   value,
   display,
   onCommit,
+  onFocus,
+  onBlur,
   testID,
   label,
 }: {
@@ -86,6 +89,8 @@ function WhenChip({
   value: string;
   display: string;
   onCommit: (value: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
   testID: string;
   label: string;
 }) {
@@ -100,6 +105,8 @@ function WhenChip({
           value={value}
           aria-label={label}
           data-testid={testID}
+          onFocus={onFocus}
+          onBlur={onBlur}
           onChange={(event) => onCommit(event.currentTarget.value)}
           style={whenInputStyle}
         />
@@ -107,6 +114,8 @@ function WhenChip({
         <TextInput
           value={value}
           onChangeText={onCommit}
+          onFocus={onFocus}
+          onBlur={onBlur}
           style={styles.whenNativeInput}
           testID={testID}
           accessibilityLabel={label}
@@ -148,6 +157,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [isLiveNow, setIsLiveNow] = useState(true);
   const [startsAt, setStartsAt] = useState(initialWindow.current.startsAt);
   const [endsAt, setEndsAt] = useState(initialWindow.current.endsAt);
+  const durationRef = useRef(initialWindow.current.endsAt.getTime() - initialWindow.current.startsAt.getTime());
+  const clockHold = useRef(0);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -190,6 +201,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   useEffect(() => {
     if (!visible) return;
     const window = liveBeaconWindow();
+    durationRef.current = window.endsAt.getTime() - window.startsAt.getTime();
+    clockHold.current = 0;
     setVisibility('tag_network');
     setIsLiveNow(true);
     setStartsAt(window.startsAt);
@@ -221,6 +234,19 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     selectedLabel.current = null;
     setPreviewGeofence(null);
   }, [visible, setPreviewGeofence]);
+
+  useEffect(() => {
+    if (!visible || !isLiveNow) return;
+    const tick = () => {
+      if (clockHold.current > 0) return;
+      const next = slideLiveWindow(new Date(), durationRef.current);
+      setStartsAt((current) => (current.getTime() === next.startsAt.getTime() ? current : next.startsAt));
+      setEndsAt((current) => (current.getTime() === next.endsAt.getTime() ? current : next.endsAt));
+    };
+    tick();
+    const timer = setInterval(tick, 1000);
+    return () => clearInterval(timer);
+  }, [visible, isLiveNow]);
 
   useEffect(() => {
     if (!visible || !coords) {
@@ -365,15 +391,25 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
   const selectLiveNow = () => {
     const window = liveBeaconWindow();
+    durationRef.current = window.endsAt.getTime() - window.startsAt.getTime();
     setIsLiveNow(true);
     setStartsAt(window.startsAt);
     setEndsAt(window.endsAt);
+  };
+
+  const holdClock = () => {
+    clockHold.current += 1;
+  };
+
+  const releaseClock = () => {
+    clockHold.current = Math.max(0, clockHold.current - 1);
   };
 
   const commitStart = (kind: 'date' | 'time', value: string) => {
     const next = kind === 'date' ? applyDateInput(startsAt, value) : applyTimeInput(startsAt, value);
     if (!next) return;
     const updated = changeWindowStart(startsAt, endsAt, next);
+    durationRef.current = updated.endsAt.getTime() - updated.startsAt.getTime();
     setStartsAt(updated.startsAt);
     setEndsAt(updated.endsAt);
     if (updated.switchedToSchedule) setIsLiveNow(false);
@@ -382,7 +418,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const commitEnd = (kind: 'date' | 'time', value: string) => {
     const next = kind === 'date' ? applyDateInput(endsAt, value) : applyTimeInput(endsAt, value);
     if (!next) return;
-    setEndsAt(changeWindowEnd(startsAt, next, kind));
+    const end = changeWindowEnd(startsAt, next, kind);
+    durationRef.current = end.getTime() - startsAt.getTime();
+    setEndsAt(end);
   };
 
   return (
@@ -664,6 +702,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       value={toDateInputValue(startsAt)}
                       display={formatBeaconDate(startsAt)}
                       onCommit={(value) => commitStart('date', value)}
+                      onFocus={holdClock}
+                      onBlur={releaseClock}
                       testID="drop-start-date"
                       label="Start date"
                     />
@@ -672,6 +712,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       value={toTimeInputValue(startsAt)}
                       display={formatBeaconTime(startsAt)}
                       onCommit={(value) => commitStart('time', value)}
+                      onFocus={holdClock}
+                      onBlur={releaseClock}
                       testID="drop-start-time"
                       label="Start time"
                     />
@@ -698,6 +740,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       value={toDateInputValue(endsAt)}
                       display={formatBeaconDate(endsAt)}
                       onCommit={(value) => commitEnd('date', value)}
+                      onFocus={holdClock}
+                      onBlur={releaseClock}
                       testID="drop-end-date"
                       label="End date"
                     />
@@ -706,6 +750,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       value={toTimeInputValue(endsAt)}
                       display={formatBeaconTime(endsAt)}
                       onCommit={(value) => commitEnd('time', value)}
+                      onFocus={holdClock}
+                      onBlur={releaseClock}
                       testID="drop-end-time"
                       label="End time"
                     />
