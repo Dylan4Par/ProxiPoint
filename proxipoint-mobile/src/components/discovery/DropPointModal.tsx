@@ -28,6 +28,7 @@ import {
   createBeaconDraft,
   formatBroadcastReach,
   GEOCODE_DEBOUNCE_MS,
+  parseBeaconTags,
   toBeaconCreatePayload,
 } from '../../lib/beaconDraft';
 import { BeaconApiError, postBeacon } from '../../services/beaconApi';
@@ -38,6 +39,7 @@ import {
   resolveBoundaryTiers,
 } from '../../lib/boundaryTiers';
 import { captureCurrentFix, geocodePlaces } from '../../services/placeGeocoder';
+import { nearestPlace } from '../../lib/placeSearch';
 import { DiscoveryLeafletMap } from './DiscoveryLeafletMap';
 import {
   BEACON_DURATIONS,
@@ -99,6 +101,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [handleInput, setHandleInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [inviteError, setInviteError] = useState('');
+  const [mapPicking, setMapPicking] = useState(false);
+  const [perimeterOn, setPerimeterOn] = useState(false);
   const skipSearch = useRef(false);
   const selectedLabel = useRef<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -142,6 +146,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setHandleInput('');
     setPhoneInput('');
     setInviteError('');
+    setMapPicking(false);
+    setPerimeterOn(false);
     skipSearch.current = false;
     selectedLabel.current = null;
     setPreviewGeofence(null);
@@ -208,6 +214,21 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setSelectedRadiusMeters(BOUNDARY_RADII[tier]);
   };
 
+  const handleMapPick = (latitude: number, longitude: number) => {
+    const nearby = nearestPlace(latitude, longitude);
+    applyPlace(
+      nearby ?? {
+        id: `map-${latitude.toFixed(5)}-${longitude.toFixed(5)}`,
+        label: 'Selected on map',
+        subtitle: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
+        latitude,
+        longitude,
+        placeType: 'address',
+      },
+    );
+    setMapPicking(false);
+  };
+
   const handleUseCurrentLocation = () => {
     if (locating) return;
     setLocating(true);
@@ -268,14 +289,25 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
   if (!visible) return null;
 
+  const titleAndTagsComplete = title.trim().length > 0 && parseBeaconTags(tags).length > 0;
+  const sheetCovered = revealing || mapPicking;
+
   return (
     <View style={styles.overlay} testID="drop-beacon-sheet">
-      <View style={styles.mapBand} testID="drop-beacon-map" pointerEvents={revealing ? 'auto' : 'none'}>
-        <DiscoveryLeafletMap />
+      <View style={styles.mapBand} testID="drop-beacon-map" pointerEvents={sheetCovered ? 'auto' : 'none'}>
+        <DiscoveryLeafletMap onMapPick={mapPicking ? handleMapPick : undefined} />
       </View>
+      {mapPicking ? (
+        <View style={styles.mapPickBar} testID="map-pick-bar">
+          <Text style={styles.mapPickHint}>Tap the map to set the location</Text>
+          <TouchableOpacity onPress={() => setMapPicking(false)} testID="map-pick-cancel" accessibilityRole="button">
+            <Text style={styles.mapPickCancel}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
       <KeyboardAvoidingView
-        style={[styles.sheetContainer, revealing && styles.sheetHidden]}
-        pointerEvents={revealing ? 'none' : 'auto'}
+        style={[styles.sheetContainer, sheetCovered && styles.sheetHidden]}
+        pointerEvents={sheetCovered ? 'none' : 'auto'}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
           <View style={styles.pullBar} />
@@ -319,7 +351,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               })}
             </View>
 
-            <View style={styles.groupedContainer}>
+            <View style={[styles.groupedContainer, titleAndTagsComplete && styles.fieldGlow]} testID="drop-details">
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>Title</Text>
                 <TextInput
@@ -399,6 +431,18 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
                     </Text>
                   ) : null}
+                  <TouchableOpacity
+                    onPress={() => {
+                      setSuggestions([]);
+                      setMapPicking(true);
+                    }}
+                    style={styles.mapPickBtn}
+                    testID="drop-select-on-map"
+                    accessibilityRole="button"
+                  >
+                    <MapPin size={14} color="#22d3ee" strokeWidth={2.25} />
+                    <Text style={styles.mapPickBtnText}>Select on map</Text>
+                  </TouchableOpacity>
                 </View>
                 <TouchableOpacity
                   onPress={handleUseCurrentLocation}
@@ -436,11 +480,25 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               ) : null}
             </View>
 
-            <View style={styles.scaleRailContainer}>
+            <View style={[styles.scaleRailContainer, perimeterOn && styles.fieldGlow]} testID="drop-perimeter">
               <View style={styles.scaleRailHeaderRow}>
                 <Text style={styles.scaleRailHeading}>BROADCAST PERIMETER</Text>
-                <Text style={styles.scaleRailRadiusBadge}>{activeTier.displayRadius}</Text>
+                <View style={styles.perimeterControls}>
+                  {perimeterOn ? <Text style={styles.scaleRailRadiusBadge}>{activeTier.displayRadius}</Text> : null}
+                  <TouchableOpacity
+                    onPress={() => setPerimeterOn((on) => !on)}
+                    style={[styles.perimeterToggle, perimeterOn ? styles.perimeterToggleOn : styles.perimeterToggleOff]}
+                    testID="drop-perimeter-toggle"
+                    accessibilityRole="switch"
+                    accessibilityLabel="Broadcast perimeter"
+                    accessibilityState={{ checked: perimeterOn }}
+                  >
+                    <View style={[styles.perimeterThumb, perimeterOn && styles.perimeterThumbOn]} />
+                  </TouchableOpacity>
+                </View>
               </View>
+              {perimeterOn ? (
+              <View testID="drop-perimeter-body">
               <View style={styles.scaleChipsRow}>
                 {boundaryTiers.map((tier) => {
                   const isActive = selectedTier === tier.id;
@@ -474,6 +532,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               <Text style={styles.broadcastSubtext} testID="drop-broadcast">
                 {formatBroadcastReach(tags, activeTier.displayRadius)}
               </Text>
+              </View>
+              ) : null}
             </View>
 
             <View style={styles.groupedContainer}>
@@ -941,6 +1001,15 @@ const styles = StyleSheet.create({
     position: 'relative',
     zIndex: 4,
   },
+  fieldGlow: {
+    borderColor: '#22d3ee',
+    borderWidth: 1.5,
+    shadowColor: '#22d3ee',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    elevation: 8,
+  },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -971,6 +1040,80 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontVariant: ['tabular-nums'],
     marginTop: 2,
+  },
+  mapPickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 8,
+    alignSelf: 'flex-start',
+  },
+  mapPickBtnText: {
+    color: '#22d3ee',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  mapPickBar: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 16,
+    zIndex: 6,
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#22d3ee',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#22d3ee',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+  },
+  mapPickHint: {
+    color: '#f8fafc',
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+  },
+  mapPickCancel: {
+    color: '#22d3ee',
+    fontSize: 14,
+    fontWeight: '800',
+    marginLeft: 12,
+  },
+  perimeterControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  perimeterToggle: {
+    width: 42,
+    height: 24,
+    borderRadius: 12,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  perimeterToggleOn: {
+    backgroundColor: '#22d3ee',
+  },
+  perimeterToggleOff: {
+    backgroundColor: '#1e293b',
+    borderWidth: 1,
+    borderColor: '#334155',
+  },
+  perimeterThumb: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: '#94a3b8',
+  },
+  perimeterThumbOn: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#082f49',
   },
   targetIconBtn: {
     padding: 6,

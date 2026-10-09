@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Platform, StyleSheet, View } from 'react-native';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
-import { buildDiscoveryMapDocument } from '../../lib/discoveryMapDocument';
+import { buildDiscoveryMapDocument, MAP_PICK_MESSAGE } from '../../lib/discoveryMapDocument';
 import { BOUNDARY_RADII } from '../../lib/boundaryTiers';
 
 interface PreviewMapWindow {
@@ -13,7 +13,11 @@ interface PreviewFrame {
   contentWindow: PreviewMapWindow | null;
 }
 
-export const DiscoveryLeafletMap: React.FC = () => {
+interface DiscoveryLeafletMapProps {
+  onMapPick?: (latitude: number, longitude: number) => void;
+}
+
+export const DiscoveryLeafletMap: React.FC<DiscoveryLeafletMapProps> = ({ onMapPick }) => {
   const preview = useDiscoveryStore((state) => state.previewGeofence);
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const html = useMemo(
@@ -51,6 +55,19 @@ export const DiscoveryLeafletMap: React.FC = () => {
       clearTimeout(stop);
     };
   }, [preview, ready]);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !onMapPick) return;
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; latitude?: number; longitude?: number } | null;
+      if (!data || data.type !== MAP_PICK_MESSAGE) return;
+      if (typeof data.latitude !== 'number' || typeof data.longitude !== 'number') return;
+      if (!Number.isFinite(data.latitude) || !Number.isFinite(data.longitude)) return;
+      onMapPick(data.latitude, data.longitude);
+    };
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [onMapPick]);
 
   if (Platform.OS !== 'web') {
     return <NativePerimeter radiusMeters={preview?.radiusMeters ?? null} />;
