@@ -1,5 +1,13 @@
 import { BOUNDARY_RADII } from './boundaryTiers';
-import type { BeaconDraft, BeaconDuration, BeaconVisibility, DropBeaconInput } from '../types/beacon';
+import type {
+  BeaconCreatePayload,
+  BeaconDraft,
+  BeaconDuration,
+  BeaconVisibility,
+  DropBeaconInput,
+} from '../types/beacon';
+
+const DEFAULT_BEACON_URL = 'http://127.0.0.1:8090/api/v1/beacons';
 
 export const GEOCODE_DEBOUNCE_MS = 300;
 
@@ -50,4 +58,38 @@ export function createBeaconDraft(input: DropBeaconInput): BeaconDraft {
 export function formatBroadcastReach(tags: string, displayRadius: string): string {
   const audience = parseBeaconTags(tags)[0] ?? '#Network';
   return `↳ Broadcasting to ${audience} trackers within a ${displayRadius} radius.`;
+}
+
+export function durationToHours(duration: BeaconDuration): number {
+  switch (duration) {
+    case '1 hr':
+      return 1;
+    case '2 hrs':
+      return 2;
+    case '4 hrs':
+      return 4;
+    case 'All Day':
+      return 24;
+  }
+}
+
+export function toBeaconCreatePayload(draft: BeaconDraft): BeaconCreatePayload {
+  return {
+    title: draft.title,
+    venue: draft.venue,
+    channels: parseBeaconTags(draft.tags),
+    latitude: draft.latitude,
+    longitude: draft.longitude,
+    radius_meters: draft.radiusMeters,
+    visibility: draft.visibility,
+    duration_hours: durationToHours(draft.duration),
+  };
+}
+
+export function resolveBeaconCreateUrl(env: { beaconUrl?: string; apiUrl?: string }): string {
+  const beaconUrl = env.beaconUrl?.trim();
+  if (beaconUrl) return beaconUrl;
+  const apiUrl = env.apiUrl?.trim();
+  if (apiUrl) return apiUrl.replace(/\/telemetry\/ping$/, '/beacons');
+  return DEFAULT_BEACON_URL;
 }

@@ -1,7 +1,15 @@
 import { create } from 'zustand';
 import { describeBeaconTiming, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
 import { calculateDistanceMeters } from '../lib/locationFilter';
-import type { BeaconDuration, BeaconVisibility, BoundaryTierLevel, DropBeaconInput, PreviewGeofence } from '../types/beacon';
+import type {
+  BeaconDraft,
+  BeaconDuration,
+  BeaconVisibility,
+  BoundaryTierLevel,
+  DropBeaconInput,
+  PersistedBeacon,
+  PreviewGeofence,
+} from '../types/beacon';
 
 export interface InboundProximityNode {
   id: string;
@@ -80,6 +88,7 @@ export interface DiscoveryState {
   removeTag: (tag: string) => void;
   toggleRsvp: (id: string) => void;
   dropBeacon: (input: DropBeaconInput) => string;
+  adoptPersistedBeacon: (saved: PersistedBeacon, draft: BeaconDraft) => string;
   updateConfig: (config: Partial<Pick<DiscoveryState, 'tenantId' | 'deviceId' | 'wsEndpoint' | 'searchRadiusMeters'>>) => void;
   syncProximityNodes: (incomingNodes: InboundProximityNode[], timestamp: string) => void;
   getVisibleNodes: () => DiscoveryNode[];
@@ -194,6 +203,61 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   },
 };
 
+function placeLocalBeacon(
+  set: (updater: (state: DiscoveryState) => Partial<DiscoveryState>) => void,
+  get: () => DiscoveryState,
+  id: string,
+  draft: BeaconDraft,
+): string {
+  parseBeaconTags(draft.tags).forEach((tag) => get().addTag(tag));
+  const timing = describeBeaconTiming(draft);
+
+  set((state) => {
+    const { latitude: selfLat, longitude: selfLon } = state.selfCoordinates;
+    const { x, y } = toCanvasCoordinates(draft.latitude, draft.longitude, selfLat, selfLon);
+    const distanceMeters = Math.round(
+      calculateDistanceMeters(selfLat, selfLon, draft.latitude, draft.longitude),
+    );
+    const etaMinutes = Math.max(2, Math.round(distanceMeters / 80));
+    const node: DiscoveryNode = {
+      id,
+      tag: primaryBeaconTag(draft.tags),
+      title: draft.title,
+      venue: draft.venue,
+      latitude: draft.latitude,
+      longitude: draft.longitude,
+      distanceMeters,
+      status: timing.status,
+      statusColor: timing.statusColor,
+      eta: distanceMeters > 1000 ? `${Math.round(etaMinutes / 4)} min drive` : `${etaMinutes} min walk`,
+      etaMode: distanceMeters > 1000 ? 'drive' : 'walk',
+      attendeeCount: 1,
+      isRsvpd: true,
+      radii: [draft.radiusMeters],
+      visibility: draft.visibility,
+      duration: draft.duration,
+      radiusMeters: draft.radiusMeters,
+      tierLevel: draft.tierLevel,
+      origin: 'local',
+      x,
+      y,
+    };
+
+    return {
+      nodes: { ...state.nodes, [id]: node },
+      selectedNodeId: id,
+      selectedEventId: id,
+      previewGeofence: {
+        latitude: draft.latitude,
+        longitude: draft.longitude,
+        radiusMeters: draft.radiusMeters,
+      },
+    };
+  });
+
+  return id;
+}
+
 export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   tenantId: '00000000-0000-0000-0000-000000000001',
   deviceId: 'Ranger-F0A5ACCF',
@@ -254,50 +318,22 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
   dropBeacon: (input) => {
     const draft = createBeaconDraft(input);
-    parseBeaconTags(draft.tags).forEach((tag) => get().addTag(tag));
     const id = `beacon-${Date.now().toString(36)}`;
-    const timing = describeBeaconTiming(draft);
+    return placeLocalBeacon(set, get, id, draft);
+  },
 
-    set((state) => {
-      const { latitude: selfLat, longitude: selfLon } = state.selfCoordinates;
-      const { x, y } = toCanvasCoordinates(draft.latitude, draft.longitude, selfLat, selfLon);
-      const distanceMeters = Math.round(
-        calculateDistanceMeters(selfLat, selfLon, draft.latitude, draft.longitude),
-      );
-      const etaMinutes = Math.max(2, Math.round(distanceMeters / 80));
-      const node: DiscoveryNode = {
-        id,
-        tag: primaryBeaconTag(draft.tags),
-        title: draft.title,
-        venue: draft.venue,
-        latitude: draft.latitude,
-        longitude: draft.longitude,
-        distanceMeters,
-        status: timing.status,
-        statusColor: timing.statusColor,
-        eta: distanceMeters > 1000 ? `${Math.round(etaMinutes / 4)} min drive` : `${etaMinutes} min walk`,
-        etaMode: distanceMeters > 1000 ? 'drive' : 'walk',
-        attendeeCount: 1,
-        isRsvpd: true,
-        radii: [draft.radiusMeters],
-        visibility: draft.visibility,
-        duration: draft.duration,
-        radiusMeters: draft.radiusMeters,
-        tierLevel: draft.tierLevel,
-        origin: 'local',
-        x,
-        y,
-      };
-
-      return {
-        nodes: { ...state.nodes, [id]: node },
-        selectedNodeId: id,
-        selectedEventId: id,
-        previewGeofence: null,
-      };
+  adoptPersistedBeacon: (saved, draft) => {
+    const adopted = createBeaconDraft({
+      ...draft,
+      title: saved.title || draft.title,
+      venue: saved.venue || draft.venue,
+      visibility: saved.visibility || draft.visibility,
+      latitude: saved.latitude,
+      longitude: saved.longitude,
+      radiusMeters: saved.radius_meters,
     });
-
-    return id;
+    (saved.channels ?? []).forEach((tag) => get().addTag(tag));
+    return placeLocalBeacon(set, get, saved.id, adopted);
   },
 
   updateConfig: (config) => set((state) => ({ ...state, ...config })),

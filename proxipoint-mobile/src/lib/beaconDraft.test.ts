@@ -8,6 +8,9 @@ import {
   GEOCODE_DEBOUNCE_MS,
   createBeaconDraft,
   formatBroadcastReach,
+  durationToHours,
+  toBeaconCreatePayload,
+  resolveBeaconCreateUrl,
 } from './beaconDraft';
 
 test('visibility is the three-way model', () => {
@@ -59,4 +62,41 @@ test('createBeaconDraft keeps the selected tier radius', () => {
 
 test('geocode autocomplete waits 300ms', () => {
   assert.equal(GEOCODE_DEBOUNCE_MS, 300);
+});
+
+test('create payload maps channels, radius, and duration hours', () => {
+  const draft = createBeaconDraft({
+    title: 'Boulder Tech & GIS Meetup',
+    tags: '#TechMeetup, PostGIS',
+    visibility: 'tag_network',
+    venue: 'Pearl St Mall',
+    latitude: 40.0179,
+    longitude: -105.2789,
+    isLiveNow: true,
+    duration: '2 hrs',
+    scheduledStart: '18:00',
+    tierLevel: 'neighborhood',
+  });
+  assert.equal(durationToHours('1 hr'), 1);
+  assert.equal(durationToHours('4 hrs'), 4);
+  assert.equal(durationToHours('All Day'), 24);
+  assert.deepEqual(toBeaconCreatePayload(draft), {
+    title: 'Boulder Tech & GIS Meetup',
+    venue: 'Pearl St Mall',
+    channels: ['#TechMeetup', '#PostGIS'],
+    latitude: 40.0179,
+    longitude: -105.2789,
+    radius_meters: 1500,
+    visibility: 'tag_network',
+    duration_hours: 2,
+  });
+  assert.equal(resolveBeaconCreateUrl({}), 'http://127.0.0.1:8090/api/v1/beacons');
+  assert.equal(
+    resolveBeaconCreateUrl({ apiUrl: 'http://10.0.2.2:8080/api/v1/telemetry/ping' }),
+    'http://10.0.2.2:8080/api/v1/beacons',
+  );
+  assert.equal(
+    resolveBeaconCreateUrl({ beaconUrl: 'https://events.example/api/v1/beacons', apiUrl: 'http://ignored' }),
+    'https://events.example/api/v1/beacons',
+  );
 });

@@ -11,7 +11,8 @@ import {
   Platform,
 } from 'react-native';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
-import { createBeaconDraft, formatBroadcastReach, GEOCODE_DEBOUNCE_MS } from '../../lib/beaconDraft';
+import { createBeaconDraft, formatBroadcastReach, GEOCODE_DEBOUNCE_MS, toBeaconCreatePayload } from '../../lib/beaconDraft';
+import { BeaconApiError, postBeacon } from '../../services/beaconApi';
 import {
   BOUNDARY_RADII,
   getRecommendedTier,
@@ -44,6 +45,7 @@ const VISIBILITY_OPTIONS: Array<{ id: BeaconVisibility; label: string; accent: s
 export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose }) => {
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const dropBeacon = useDiscoveryStore((state) => state.dropBeacon);
+  const adoptPersistedBeacon = useDiscoveryStore((state) => state.adoptPersistedBeacon);
   const setPreviewGeofence = useDiscoveryStore((state) => state.setPreviewGeofence);
 
   const [visibility, setVisibility] = useState<BeaconVisibility>('tag_network');
@@ -62,14 +64,22 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const skipSearch = useRef(false);
   const selectedLabel = useRef<string | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const boundaryTiers = useMemo(
     () => resolveBoundaryTiers({ placeName: placeLabel, placeType }),
     [placeLabel, placeType],
   );
   const activeTier = boundaryTiers.find((tier) => tier.id === selectedTier) ?? boundaryTiers[0];
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
 
   useEffect(() => {
     if (!visible) return;
@@ -89,6 +99,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setSearching(false);
     setLocating(false);
     setFormError(null);
+    setSubmitting(false);
     skipSearch.current = false;
     selectedLabel.current = null;
     setPreviewGeofence(null);
@@ -166,29 +177,49 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       .finally(() => setLocating(false));
   };
 
+  const scheduleClose = () => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => onClose(), 700);
+  };
+
   const handleDropBeacon = () => {
+    if (submitting) return;
     const trimmedTitle = title.trim();
     if (!trimmedTitle || !coords) {
       setFormError(trimmedTitle ? 'Choose a place or tap GPS to set coordinates.' : 'Add a title before dropping this beacon.');
       return;
     }
 
-    dropBeacon(
-      createBeaconDraft({
-        title: trimmedTitle,
-        tags,
-        visibility,
-        venue: locationSearch.trim() || 'Dropped beacon',
-        latitude: coords.lat,
-        longitude: coords.lon,
-        isLiveNow,
-        duration,
-        scheduledStart,
-        radiusMeters: selectedRadiusMeters,
-        tierLevel: selectedTier,
-      }),
-    );
-    onClose();
+    const draft = createBeaconDraft({
+      title: trimmedTitle,
+      tags,
+      visibility,
+      venue: locationSearch.trim() || 'Dropped beacon',
+      latitude: coords.lat,
+      longitude: coords.lon,
+      isLiveNow,
+      duration,
+      scheduledStart,
+      radiusMeters: selectedRadiusMeters,
+      tierLevel: selectedTier,
+    });
+
+    setSubmitting(true);
+    setFormError(null);
+    void postBeacon(toBeaconCreatePayload(draft))
+      .then((saved) => {
+        adoptPersistedBeacon(saved, draft);
+        scheduleClose();
+      })
+      .catch((error: unknown) => {
+        if (error instanceof BeaconApiError && error.status >= 400 && error.status < 500) {
+          setFormError('The beacon service rejected this drop. Check the title and place, then try again.');
+          setSubmitting(false);
+          return;
+        }
+        dropBeacon(draft);
+        scheduleClose();
+      });
   };
 
   if (!visible) return null;
@@ -417,8 +448,16 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
           <View style={styles.ctaDock}>
             {formError ? <Text style={styles.formError}>{formError}</Text> : null}
-            <TouchableOpacity style={styles.primaryDropBtn} onPress={handleDropBeacon} activeOpacity={0.85}>
-              <Text style={styles.primaryDropText}>DROP BEACON</Text>
+            <TouchableOpacity
+              style={[styles.primaryDropBtn, submitting && styles.primaryDropBtnBusy]}
+              onPress={handleDropBeacon}
+              activeOpacity={0.85}
+              disabled={submitting}
+              accessibilityRole="button"
+              accessibilityState={{ disabled: submitting }}
+            >
+              {submitting ? <ActivityIndicator color="#070b13" style={styles.dropSpinner} /> : null}
+              <Text style={styles.primaryDropText}>{submitting ? 'DROPPING' : 'DROP BEACON'}</Text>
             </TouchableOpacity>
           </View>
       </KeyboardAvoidingView>
@@ -737,11 +776,19 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
+    flexDirection: 'row',
+    justifyContent: 'center',
     shadowColor: '#06b6d4',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
     elevation: 8,
+  },
+  primaryDropBtnBusy: {
+    opacity: 0.7,
+  },
+  dropSpinner: {
+    marginRight: 8,
   },
   primaryDropText: {
     color: '#070b13',
