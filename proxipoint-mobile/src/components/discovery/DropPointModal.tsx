@@ -404,7 +404,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             </View>
 
             <View style={styles.locationBlock}>
-              <View style={styles.locationContainer}>
+              <View style={[styles.locationContainer, coords && styles.fieldGlow]}>
                 <View style={styles.locationCopy}>
                   <TextInput
                     placeholder="Search location or venue..."
@@ -427,9 +427,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     testID="drop-place"
                   />
                   {coords ? (
-                    <Text style={styles.coordReadout}>
-                      {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
-                    </Text>
+                    <>
+                      <View style={styles.locationDivider} />
+                      <Text style={styles.coordReadout} testID="drop-coordinates">
+                        {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
+                      </Text>
+                    </>
                   ) : null}
                   <TouchableOpacity
                     onPress={() => {
@@ -1015,16 +1018,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#0f172a',
     borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: '#22d3ee',
+    borderWidth: 1,
+    borderColor: '#1e293b',
     paddingHorizontal: 14,
     minHeight: 56,
     paddingVertical: 10,
-    shadowColor: '#22d3ee',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius: 12,
-    elevation: 8,
   },
   locationCopy: {
     flex: 1,
@@ -1035,11 +1033,16 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     padding: 0,
   },
+  locationDivider: {
+    height: 1,
+    backgroundColor: '#334155',
+    marginTop: 8,
+    marginBottom: 6,
+  },
   coordReadout: {
     color: '#38bdf8',
     fontSize: 11,
     fontVariant: ['tabular-nums'],
-    marginTop: 2,
   },
   mapPickBtn: {
     flexDirection: 'row',
