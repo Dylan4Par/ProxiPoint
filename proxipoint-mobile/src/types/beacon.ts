@@ -51,6 +51,8 @@ export interface DropBeaconInput {
   isLiveNow: boolean;
   duration: BeaconDuration;
   scheduledStart: string;
+  /** Exact span posted as duration_hours. Preset duration stays for older callers. */
+  durationHours?: number;
   radiusMeters?: number;
   tierLevel?: BoundaryTierLevel;
 }

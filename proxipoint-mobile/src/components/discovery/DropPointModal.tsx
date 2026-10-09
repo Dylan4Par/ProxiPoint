@@ -42,8 +42,20 @@ import { captureCurrentFix, geocodePlaces } from '../../services/placeGeocoder';
 import { nearestPlace } from '../../lib/placeSearch';
 import { DiscoveryLeafletMap } from './DiscoveryLeafletMap';
 import {
-  BEACON_DURATIONS,
-  type BeaconDuration,
+  applyDateInput,
+  applyTimeInput,
+  changeWindowEnd,
+  changeWindowStart,
+  formatBeaconDate,
+  formatBeaconStart,
+  formatBeaconTime,
+  liveBeaconWindow,
+  presetForHours,
+  toDateInputValue,
+  toTimeInputValue,
+  windowDurationHours,
+} from '../../lib/beaconWindow';
+import {
   type BeaconVisibility,
   type BoundaryTierLevel,
   type PlaceSuggestion,
@@ -62,6 +74,61 @@ const VISIBILITY_OPTIONS: Array<{ id: BeaconVisibility; label: string; accent: s
   { id: 'public', label: 'Public', accent: '#34d399' },
 ];
 
+function WhenChip({
+  kind,
+  value,
+  display,
+  onCommit,
+  testID,
+  label,
+}: {
+  kind: 'date' | 'time';
+  value: string;
+  display: string;
+  onCommit: (value: string) => void;
+  testID: string;
+  label: string;
+}) {
+  return (
+    <View style={styles.whenChip}>
+      <Text style={styles.whenChipText} testID={`${testID}-label`}>
+        {display}
+      </Text>
+      {Platform.OS === 'web' ? (
+        <input
+          type={kind}
+          value={value}
+          aria-label={label}
+          data-testid={testID}
+          onChange={(event) => onCommit(event.currentTarget.value)}
+          style={whenInputStyle}
+        />
+      ) : (
+        <TextInput
+          value={value}
+          onChangeText={onCommit}
+          style={styles.whenNativeInput}
+          testID={testID}
+          accessibilityLabel={label}
+        />
+      )}
+    </View>
+  );
+}
+
+const whenInputStyle: React.CSSProperties = {
+  position: 'absolute',
+  top: 0,
+  right: 0,
+  bottom: 0,
+  left: 0,
+  width: '100%',
+  height: '100%',
+  opacity: 0,
+  cursor: 'pointer',
+  border: 'none',
+};
+
 function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
   const color = active ? '#f8fafc' : '#94a3b8';
   const props = { size: 14, color, strokeWidth: 2.25 };
@@ -77,9 +144,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const setPreviewGeofence = useDiscoveryStore((state) => state.setPreviewGeofence);
 
   const [visibility, setVisibility] = useState<BeaconVisibility>('tag_network');
+  const initialWindow = useRef(liveBeaconWindow());
   const [isLiveNow, setIsLiveNow] = useState(true);
-  const [duration, setDuration] = useState<BeaconDuration>('2 hrs');
-  const [scheduledStart, setScheduledStart] = useState('18:00');
+  const [startsAt, setStartsAt] = useState(initialWindow.current.startsAt);
+  const [endsAt, setEndsAt] = useState(initialWindow.current.endsAt);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -121,10 +189,11 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
   useEffect(() => {
     if (!visible) return;
+    const window = liveBeaconWindow();
     setVisibility('tag_network');
     setIsLiveNow(true);
-    setDuration('2 hrs');
-    setScheduledStart('18:00');
+    setStartsAt(window.startsAt);
+    setEndsAt(window.endsAt);
     setTitle('');
     setDescription('');
     setTags('');
@@ -254,6 +323,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
 
+    const durationHours = windowDurationHours(startsAt, endsAt);
     const draft = createBeaconDraft({
       title: trimmedTitle,
       description,
@@ -263,8 +333,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       latitude: coords.lat,
       longitude: coords.lon,
       isLiveNow,
-      duration,
-      scheduledStart,
+      duration: presetForHours(durationHours),
+      durationHours,
+      scheduledStart: formatBeaconStart(startsAt),
       radiusMeters: selectedRadiusMeters,
       tierLevel: selectedTier,
     });
@@ -291,6 +362,28 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
   const titleAndTagsComplete = title.trim().length > 0 && parseBeaconTags(tags).length > 0;
   const sheetCovered = revealing || mapPicking;
+
+  const selectLiveNow = () => {
+    const window = liveBeaconWindow();
+    setIsLiveNow(true);
+    setStartsAt(window.startsAt);
+    setEndsAt(window.endsAt);
+  };
+
+  const commitStart = (kind: 'date' | 'time', value: string) => {
+    const next = kind === 'date' ? applyDateInput(startsAt, value) : applyTimeInput(startsAt, value);
+    if (!next) return;
+    const updated = changeWindowStart(startsAt, endsAt, next);
+    setStartsAt(updated.startsAt);
+    setEndsAt(updated.endsAt);
+    if (updated.switchedToSchedule) setIsLiveNow(false);
+  };
+
+  const commitEnd = (kind: 'date' | 'time', value: string) => {
+    const next = kind === 'date' ? applyDateInput(endsAt, value) : applyTimeInput(endsAt, value);
+    if (!next) return;
+    setEndsAt(changeWindowEnd(startsAt, next, kind));
+  };
 
   return (
     <View style={styles.overlay} testID="drop-beacon-sheet">
@@ -543,7 +636,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               <View style={styles.timeToggleRow}>
                 <TouchableOpacity
                   style={[styles.pillToggle, isLiveNow && styles.pillToggleActive]}
-                  onPress={() => setIsLiveNow(true)}
+                  onPress={selectLiveNow}
                   testID="drop-live"
                 >
                   <Rocket size={14} color={isLiveNow ? '#22d3ee' : '#64748b'} strokeWidth={2.25} />
@@ -559,37 +652,61 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 </TouchableOpacity>
               </View>
 
-              {!isLiveNow ? (
-                <>
-                  <View style={styles.hairline} />
-                  <View style={styles.inputRow}>
-                    <Text style={styles.inputLabel}>Starts</Text>
-                    <TextInput
-                      placeholder="18:00"
-                      placeholderTextColor="#64748b"
-                      style={styles.textInput}
-                      value={scheduledStart}
-                      onChangeText={setScheduledStart}
+              <View style={styles.whenBlock} testID="drop-window">
+                <View style={styles.whenRow}>
+                  <View style={styles.whenRail}>
+                    <View style={styles.whenDotFilled} />
+                  </View>
+                  <Text style={styles.whenLabel}>Start</Text>
+                  <View style={styles.whenChips}>
+                    <WhenChip
+                      kind="date"
+                      value={toDateInputValue(startsAt)}
+                      display={formatBeaconDate(startsAt)}
+                      onCommit={(value) => commitStart('date', value)}
+                      testID="drop-start-date"
+                      label="Start date"
+                    />
+                    <WhenChip
+                      kind="time"
+                      value={toTimeInputValue(startsAt)}
+                      display={formatBeaconTime(startsAt)}
+                      onCommit={(value) => commitStart('time', value)}
+                      testID="drop-start-time"
+                      label="Start time"
                     />
                   </View>
-                </>
-              ) : null}
-
-              <View style={styles.hairline} />
-              <View style={styles.durationRow}>
-                {BEACON_DURATIONS.map((option) => {
-                  const active = duration === option;
-                  return (
-                    <TouchableOpacity
-                      key={option}
-                      style={[styles.durationChip, active && styles.durationChipActive]}
-                      onPress={() => setDuration(option)}
-                      testID={`drop-duration-${option.replace(/\s+/g, '-')}`}
-                    >
-                      <Text style={[styles.durationText, active && styles.durationTextActive]}>{option}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                </View>
+                <View style={styles.whenBridge}>
+                  <View style={styles.whenRail}>
+                    <View style={styles.whenDotted} />
+                  </View>
+                  <View style={styles.whenRule} />
+                </View>
+                <View style={styles.whenRow}>
+                  <View style={styles.whenRail}>
+                    <View style={styles.whenDotOpen} />
+                  </View>
+                  <Text style={styles.whenLabel}>End</Text>
+                  <View style={styles.whenChips}>
+                    <WhenChip
+                      kind="date"
+                      value={toDateInputValue(endsAt)}
+                      display={formatBeaconDate(endsAt)}
+                      onCommit={(value) => commitEnd('date', value)}
+                      testID="drop-end-date"
+                      label="End date"
+                    />
+                    <WhenChip
+                      kind="time"
+                      value={toTimeInputValue(endsAt)}
+                      display={formatBeaconTime(endsAt)}
+                      onCommit={(value) => commitEnd('time', value)}
+                      testID="drop-end-time"
+                      label="End time"
+                    />
+                  </View>
+                </View>
               </View>
             </View>
             <View style={styles.inviteBlock}>
@@ -1187,29 +1304,83 @@ const styles = StyleSheet.create({
   pillToggleTextActive: {
     color: '#f8fafc',
   },
-  durationRow: {
+  whenBlock: {
+    marginTop: 14,
+  },
+  whenRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 8,
   },
-  durationChip: {
-    flex: 1,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: '#070b13',
+  whenRail: {
+    width: 16,
     alignItems: 'center',
+    alignSelf: 'stretch',
+    justifyContent: 'center',
   },
-  durationChipActive: {
-    backgroundColor: '#22d3ee',
+  whenDotFilled: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#94a3b8',
   },
-  durationText: {
-    color: '#64748b',
-    fontSize: 11,
+  whenDotOpen: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: '#94a3b8',
+  },
+  whenBridge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 18,
+    gap: 8,
+  },
+  whenDotted: {
+    width: 0,
+    flex: 1,
+    borderLeftWidth: 1,
+    borderStyle: 'dotted',
+    borderColor: '#64748b',
+  },
+  whenRule: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#334155',
+  },
+  whenLabel: {
+    color: '#94a3b8',
+    fontSize: 16,
+    fontWeight: '500',
+    width: 48,
+  },
+  whenChips: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+  },
+  whenChip: {
+    position: 'relative',
+    backgroundColor: '#1e293b',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    overflow: 'hidden',
+  },
+  whenChipText: {
+    color: '#f8fafc',
+    fontSize: 14,
     fontWeight: '600',
   },
-  durationTextActive: {
-    color: '#f8fafc',
-    fontWeight: '700',
+  whenNativeInput: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    bottom: 0,
+    left: 0,
+    opacity: 0,
   },
   ctaDock: {
     paddingTop: 8,

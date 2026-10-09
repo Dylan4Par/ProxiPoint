@@ -9,6 +9,7 @@ import {
   createBeaconDraft,
   formatBroadcastReach,
   durationToHours,
+  resolveDurationHours,
   countBeaconWords,
   clampBeaconDescription,
   BEACON_DESCRIPTION_WORD_LIMIT,
@@ -106,6 +107,8 @@ test('create payload maps channels, radius, and duration hours', () => {
   assert.equal(durationToHours('1 hr'), 1);
   assert.equal(durationToHours('4 hrs'), 4);
   assert.equal(durationToHours('All Day'), 24);
+  assert.equal(resolveDurationHours({ duration: '2 hrs', durationHours: 1.5 }), 1.5);
+  assert.equal(resolveDurationHours({ duration: '2 hrs' }), 2);
   assert.deepEqual(toBeaconCreatePayload(draft), {
     title: 'Boulder Tech & GIS Meetup',
     venue: 'Pearl St Mall',

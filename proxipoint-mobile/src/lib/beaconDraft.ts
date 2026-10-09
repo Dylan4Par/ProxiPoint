@@ -97,6 +97,13 @@ export function durationToHours(duration: BeaconDuration): number {
   }
 }
 
+export function resolveDurationHours(draft: { duration: BeaconDuration; durationHours?: number }): number {
+  if (draft.durationHours != null && Number.isFinite(draft.durationHours) && draft.durationHours > 0) {
+    return Math.round(draft.durationHours * 100) / 100;
+  }
+  return durationToHours(draft.duration);
+}
+
 export function toBeaconCreatePayload(draft: BeaconDraft): BeaconCreatePayload {
   const description = clampBeaconDescription(draft.description ?? '').trim();
   return {
@@ -107,7 +114,7 @@ export function toBeaconCreatePayload(draft: BeaconDraft): BeaconCreatePayload {
     longitude: draft.longitude,
     radius_meters: draft.radiusMeters,
     visibility: draft.visibility,
-    duration_hours: durationToHours(draft.duration),
+    duration_hours: resolveDurationHours(draft),
     ...(description ? { description } : {}),
   };
 }
