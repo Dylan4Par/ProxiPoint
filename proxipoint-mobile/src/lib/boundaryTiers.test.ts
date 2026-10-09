@@ -43,6 +43,17 @@ test('truncates overly long venue labels for compact chip display', () => {
   assert.equal(compactPlaceLabel(longName).length, 20);
 });
 
+test('a street address stays on Venue / Micro until another tier is chosen', () => {
+  const tiers = resolveBoundaryTiers({ placeName: 'Pearl St & Broadway', placeType: 'address' });
+  assert.equal(tiers[0]?.id, 'micro');
+  assert.equal(tiers[0]?.label, 'Venue / Micro');
+  assert.equal(tiers[0]?.radiusMeters, 300);
+  assert.equal(tiers[1]?.label, 'Neighborhood');
+  assert.equal(tiers[1]?.radiusMeters, 1500);
+  assert.equal(tiers[2]?.label, 'City Limits');
+  assert.equal(tiers[2]?.radiusMeters, 8000);
+});
+
 test('recommends a tier from geocoder place_type and semantic context', () => {
   assert.equal(getRecommendedTier('poi'), 'micro');
   assert.equal(getRecommendedTier('address'), 'micro');

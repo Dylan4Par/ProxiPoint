@@ -314,7 +314,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               </View>
             </View>
 
-            <View>
+            <View style={styles.locationBlock}>
               <View style={styles.locationContainer}>
                 <View style={styles.locationCopy}>
                   <TextInput
@@ -369,6 +369,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       key={place.id}
                       style={styles.suggestionRow}
                       onPress={() => applyPlace(place)}
+                      testID={`drop-place-option-${place.id}`}
                     >
                       <Text style={styles.suggestionLabel}>{place.label}</Text>
                       <Text style={styles.suggestionSubtitle}>{place.subtitle}</Text>
@@ -550,7 +551,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   scroll: {
-    flexGrow: 0,
+    flex: 1,
+    flexGrow: 1,
     flexShrink: 1,
   },
   scrollContent: {
@@ -688,6 +690,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     fontStyle: 'italic',
   },
+  locationBlock: {
+    position: 'relative',
+    zIndex: 4,
+  },
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -725,12 +731,18 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   suggestionList: {
-    marginTop: 8,
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: 6,
     backgroundColor: '#0f172a',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#1e293b',
     overflow: 'hidden',
+    zIndex: 6,
+    elevation: 6,
   },
   suggestionRow: {
     paddingHorizontal: 14,
