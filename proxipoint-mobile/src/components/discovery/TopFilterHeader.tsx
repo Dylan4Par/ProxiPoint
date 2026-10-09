@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,12 @@ import {
   TextInput,
   TouchableWithoutFeedback,
 } from 'react-native';
+import type { AppearancePalette } from '../../lib/appearance';
+import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { useOperatorAvatar } from '../../stores/useProfileAvatarStore';
+import { OperatorAvatar } from './OperatorAvatar';
+import { ProfileSettings } from './ProfileSettings';
 
 export const TopFilterHeader: React.FC = () => {
   const activeTab = useDiscoveryStore((s) => s.activeTab);
@@ -19,6 +24,10 @@ export const TopFilterHeader: React.FC = () => {
   const tags = useDiscoveryStore((s) => s.tags);
   const addTag = useDiscoveryStore((s) => s.addTag);
   const removeTag = useDiscoveryStore((s) => s.removeTag);
+  const mode = useAppearanceStore((s) => s.mode);
+  const setMode = useAppearanceStore((s) => s.setMode);
+  const colors = useAppearanceStore((s) => s.colors);
+  const styles = useMemo(() => createHeaderStyles(colors), [colors]);
 
   // Settings Modal State
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -29,6 +38,41 @@ export const TopFilterHeader: React.FC = () => {
   // Tag Editor Modal State
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const [newTagInput, setNewTagInput] = useState('');
+  const channelScrollRef = useRef<ScrollView>(null);
+  const channelScrollX = useRef(0);
+  const suppressChannelPress = useRef(false);
+
+  const beginChannelPan = (event: { nativeEvent?: { pageX?: number } }) => {
+    const startX = event.nativeEvent?.pageX ?? 0;
+    const origin = channelScrollX.current;
+    let moved = false;
+    const onMove = (moveEvent: MouseEvent) => {
+      const dx = moveEvent.pageX - startX;
+      if (Math.abs(dx) > 4) moved = true;
+      if (!moved) return;
+      channelScrollRef.current?.scrollTo({ x: Math.max(0, origin - dx), animated: false });
+    };
+    const onUp = () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      if (moved) {
+        suppressChannelPress.current = true;
+        window.setTimeout(() => {
+          suppressChannelPress.current = false;
+        }, 0);
+      }
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  };
+
+  const selectChannel = (tag: string) => {
+    if (suppressChannelPress.current) return;
+    setSelectedTag(tag);
+  };
+
+  const profileInitial = callsign.trim().charAt(0).toUpperCase() || 'R';
+  const avatarUri = useOperatorAvatar(callsign);
 
   const handleAddNewTag = () => {
     if (newTagInput.trim()) {
@@ -42,13 +86,20 @@ export const TopFilterHeader: React.FC = () => {
       {/* Top Row: Avatar Pill + Segmented Switcher */}
       <View style={styles.topRow}>
         <TouchableOpacity
+          testID="profile-button"
           style={styles.avatarButton}
           onPress={() => setSettingsOpen(true)}
           activeOpacity={0.8}
         >
-          <View style={styles.avatarInner}>
-            <Text style={styles.avatarInitial}>R</Text>
-          </View>
+          <OperatorAvatar
+            uri={avatarUri}
+            initial={profileInitial}
+            size={36}
+            backgroundColor={colors.inset}
+            color={colors.accentBright}
+            fontSize={16}
+            style={styles.avatarInner}
+          />
           <View style={styles.onlineBadge} />
         </TouchableOpacity>
 
@@ -76,8 +127,16 @@ export const TopFilterHeader: React.FC = () => {
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
       <ScrollView
         horizontal
+        ref={channelScrollRef}
+        testID="channel-scroller"
         showsHorizontalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={(scrollEvent) => {
+          channelScrollX.current = scrollEvent.nativeEvent.contentOffset.x;
+        }}
+        onMouseDown={beginChannelPan}
         contentContainerStyle={styles.tagScrollContainer}
+        style={[styles.tagScroll, dragStyles.tagScroll]}
       >
         {tags.map((tag) => {
           const isActive = selectedTag === tag;
@@ -85,7 +144,7 @@ export const TopFilterHeader: React.FC = () => {
             <TouchableOpacity
               key={tag}
               style={[styles.tagPill, isActive && styles.tagPillActive]}
-              onPress={() => setSelectedTag(tag)}
+              onPress={() => selectChannel(tag)}
             >
               <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
                 {tag}
@@ -127,7 +186,7 @@ export const TopFilterHeader: React.FC = () => {
                   <TextInput
                     style={styles.addTagInput}
                     placeholder="e.g. Pickleball, FarmersMarket"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={colors.textDim}
                     value={newTagInput}
                     onChangeText={setNewTagInput}
                     onSubmitEditing={handleAddNewTag}
@@ -168,82 +227,39 @@ export const TopFilterHeader: React.FC = () => {
         </TouchableWithoutFeedback>
       </Modal>
 
-      {/* Settings Modal Sheet */}
-      <Modal
+      <ProfileSettings
         visible={settingsOpen}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setSettingsOpen(false)}
-      >
-        <TouchableWithoutFeedback onPress={() => setSettingsOpen(false)}>
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalCard}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Node & Profile Settings</Text>
-                  <TouchableOpacity onPress={() => setSettingsOpen(false)}>
-                    <Text style={styles.modalCloseText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Device Callsign / Handle</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={callsign}
-                    onChangeText={setCallsign}
-                    placeholder="e.g. Ranger-F0A5ACCF"
-                    placeholderTextColor="#475569"
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Tenant ID (UUID)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={tenantId}
-                    onChangeText={setTenantId}
-                    autoCapitalize="none"
-                    placeholderTextColor="#475569"
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Ingest WebSocket URL</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={serverUrl}
-                    onChangeText={setServerUrl}
-                    autoCapitalize="none"
-                    placeholderTextColor="#475569"
-                  />
-                </View>
-
-                <View style={styles.statusBox}>
-                  <View style={styles.statusDot} />
-                  <Text style={styles.statusBoxText}>Engine: overwatchcore-ingest :8080</Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={() => setSettingsOpen(false)}
-                >
-                  <Text style={styles.saveBtnText}>Save & Apply</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+        onClose={() => setSettingsOpen(false)}
+        callsign={callsign}
+        onChangeCallsign={setCallsign}
+        tenantId={tenantId}
+        onChangeTenantId={setTenantId}
+        serverUrl={serverUrl}
+        onChangeServerUrl={setServerUrl}
+        mode={mode}
+        onChangeMode={setMode}
+        colors={colors}
+      />
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const dragStyles = StyleSheet.create({
+  tagScroll: {
+    flexGrow: 0,
+    cursor: 'grab',
+    userSelect: 'none',
+  },
+});
+
+function createHeaderStyles(c: AppearancePalette) {
+  return StyleSheet.create({
   headerContainer: {
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: c.header,
+    borderBottomWidth: 1,
+    borderBottomColor: c.border,
     zIndex: 10,
   },
   topRow: {
@@ -256,9 +272,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderWidth: 1.5,
-    borderColor: '#06b6d4',
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -267,12 +283,12 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#0f172a',
+    backgroundColor: c.inset,
     alignItems: 'center',
     justifyContent: 'center',
   },
   avatarInitial: {
-    color: '#38bdf8',
+    color: c.accentBright,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -285,16 +301,16 @@ const styles = StyleSheet.create({
     borderRadius: 5.5,
     backgroundColor: '#10b981',
     borderWidth: 2,
-    borderColor: '#0a1120',
+    borderColor: c.onlineBorder,
   },
   segmentedWrapper: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderRadius: 24,
     padding: 3,
     borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.2)',
+    borderColor: c.segmentBorder,
   },
   segmentBtn: {
     flex: 1,
@@ -303,18 +319,21 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   segmentBtnActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    backgroundColor: c.accentSoft,
     borderWidth: 1,
-    borderColor: '#06b6d4',
+    borderColor: c.accent,
   },
   segmentText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#38bdf8',
+    color: c.accentBright,
     fontWeight: '700',
+  },
+  tagScroll: {
+    flexGrow: 0,
   },
   tagScrollContainer: {
     paddingHorizontal: 16,
@@ -326,53 +345,53 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 18,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.border,
   },
   tagPillActive: {
-    backgroundColor: '#06b6d4',
-    borderColor: '#22d3ee',
+    backgroundColor: c.accent,
+    borderColor: c.region,
   },
   tagText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },
   tagTextActive: {
-    color: '#0f172a',
+    color: c.onAccent,
     fontWeight: '700',
   },
   trailingEditPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 18,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#06b6d4',
+    borderColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   trailingEditIcon: {
-    color: '#38bdf8',
+    color: c.accentBright,
     fontSize: 13,
     fontWeight: '700',
   },
   /* Modals */
   modalBackdrop: {
     flex: 1,
-    backgroundColor: 'rgba(2, 6, 23, 0.8)',
+    backgroundColor: c.modalBackdrop,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#0f172a',
+    backgroundColor: c.modal,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.border,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -380,16 +399,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: c.border,
     paddingBottom: 10,
   },
   modalTitle: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 16,
     fontWeight: '700',
   },
   modalCloseText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 18,
     fontWeight: '700',
     padding: 4,
@@ -401,28 +420,28 @@ const styles = StyleSheet.create({
   },
   addTagInput: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: c.border,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 13,
   },
   addTagBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: c.accent,
     paddingHorizontal: 16,
     justifyContent: 'center',
     borderRadius: 10,
   },
   addTagBtnText: {
-    color: '#0f172a',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '700',
   },
   sectionSubtitle: {
-    color: '#64748b',
+    color: c.textDim,
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -437,16 +456,16 @@ const styles = StyleSheet.create({
   editorChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.surface,
     borderRadius: 16,
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.border,
   },
   editorChipText: {
-    color: '#e2e8f0',
+    color: c.text,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -456,57 +475,17 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 2,
   },
-  fieldGroup: {
-    marginBottom: 14,
-  },
-  fieldLabel: {
-    color: '#94a3b8',
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-  },
-  textInput: {
-    backgroundColor: '#1e293b',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    fontFamily: 'monospace',
-  },
-  statusBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#172554',
-    padding: 10,
-    borderRadius: 8,
-    gap: 8,
-    marginVertical: 10,
-  },
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10b981',
-  },
-  statusBoxText: {
-    color: '#38bdf8',
-    fontSize: 11,
-    fontWeight: '600',
-  },
   saveBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: c.accent,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 6,
   },
   saveBtnText: {
-    color: '#0f172a',
+    color: c.onAccent,
     fontSize: 14,
     fontWeight: '700',
   },
 });
+}

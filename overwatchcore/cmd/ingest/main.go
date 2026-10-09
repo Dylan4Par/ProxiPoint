@@ -10,20 +10,26 @@ import (
 
 	_ "github.com/jackc/pgx/v5/stdlib"
 
+	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/pipeline"
+	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/profile"
+	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/regions"
 	"github.com/Dylan4Par/ProxiPoint/overwatchcore/internal/telemetry"
 )
 
 func main() {
 	addr := getenv("ADDR", ":8080")
-	index := openIndex()
+	nearby, districts, profiles, alerts := openIndexes()
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true}`))
 	})
-	mux.HandleFunc("/api/v1/telemetry/ping", telemetry.HandleTelemetryHTTP(index))
-	mux.HandleFunc("/api/v1/telemetry/ws", telemetry.HandleTelemetryWS(index))
+	mux.HandleFunc("/api/v1/telemetry/ping", telemetry.HandleTelemetryHTTP(nearby))
+	mux.HandleFunc("/api/v1/telemetry/ws", telemetry.HandleTelemetryWS(nearby))
+	mux.HandleFunc("/api/v1/regions/lookup", regions.HandleLookup(districts))
+	mux.HandleFunc("/api/v1/profiles/", profile.Handle(profiles))
+	mux.HandleFunc("/api/v1/pipeline/", pipeline.Handle(alerts))
 
 	server := &http.Server{
 		Addr:              addr,
@@ -36,11 +42,11 @@ func main() {
 	}
 }
 
-func openIndex() telemetry.NearbyQuerier {
+func openIndexes() (telemetry.NearbyQuerier, regions.Querier, profile.Store, *pipeline.Service) {
 	dsn := os.Getenv("DATABASE_URL")
 	if dsn == "" {
-		log.Printf("DATABASE_URL unset; using in-memory geofence index")
-		return telemetry.NewDemoIndex()
+		log.Printf("DATABASE_URL unset; using in-memory geofence, region, profile, and beacon stores")
+		return telemetry.NewDemoIndex(), regions.NewMemoryIndex(), profile.NewMemoryStore(), pipeline.NewService(pipeline.NewMemoryStore())
 	}
 
 	db, err := sql.Open("pgx", dsn)
@@ -58,8 +64,17 @@ func openIndex() telemetry.NearbyQuerier {
 	if err := telemetry.EnsureSchema(ctx, db); err != nil {
 		log.Fatalf("migrate schema: %v", err)
 	}
+	if err := regions.EnsureSchema(ctx, db); err != nil {
+		log.Fatalf("migrate regions: %v", err)
+	}
+	if err := profile.EnsureSchema(ctx, db); err != nil {
+		log.Fatalf("migrate profiles: %v", err)
+	}
+	if err := pipeline.EnsureSchema(ctx, db); err != nil {
+		log.Fatalf("migrate beacons: %v", err)
+	}
 	log.Printf("connected to PostGIS")
-	return telemetry.NewPostGISIndex(db)
+	return telemetry.NewPostGISIndex(db), regions.NewPostGISIndex(db), profile.NewPostGISStore(db), pipeline.NewService(pipeline.NewPostGISStore(db))
 }
 
 func getenv(key, fallback string) string {

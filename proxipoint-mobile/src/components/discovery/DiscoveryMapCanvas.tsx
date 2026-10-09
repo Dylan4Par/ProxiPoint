@@ -8,10 +8,31 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
+import { eventMatchesMapFilter, presentAssignedTag } from '../../lib/beaconDrop';
+import { focusOffsetForPoint, visibleWorldBounds } from '../../lib/discoveryFocus';
+import { useAppearanceStore } from '../../stores/useAppearanceStore';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 const { width, height } = Dimensions.get('window');
 const CANVAS_HEIGHT = height * 0.52;
+const PAN_SLOP_PX = 4;
+
+function exceedsPanSlop(gestureState: { dx: number; dy: number }): boolean {
+  return Math.abs(gestureState.dx) > PAN_SLOP_PX || Math.abs(gestureState.dy) > PAN_SLOP_PX;
+}
+
+function responderTestId(event: { nativeEvent?: { target?: unknown } }): string {
+  const target = event.nativeEvent?.target as {
+    closest?: (selector: string) => { getAttribute?: (name: string) => string | null } | null;
+  } | null;
+  const tagged = target?.closest?.('[data-testid]');
+  return tagged?.getAttribute?.('data-testid') ?? '';
+}
+
+function isPinOrRecenterTarget(event: { nativeEvent?: { target?: unknown } }): boolean {
+  const testId = responderTestId(event);
+  return testId === 'discovery-recenter' || testId.startsWith('discovery-pin-');
+}
 
 // Beacon world coordinates inside 1400x1400 world
 const BEACON_WORLD_X = 480;
@@ -25,44 +46,89 @@ const CENTER_OFFSET_Y = CANVAS_HEIGHT / 2 - (BEACON_WORLD_Y - WORLD_OFFSET);
 export const DiscoveryMapCanvas: React.FC = () => {
   const nodes = useDiscoveryStore((s) => s.nodes);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
+  const mapFocusToken = useDiscoveryStore((s) => s.mapFocusToken);
   const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
   const setViewportBounds = useDiscoveryStore((s) => s.setViewportBounds);
+  const selectedTag = useDiscoveryStore((s) => s.selectedTag);
+  const activeTab = useDiscoveryStore((s) => s.activeTab);
+  const previewPin = useDiscoveryStore((s) => s.previewPin);
+  const colors = useAppearanceStore((s) => s.colors);
 
-  const nodeList = Object.values(nodes || {});
+  const nodeList = Object.values(nodes || {}).filter((node) => {
+    if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
+    return eventMatchesMapFilter(node.tags, selectedTag, node.tag);
+  });
 
   const pan = useRef(new Animated.ValueXY({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y })).current;
   const currentPan = useRef({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y });
+  const canvasSize = useRef({ width, height: CANVAS_HEIGHT });
+  const pendingFocus = useRef(false);
 
   const calculateBounds = (offsetX: number, offsetY: number) => {
-    const minX = -offsetX - 40;
-    const maxX = -offsetX + width + 40;
-    const minY = -offsetY - 40;
-    const maxY = -offsetY + CANVAS_HEIGHT + 40;
-    setViewportBounds({ minX, maxX, minY, maxY });
+    const { width: canvasWidth, height: canvasHeight } = canvasSize.current;
+    setViewportBounds(visibleWorldBounds(offsetX, offsetY, canvasWidth, canvasHeight));
+  };
+
+  const moveTo = (pointX: number, pointY: number) => {
+    const offset = focusOffsetForPoint(pointX, pointY, canvasSize.current.width, canvasSize.current.height);
+    if (!offset) return;
+    pan.stopAnimation();
+    pan.flattenOffset();
+    Animated.spring(pan, {
+      toValue: offset,
+      useNativeDriver: false,
+      friction: 7,
+      tension: 40,
+    }).start();
+    currentPan.current = offset;
+    calculateBounds(offset.x, offset.y);
   };
 
   useEffect(() => {
     calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
   }, []);
 
+  useEffect(() => {
+    if (mapFocusToken === 0) return;
+    const selectedId = useDiscoveryStore.getState().selectedNodeId;
+    const node = selectedId ? useDiscoveryStore.getState().nodes[selectedId] : null;
+    if (!node) return;
+    pendingFocus.current = true;
+    moveTo(node.x, node.y);
+  }, [mapFocusToken]);
+
+  useEffect(() => {
+    if (!previewPin) return;
+    moveTo(previewPin.x, previewPin.y);
+  }, [previewPin]);
+
   const handleRecenter = () => {
-    Animated.spring(pan, {
-      toValue: { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y },
-      useNativeDriver: false,
-      friction: 7,
-      tension: 40,
-    }).start();
-    currentPan.current = { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y };
-    calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
+    moveTo(BEACON_WORLD_X, BEACON_WORLD_Y);
+  };
+
+  const commitPan = (gestureState: { dx: number; dy: number }) => {
+    currentPan.current.x += gestureState.dx;
+    currentPan.current.y += gestureState.dy;
+    pan.flattenOffset();
+    calculateBounds(currentPan.current.x, currentPan.current.y);
   };
 
   const panResponder = useRef(
     PanResponder.create({
-      onStartShouldSetPanResponder: () => false,
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4;
-      },
-      onPanResponderGrant: () => {
+      // Empty map space claims the press immediately so the browser does not
+      // start a text selection. Pins and the recenter button keep their taps.
+      onStartShouldSetPanResponderCapture: (event) => !isPinOrRecenterTarget(event),
+      onMoveShouldSetPanResponder: (_, gestureState) => exceedsPanSlop(gestureState),
+      // A drag that begins on a pin or a radius ring still pans the map.
+      onMoveShouldSetPanResponderCapture: (_, gestureState) => exceedsPanSlop(gestureState),
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: (event) => {
+        event.preventDefault?.();
+        pan.stopAnimation((value: { x: number; y: number }) => {
+          if (Number.isFinite(value?.x) && Number.isFinite(value?.y)) {
+            currentPan.current = { x: value.x, y: value.y };
+          }
+        });
         pan.setOffset({ x: currentPan.current.x, y: currentPan.current.y });
         pan.setValue({ x: 0, y: 0 });
       },
@@ -75,17 +141,41 @@ export const DiscoveryMapCanvas: React.FC = () => {
         },
       }),
       onPanResponderRelease: (_, gestureState) => {
-        currentPan.current.x += gestureState.dx;
-        currentPan.current.y += gestureState.dy;
-        pan.flattenOffset();
-        calculateBounds(currentPan.current.x, currentPan.current.y);
+        commitPan(gestureState);
+      },
+      onPanResponderTerminate: (_, gestureState) => {
+        commitPan(gestureState);
       },
     })
   ).current;
 
   return (
-    <View style={styles.canvasContainer} {...panResponder.panHandlers}>
+    <View
+      testID="discovery-map"
+      style={[styles.canvasContainer, { backgroundColor: colors.map }]}
+      onLayout={(event) => {
+        const { width: layoutWidth, height: layoutHeight } = event.nativeEvent.layout;
+        if (layoutWidth > 0 && layoutHeight > 0) {
+          const changed =
+            canvasSize.current.width !== layoutWidth || canvasSize.current.height !== layoutHeight;
+          canvasSize.current = { width: layoutWidth, height: layoutHeight };
+          if (changed && pendingFocus.current) {
+            pendingFocus.current = false;
+            const selectedId = useDiscoveryStore.getState().selectedNodeId;
+            const node = selectedId ? useDiscoveryStore.getState().nodes[selectedId] : null;
+            if (node) {
+              moveTo(node.x, node.y);
+              return;
+            }
+          }
+          pendingFocus.current = false;
+          calculateBounds(currentPan.current.x, currentPan.current.y);
+        }
+      }}
+      {...panResponder.panHandlers}
+    >
       <Animated.View
+        pointerEvents="none"
         style={[
           styles.interactiveWorld,
           {
@@ -94,21 +184,33 @@ export const DiscoveryMapCanvas: React.FC = () => {
         ]}
       >
         {/* Tactical Grid Overlay */}
-        <View style={styles.gridLineH1} />
-        <View style={styles.gridLineH2} />
-        <View style={styles.gridLineH3} />
-        <View style={styles.gridLineV1} />
-        <View style={styles.gridLineV2} />
-        <View style={styles.gridLineV3} />
+        <View style={[styles.gridLineH1, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineH2, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineH3, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineV1, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineV2, { backgroundColor: colors.grid }]} />
+        <View style={[styles.gridLineV3, { backgroundColor: colors.grid }]} />
 
         {/* Diagonal Arteries */}
-        <View style={styles.roadDiagonal1} />
-        <View style={styles.roadDiagonal2} />
+        <View style={[styles.roadDiagonal1, { backgroundColor: colors.road }]} />
+        <View style={[styles.roadDiagonal2, { backgroundColor: colors.road }]} />
+
+        {previewPin ? (
+          <View style={[styles.previewPin, { top: previewPin.y - 28, left: previewPin.x - 14 }]}>
+            <View style={styles.previewPinLabel}>
+              <Text style={styles.previewPinLabelText}>Here</Text>
+            </View>
+            <View style={styles.previewPinHead}>
+              <View style={styles.previewPinDot} />
+            </View>
+            <View style={styles.previewPinTip} />
+          </View>
+        ) : null}
 
         {/* User Beacon Reticle (Origin: 480, 480) */}
         <View style={styles.userBeaconContainer}>
           <View style={styles.userPulseRing} />
-          <View style={styles.userCoreDot} />
+          <View style={styles.userCoreDot} testID="user-center-dot" />
         </View>
 
         {/* Interactive Event Nodes */}
@@ -116,37 +218,30 @@ export const DiscoveryMapCanvas: React.FC = () => {
           const isSelected = item.id === selectedNodeId;
           const posX = item.x ?? 480;
           const posY = item.y ?? 480;
+          const shownTag = presentAssignedTag(item.tags, selectedTag, item.tag);
 
           return (
             <View
               key={item.id}
+              pointerEvents="none"
               style={[
                 styles.nodeCluster,
                 { top: posY - 75, left: posX - 75 },
               ]}
             >
-              {/* Outer Tactical Ring */}
-              <View
-                style={[
-                  styles.ring500m,
-                  isSelected && styles.ringSelected,
-                ]}
-              >
-                <Text style={styles.ringLabelTop}>500m</Text>
-              </View>
+              {isSelected ? (
+                <View style={[styles.ring500m, styles.ringSelected]}>
+                  <Text style={[styles.ringLabelTop, { color: colors.region, backgroundColor: colors.ringLabel }]}>500m</Text>
+                </View>
+              ) : null}
 
-              {/* Inner Tactical Ring */}
-              <View
-                style={[
-                  styles.ring250m,
-                  isSelected && styles.ringInnerSelected,
-                ]}
-              >
-                <Text style={styles.ringLabelInner}>250m</Text>
+              <View pointerEvents="none" style={[styles.pinTagPill, { backgroundColor: colors.pinTag }]}>
+                <Text style={[styles.pinTagText, { color: colors.pinTagText }]}>{shownTag}</Text>
               </View>
 
               {/* Center Pin Marker */}
               <TouchableOpacity
+                testID={`discovery-pin-${item.id}`}
                 activeOpacity={0.8}
                 onPress={() => setSelectedNodeId(item.id)}
                 style={styles.pinWrapper}
@@ -173,7 +268,8 @@ export const DiscoveryMapCanvas: React.FC = () => {
 
       {/* Pure View-based Tactical Crosshair Recenter Button */}
       <TouchableOpacity
-        style={styles.crosshairBtn}
+        testID="discovery-recenter"
+        style={[styles.crosshairBtn, { backgroundColor: colors.crosshair, borderColor: colors.accentBright }]}
         activeOpacity={0.7}
         onPress={handleRecenter}
       >
@@ -193,6 +289,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#0a1120',
     overflow: 'hidden',
     position: 'relative',
+    userSelect: 'none',
+    touchAction: 'none',
   },
   interactiveWorld: {
     width: 1400,
@@ -225,6 +323,51 @@ const styles = StyleSheet.create({
     backgroundColor: '#172554',
     transform: [{ rotate: '-40deg' }],
   },
+  previewPin: {
+    position: 'absolute',
+    alignItems: 'center',
+    zIndex: 8,
+    width: 28,
+  },
+  previewPinLabel: {
+    backgroundColor: '#22d3ee',
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginBottom: 4,
+  },
+  previewPinLabelText: {
+    color: '#082f49',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+  previewPinHead: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: '#f97316',
+    borderWidth: 2,
+    borderColor: '#ffffff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  previewPinDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#ffffff',
+  },
+  previewPinTip: {
+    width: 0,
+    height: 0,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: '#f97316',
+    marginTop: -1,
+  },
   userBeaconContainer: {
     position: 'absolute',
     top: BEACON_WORLD_Y,
@@ -237,9 +380,9 @@ const styles = StyleSheet.create({
     width: 14,
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#38bdf8',
+    backgroundColor: '#facc15',
     borderWidth: 2,
-    borderColor: '#ffffff',
+    borderColor: '#000000',
   },
   userPulseRing: {
     position: 'absolute',
@@ -247,8 +390,8 @@ const styles = StyleSheet.create({
     height: 34,
     borderRadius: 17,
     borderWidth: 2,
-    borderColor: 'rgba(56, 189, 248, 0.4)',
-    backgroundColor: 'rgba(56, 189, 248, 0.15)',
+    borderColor: 'rgba(250, 204, 21, 0.55)',
+    backgroundColor: 'rgba(250, 204, 21, 0.18)',
   },
   nodeCluster: {
     position: 'absolute',
@@ -273,20 +416,6 @@ const styles = StyleSheet.create({
     borderColor: '#38bdf8',
     borderWidth: 1.5,
   },
-  ring250m: {
-    position: 'absolute',
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    borderWidth: 1.5,
-    borderColor: 'rgba(6, 182, 212, 0.65)',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  ringInnerSelected: {
-    borderColor: '#22d3ee',
-    borderWidth: 2,
-  },
   ringLabelTop: {
     color: '#22d3ee',
     fontSize: 8,
@@ -295,19 +424,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
     marginTop: -6,
   },
-  ringLabelInner: {
-    color: '#38bdf8',
-    fontSize: 7,
-    fontWeight: '700',
+  pinTagPill: {
+    position: 'absolute',
+    top: 90,
+    alignSelf: 'center',
     backgroundColor: '#0a1120',
-    paddingHorizontal: 2,
-    marginTop: -5,
+    borderRadius: 8,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: 'rgba(34, 211, 238, 0.45)',
+    zIndex: 7,
+  },
+  pinTagText: {
+    color: '#67e8f9',
+    fontSize: 9,
+    fontWeight: '800',
   },
   pinWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 6,
     padding: 6,
+    pointerEvents: 'auto',
   },
   pinHead: {
     width: 22,
