@@ -20,7 +20,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({ onDropPoint, dropAct
             </View>
           </View>
         </View>
-        <Text style={[styles.navLabel, styles.navLabelActive]}>Discover</Text>
+        <Text style={[styles.navLabel, !dropActive && styles.navLabelActive]}>Discover</Text>
       </TouchableOpacity>
 
       {/* 2. Drop Point Button with Matched 34px Badge */}

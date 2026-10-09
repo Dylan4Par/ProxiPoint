@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { Building2, Calendar, Crosshair, Landmark, MapPin, Rocket } from 'lucide-react-native';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { createBeaconDraft, formatBroadcastReach, GEOCODE_DEBOUNCE_MS, toBeaconCreatePayload } from '../../lib/beaconDraft';
 import { BeaconApiError, postBeacon } from '../../services/beaconApi';
@@ -38,9 +39,17 @@ interface DropPointModalProps {
 
 const VISIBILITY_OPTIONS: Array<{ id: BeaconVisibility; label: string; accent: string }> = [
   { id: 'private', label: 'Private', accent: '#f59e0b' },
-  { id: 'tag_network', label: '((o)) Tag Net', accent: '#38bdf8' },
+  { id: 'tag_network', label: '((o)) Tag Net', accent: '#22d3ee' },
   { id: 'public', label: 'Public', accent: '#34d399' },
 ];
+
+function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
+  const color = active ? '#f8fafc' : '#94a3b8';
+  const props = { size: 14, color, strokeWidth: 2.25 };
+  if (id === 'micro') return <MapPin {...props} />;
+  if (id === 'neighborhood') return <Building2 {...props} />;
+  return <Landmark {...props} />;
+}
 
 export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose }) => {
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
@@ -65,6 +74,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [locating, setLocating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [revealing, setRevealing] = useState(false);
   const skipSearch = useRef(false);
   const selectedLabel = useRef<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -100,6 +110,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setLocating(false);
     setFormError(null);
     setSubmitting(false);
+    setRevealing(false);
     skipSearch.current = false;
     selectedLabel.current = null;
     setPreviewGeofence(null);
@@ -179,6 +190,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
   const scheduleClose = () => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
+    setRevealing(true);
     closeTimer.current = setTimeout(() => onClose(), 700);
   };
 
@@ -225,12 +237,13 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   if (!visible) return null;
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.mapBand}>
+    <View style={styles.overlay} testID="drop-beacon-sheet">
+      <View style={styles.mapBand} testID="drop-beacon-map" pointerEvents={revealing ? 'auto' : 'none'}>
         <DiscoveryLeafletMap />
       </View>
       <KeyboardAvoidingView
-        style={styles.sheetContainer}
+        style={[styles.sheetContainer, revealing && styles.sheetHidden]}
+        pointerEvents={revealing ? 'none' : 'auto'}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
           <View style={styles.pullBar} />
@@ -262,10 +275,11 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       },
                     ]}
                     onPress={() => setVisibility(option.id)}
+                    testID={`drop-visibility-${option.id}`}
                     accessibilityRole="button"
                     accessibilityState={{ selected: active }}
                   >
-                    <Text style={[styles.visibilityText, active && { color: option.accent }]}>
+                    <Text style={[styles.visibilityText, active && styles.visibilityTextActive]}>
                       {option.label}
                     </Text>
                   </TouchableOpacity>
@@ -278,10 +292,11 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 <Text style={styles.inputLabel}>Title</Text>
                 <TextInput
                   placeholder="e.g. Boulder Tech & GIS Meetup"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor="#64748b"
                   style={styles.textInput}
                   value={title}
                   onChangeText={setTitle}
+                  testID="drop-title"
                 />
               </View>
               <View style={styles.hairline} />
@@ -289,11 +304,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 <Text style={styles.inputLabel}>Tags</Text>
                 <TextInput
                   placeholder="#TechMeetup, #PostGIS"
-                  placeholderTextColor="#475569"
+                  placeholderTextColor="#64748b"
                   style={styles.textInput}
                   value={tags}
                   onChangeText={setTags}
                   autoCapitalize="none"
+                  testID="drop-tags"
                 />
               </View>
             </View>
@@ -303,7 +319,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 <View style={styles.locationCopy}>
                   <TextInput
                     placeholder="Search location or venue..."
-                    placeholderTextColor="#475569"
+                    placeholderTextColor="#64748b"
                     style={styles.locationInput}
                     value={locationSearch}
                     onChangeText={(value) => {
@@ -319,6 +335,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       }
                     }}
                     autoCorrect={false}
+                    testID="drop-place"
                   />
                   {coords ? (
                     <Text style={styles.coordReadout}>
@@ -331,11 +348,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   style={styles.targetIconBtn}
                   accessibilityLabel="Use current location"
                   disabled={locating}
+                  testID="drop-gps"
                 >
                   {locating ? (
-                    <ActivityIndicator size="small" color="#38bdf8" />
+                    <ActivityIndicator size="small" color="#22d3ee" />
                   ) : (
-                    <Text style={styles.targetIcon}>⌖</Text>
+                    <Crosshair size={20} color="#22d3ee" strokeWidth={2} />
                   )}
                 </TouchableOpacity>
               </View>
@@ -377,13 +395,17 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                         setSelectedRadiusMeters(tier.radiusMeters);
                       }}
                       activeOpacity={0.8}
+                      testID={`drop-tier-${tier.id}`}
                     >
-                      <Text
-                        style={[styles.scaleChipText, isActive && styles.scaleChipTextActive]}
-                        numberOfLines={1}
-                      >
-                        {tier.icon} {tier.label}
-                      </Text>
+                      <View style={styles.scaleChipLabel}>
+                        <TierGlyph id={tier.id} active={isActive} />
+                        <Text
+                          style={[styles.scaleChipText, isActive && styles.scaleChipTextActive]}
+                          numberOfLines={1}
+                        >
+                          {tier.label}
+                        </Text>
+                      </View>
                       <Text style={[styles.scaleChipSub, isActive && styles.scaleChipSubActive]}>
                         {tier.displayRadius}
                       </Text>
@@ -391,7 +413,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   );
                 })}
               </View>
-              <Text style={styles.broadcastSubtext}>
+              <Text style={styles.broadcastSubtext} testID="drop-broadcast">
                 {formatBroadcastReach(tags, activeTier.displayRadius)}
               </Text>
             </View>
@@ -401,14 +423,18 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 <TouchableOpacity
                   style={[styles.pillToggle, isLiveNow && styles.pillToggleActive]}
                   onPress={() => setIsLiveNow(true)}
+                  testID="drop-live"
                 >
-                  <Text style={[styles.pillToggleText, isLiveNow && styles.pillToggleTextActive]}>🚀 Live Now</Text>
+                  <Rocket size={14} color={isLiveNow ? '#22d3ee' : '#64748b'} strokeWidth={2.25} />
+                  <Text style={[styles.pillToggleText, isLiveNow && styles.pillToggleTextActive]}>Live Now</Text>
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={[styles.pillToggle, !isLiveNow && styles.pillToggleActive]}
                   onPress={() => setIsLiveNow(false)}
+                  testID="drop-schedule"
                 >
-                  <Text style={[styles.pillToggleText, !isLiveNow && styles.pillToggleTextActive]}>📅 Schedule</Text>
+                  <Calendar size={14} color={!isLiveNow ? '#22d3ee' : '#64748b'} strokeWidth={2.25} />
+                  <Text style={[styles.pillToggleText, !isLiveNow && styles.pillToggleTextActive]}>Schedule</Text>
                 </TouchableOpacity>
               </View>
 
@@ -419,7 +445,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     <Text style={styles.inputLabel}>Starts</Text>
                     <TextInput
                       placeholder="18:00"
-                      placeholderTextColor="#475569"
+                      placeholderTextColor="#64748b"
                       style={styles.textInput}
                       value={scheduledStart}
                       onChangeText={setScheduledStart}
@@ -437,6 +463,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       key={option}
                       style={[styles.durationChip, active && styles.durationChipActive]}
                       onPress={() => setDuration(option)}
+                      testID={`drop-duration-${option.replace(/\s+/g, '-')}`}
                     >
                       <Text style={[styles.durationText, active && styles.durationTextActive]}>{option}</Text>
                     </TouchableOpacity>
@@ -447,12 +474,13 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
           </ScrollView>
 
           <View style={styles.ctaDock}>
-            {formError ? <Text style={styles.formError}>{formError}</Text> : null}
+            {formError ? <Text style={styles.formError} testID="drop-error">{formError}</Text> : null}
             <TouchableOpacity
               style={[styles.primaryDropBtn, submitting && styles.primaryDropBtnBusy]}
               onPress={handleDropBeacon}
               activeOpacity={0.85}
               disabled={submitting}
+              testID="drop-submit"
               accessibilityRole="button"
               accessibilityState={{ disabled: submitting }}
             >
@@ -478,18 +506,21 @@ const styles = StyleSheet.create({
   },
   mapBand: {
     flex: 1,
-    minHeight: 160,
     backgroundColor: '#0a1120',
   },
   sheetContainer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
     backgroundColor: '#090f1d',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    borderColor: '#1e293b',
-    maxHeight: '68%',
-    width: '100%',
-    paddingHorizontal: 20,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    paddingHorizontal: 16,
+  },
+  sheetHidden: {
+    opacity: 0,
   },
   pullBar: {
     width: 44,
@@ -545,8 +576,11 @@ const styles = StyleSheet.create({
   },
   visibilityText: {
     color: '#64748b',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
+  },
+  visibilityTextActive: {
+    color: '#f8fafc',
   },
   groupedContainer: {
     backgroundColor: '#0f172a',
@@ -619,17 +653,25 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   scaleChipActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
-    borderColor: '#06b6d4',
+    backgroundColor: 'rgba(14, 165, 233, 0.32)',
+    borderColor: '#22d3ee',
+  },
+  scaleChipLabel: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    maxWidth: '100%',
   },
   scaleChipText: {
     color: '#94a3b8',
     fontSize: 10,
     fontWeight: '700',
     textAlign: 'center',
+    flexShrink: 1,
   },
   scaleChipTextActive: {
-    color: '#38bdf8',
+    color: '#f8fafc',
   },
   scaleChipSub: {
     color: '#475569',
@@ -638,11 +680,11 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   scaleChipSubActive: {
-    color: '#06b6d4',
+    color: '#e0f2fe',
     fontWeight: '700',
   },
   broadcastSubtext: {
-    color: '#0ea5e9',
+    color: '#38bdf8',
     fontSize: 11,
     fontStyle: 'italic',
   },
@@ -652,7 +694,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#0f172a',
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#0284c7',
+    borderColor: '#22d3ee',
     paddingHorizontal: 14,
     minHeight: 48,
     paddingVertical: 8,
@@ -675,11 +717,6 @@ const styles = StyleSheet.create({
     padding: 6,
     minWidth: 32,
     alignItems: 'center',
-  },
-  targetIcon: {
-    color: '#38bdf8',
-    fontSize: 20,
-    fontWeight: '700',
   },
   searchingText: {
     color: '#64748b',
@@ -717,24 +754,27 @@ const styles = StyleSheet.create({
   },
   pillToggle: {
     flex: 1,
-    paddingVertical: 8,
-    borderRadius: 10,
+    flexDirection: 'row',
+    paddingVertical: 10,
+    borderRadius: 12,
     backgroundColor: '#070b13',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   pillToggleActive: {
-    backgroundColor: 'rgba(6, 182, 212, 0.15)',
-    borderColor: '#06b6d4',
+    backgroundColor: 'rgba(34, 211, 238, 0.12)',
+    borderColor: '#22d3ee',
   },
   pillToggleText: {
     color: '#64748b',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: '700',
   },
   pillToggleTextActive: {
-    color: '#38bdf8',
+    color: '#f8fafc',
   },
   durationRow: {
     flexDirection: 'row',
@@ -749,7 +789,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   durationChipActive: {
-    backgroundColor: '#0284c7',
+    backgroundColor: '#22d3ee',
   },
   durationText: {
     color: '#64748b',
@@ -772,13 +812,13 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   primaryDropBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: '#22d3ee',
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    shadowColor: '#06b6d4',
+    shadowColor: '#22d3ee',
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
