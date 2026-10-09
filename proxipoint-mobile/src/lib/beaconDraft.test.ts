@@ -9,6 +9,9 @@ import {
   createBeaconDraft,
   formatBroadcastReach,
   durationToHours,
+  countBeaconWords,
+  clampBeaconDescription,
+  BEACON_DESCRIPTION_WORD_LIMIT,
   toBeaconCreatePayload,
   resolveBeaconCreateUrl,
 } from './beaconDraft';
@@ -58,6 +61,29 @@ test('createBeaconDraft keeps the selected tier radius', () => {
     '↳ Broadcasting to #TechMeetup trackers within a 1.5km radius.',
   );
   assert.match(formatBroadcastReach('', '300m'), /#Network/);
+});
+
+test('description keeps the first 200 words', () => {
+  const words = Array.from({ length: 205 }, (_, index) => `word${index + 1}`);
+  const clamped = clampBeaconDescription(words.join(' '));
+  assert.equal(countBeaconWords(clamped), BEACON_DESCRIPTION_WORD_LIMIT);
+  assert.equal(clamped.endsWith('word200'), true);
+  assert.equal(clampBeaconDescription('  a short note  ').trim(), 'a short note');
+
+  const draft = createBeaconDraft({
+    title: 'GIS Meetup',
+    description: words.join(' '),
+    tags: '#TechMeetup',
+    visibility: 'tag_network',
+    venue: 'Pearl St & Broadway',
+    latitude: 40.0179,
+    longitude: -105.2789,
+    isLiveNow: true,
+    duration: '2 hrs',
+    scheduledStart: '18:00',
+  });
+  assert.equal(countBeaconWords(draft.description ?? ''), 200);
+  assert.equal(toBeaconCreatePayload(draft).description?.split(' ').length, 200);
 });
 
 test('geocode autocomplete waits 300ms', () => {

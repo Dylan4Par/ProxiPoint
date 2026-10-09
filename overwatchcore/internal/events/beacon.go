@@ -14,6 +14,7 @@ const alertTTL = 6 * time.Hour
 type Beacon struct {
 	ID            string   `json:"id"`
 	Title         string   `json:"title"`
+	Description   string   `json:"description,omitempty"`
 	Venue         string   `json:"venue"`
 	Channels      []string `json:"channels"`
 	Latitude      float64  `json:"latitude"`
@@ -69,6 +70,7 @@ func invalid(msg string) error { return &validationError{msg: msg} }
 func (b *Beacon) normalize() error {
 	b.Title = strings.TrimSpace(b.Title)
 	b.Venue = strings.TrimSpace(b.Venue)
+	b.Description = clampWords(b.Description, 200)
 	if b.Title == "" || b.Venue == "" {
 		return invalid("title and venue are required")
 	}
@@ -94,6 +96,18 @@ func (f *TrackerFix) normalize() error {
 	}
 	f.TrackedTags = normalizeTags(f.TrackedTags)
 	return nil
+}
+
+func clampWords(value string, limit int) string {
+	clean := strings.TrimSpace(value)
+	if limit <= 0 || clean == "" {
+		return ""
+	}
+	fields := strings.Fields(clean)
+	if len(fields) <= limit {
+		return clean
+	}
+	return strings.Join(fields[:limit], " ")
 }
 
 func normalizeTags(tags []string) []string {

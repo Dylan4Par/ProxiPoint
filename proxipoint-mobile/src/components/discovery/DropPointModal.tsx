@@ -21,7 +21,15 @@ import {
   type InviteKind,
 } from '../../lib/beaconInvite';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
-import { createBeaconDraft, formatBroadcastReach, GEOCODE_DEBOUNCE_MS, toBeaconCreatePayload } from '../../lib/beaconDraft';
+import {
+  BEACON_DESCRIPTION_WORD_LIMIT,
+  clampBeaconDescription,
+  countBeaconWords,
+  createBeaconDraft,
+  formatBroadcastReach,
+  GEOCODE_DEBOUNCE_MS,
+  toBeaconCreatePayload,
+} from '../../lib/beaconDraft';
 import { BeaconApiError, postBeacon } from '../../services/beaconApi';
 import {
   BOUNDARY_RADII,
@@ -71,6 +79,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [duration, setDuration] = useState<BeaconDuration>('2 hrs');
   const [scheduledStart, setScheduledStart] = useState('18:00');
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
   const [locationSearch, setLocationSearch] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -113,6 +122,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setDuration('2 hrs');
     setScheduledStart('18:00');
     setTitle('');
+    setDescription('');
     setTags('');
     setLocationSearch('');
     setCoords(null);
@@ -225,6 +235,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
     const draft = createBeaconDraft({
       title: trimmedTitle,
+      description,
       tags,
       visibility,
       venue: locationSearch.trim() || 'Dropped beacon',
@@ -331,6 +342,31 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   onChangeText={setTags}
                   autoCapitalize="none"
                   testID="drop-tags"
+                />
+              </View>
+              <View style={styles.hairline} />
+              <View style={styles.descriptionBlock}>
+                <View style={styles.descriptionHeader}>
+                  <Text style={styles.descriptionLabel}>Description</Text>
+                  <Text
+                    style={[
+                      styles.wordCount,
+                      countBeaconWords(description) >= BEACON_DESCRIPTION_WORD_LIMIT && styles.wordCountFull,
+                    ]}
+                    testID="drop-description-count"
+                  >
+                    {countBeaconWords(description)} / {BEACON_DESCRIPTION_WORD_LIMIT}
+                  </Text>
+                </View>
+                <TextInput
+                  placeholder="What should people nearby know?"
+                  placeholderTextColor="#64748b"
+                  style={styles.descriptionInput}
+                  value={description}
+                  onChangeText={(value) => setDescription(clampBeaconDescription(value))}
+                  multiline
+                  textAlignVertical="top"
+                  testID="drop-description"
                 />
               </View>
             </View>
@@ -782,6 +818,36 @@ const styles = StyleSheet.create({
     width: 60,
     fontSize: 12,
     fontWeight: '600',
+  },
+  descriptionLabel: {
+    color: '#94a3b8',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  descriptionBlock: {
+    paddingTop: 2,
+    gap: 6,
+  },
+  descriptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  descriptionInput: {
+    color: '#f8fafc',
+    fontSize: 13,
+    minHeight: 40,
+    maxHeight: 88,
+    padding: 0,
+  },
+  wordCount: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  wordCountFull: {
+    color: '#f59e0b',
   },
   textInput: {
     flex: 1,

@@ -42,6 +42,7 @@ export interface PreviewGeofence {
 
 export interface DropBeaconInput {
   title: string;
+  description?: string;
   tags: string;
   visibility: BeaconVisibility;
   venue: string;
@@ -61,6 +62,7 @@ export interface BeaconDraft extends DropBeaconInput {
 
 export interface BeaconCreatePayload {
   title: string;
+  description?: string;
   venue: string;
   channels: string[];
   latitude: number;

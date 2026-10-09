@@ -11,6 +11,29 @@ const DEFAULT_BEACON_URL = 'http://127.0.0.1:8090/api/v1/beacons';
 
 export const GEOCODE_DEBOUNCE_MS = 300;
 
+export const BEACON_DESCRIPTION_WORD_LIMIT = 200;
+
+export function countBeaconWords(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+/** Keep the first 200 words, including the spacing the operator already typed. */
+export function clampBeaconDescription(value: string, limit = BEACON_DESCRIPTION_WORD_LIMIT): string {
+  if (countBeaconWords(value) <= limit) return value;
+  const pattern = /\S+/g;
+  let count = 0;
+  let end = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value)) !== null) {
+    count += 1;
+    end = match.index + match[0].length;
+    if (count >= limit) break;
+  }
+  return value.slice(0, end);
+}
+
 export function parseBeaconTags(raw: string): string[] {
   const seen = new Set<string>();
   const tags: string[] = [];
@@ -50,6 +73,7 @@ export function createBeaconDraft(input: DropBeaconInput): BeaconDraft {
   return {
     ...input,
     title: input.title.trim(),
+    description: clampBeaconDescription(input.description ?? '').trim(),
     tierLevel,
     radiusMeters: input.radiusMeters ?? BOUNDARY_RADII[tierLevel],
   };
@@ -74,6 +98,7 @@ export function durationToHours(duration: BeaconDuration): number {
 }
 
 export function toBeaconCreatePayload(draft: BeaconDraft): BeaconCreatePayload {
+  const description = clampBeaconDescription(draft.description ?? '').trim();
   return {
     title: draft.title,
     venue: draft.venue,
@@ -83,6 +108,7 @@ export function toBeaconCreatePayload(draft: BeaconDraft): BeaconCreatePayload {
     radius_meters: draft.radiusMeters,
     visibility: draft.visibility,
     duration_hours: durationToHours(draft.duration),
+    ...(description ? { description } : {}),
   };
 }
 

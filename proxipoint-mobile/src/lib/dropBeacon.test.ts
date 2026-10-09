@@ -6,6 +6,7 @@ import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 test('dropping a beacon stores visibility, duration, and survives a feed sync', () => {
   const id = useDiscoveryStore.getState().dropBeacon({
     title: 'GIS Meetup',
+    description: 'Bring a laptop.',
     tags: 'TechMeetup, PostGIS',
     visibility: 'tag_network',
     venue: 'Downtown Tech Lab',
@@ -19,6 +20,7 @@ test('dropping a beacon stores visibility, duration, and survives a feed sync', 
   const dropped = useDiscoveryStore.getState().nodes[id];
   assert.ok(dropped);
   assert.equal(dropped?.visibility, 'tag_network');
+  assert.equal(dropped?.description, 'Bring a laptop.');
   assert.equal(dropped?.duration, '4 hrs');
   assert.equal(dropped?.origin, 'local');
   assert.equal(dropped?.status, 'Starts 18:00');

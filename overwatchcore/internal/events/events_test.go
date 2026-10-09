@@ -219,6 +219,30 @@ func TestCandidateQueryMatchesPrompt(t *testing.T) {
 	}
 }
 
+func TestDescriptionClampsAtTwoHundredWords(t *testing.T) {
+	words := make([]string, 205)
+	for i := range words {
+		words[i] = "word"
+	}
+	beacon := Beacon{
+		Title:         "Meetup",
+		Description:   strings.Join(words, " "),
+		Venue:         "Pearl St",
+		Channels:      []string{"#TechMeetup"},
+		Latitude:      40.0179,
+		Longitude:     -105.2789,
+		RadiusMeters:  300,
+		Visibility:    "tag_network",
+		DurationHours: 2,
+	}
+	if err := beacon.normalize(); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(strings.Fields(beacon.Description)); got != 200 {
+		t.Fatalf("words = %d", got)
+	}
+}
+
 func TestCreateBeaconHTTP(t *testing.T) {
 	svc := NewService(NewMemoryStore(), NewMemoryDeduper(), NewHub())
 	handler := HandleCreateBeacon(svc)

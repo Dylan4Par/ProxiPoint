@@ -28,6 +28,7 @@ export interface DiscoveryNode {
   id: string;
   tag: string;
   title: string;
+  description?: string;
   venue: string;
   latitude: number;
   longitude: number;
@@ -223,6 +224,7 @@ function placeLocalBeacon(
       id,
       tag: primaryBeaconTag(draft.tags),
       title: draft.title,
+      description: draft.description,
       venue: draft.venue,
       latitude: draft.latitude,
       longitude: draft.longitude,
@@ -326,6 +328,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     const adopted = createBeaconDraft({
       ...draft,
       title: saved.title || draft.title,
+      description: saved.description || draft.description,
       venue: saved.venue || draft.venue,
       visibility: saved.visibility || draft.visibility,
       latitude: saved.latitude,
