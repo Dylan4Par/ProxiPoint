@@ -1,7 +1,12 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 
-export const BottomNavBar: React.FC = () => {
+interface BottomNavBarProps {
+  onDropPoint?: () => void;
+  dropActive?: boolean;
+}
+
+export const BottomNavBar: React.FC<BottomNavBarProps> = ({ onDropPoint, dropActive = false }) => {
   return (
     <View style={styles.navWrapper}>
       {/* 1. Discover Button with Scaled Compass */}
@@ -19,7 +24,7 @@ export const BottomNavBar: React.FC = () => {
       </TouchableOpacity>
 
       {/* 2. Drop Point Button with Matched 34px Badge */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+      <TouchableOpacity style={styles.navItem} activeOpacity={0.7} onPress={onDropPoint}>
         <View style={styles.iconContainer}>
           <View style={styles.dropPointBadge}>
             <View style={styles.pinHead}>
@@ -28,7 +33,7 @@ export const BottomNavBar: React.FC = () => {
             <View style={styles.pinTip} />
           </View>
         </View>
-        <Text style={styles.navLabel}>Drop Point</Text>
+        <Text style={[styles.navLabel, dropActive && styles.navLabelActive]}>Drop Point</Text>
       </TouchableOpacity>
 
       {/* 3. Activity Button with Scaled Bell Icon */}
@@ -50,6 +55,7 @@ export const BottomNavBar: React.FC = () => {
 const styles = StyleSheet.create({
   navWrapper: {
     height: 72,
+    zIndex: 40,
     backgroundColor: '#0a0f1d',
     flexDirection: 'row',
     justifyContent: 'space-around',

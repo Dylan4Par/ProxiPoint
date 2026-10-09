@@ -1,4 +1,7 @@
 import { create } from 'zustand';
+import { describeBeaconTiming, parseBeaconTags, primaryBeaconTag } from '../lib/beaconDraft';
+import { calculateDistanceMeters } from '../lib/locationFilter';
+import type { BeaconDuration, BeaconVisibility, DropBeaconInput } from '../types/beacon';
 
 export interface InboundProximityNode {
   id: string;
@@ -29,6 +32,9 @@ export interface DiscoveryNode {
   isRsvpd: boolean;
   radii: number[];
   batteryPct?: number;
+  visibility?: BeaconVisibility;
+  duration?: BeaconDuration;
+  origin?: 'local';
   x: number;
   y: number;
 }
@@ -69,6 +75,7 @@ export interface DiscoveryState {
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
   toggleRsvp: (id: string) => void;
+  dropBeacon: (input: DropBeaconInput) => string;
   updateConfig: (config: Partial<Pick<DiscoveryState, 'tenantId' | 'deviceId' | 'wsEndpoint' | 'searchRadiusMeters'>>) => void;
   syncProximityNodes: (incomingNodes: InboundProximityNode[], timestamp: string) => void;
   getVisibleNodes: () => DiscoveryNode[];
@@ -239,6 +246,50 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       };
     }),
 
+  dropBeacon: (input) => {
+    parseBeaconTags(input.tags).forEach((tag) => get().addTag(tag));
+    const id = `beacon-${Date.now().toString(36)}`;
+    const timing = describeBeaconTiming(input);
+
+    set((state) => {
+      const { latitude: selfLat, longitude: selfLon } = state.selfCoordinates;
+      const { x, y } = toCanvasCoordinates(input.latitude, input.longitude, selfLat, selfLon);
+      const distanceMeters = Math.round(
+        calculateDistanceMeters(selfLat, selfLon, input.latitude, input.longitude),
+      );
+      const etaMinutes = Math.max(2, Math.round(distanceMeters / 80));
+      const node: DiscoveryNode = {
+        id,
+        tag: primaryBeaconTag(input.tags),
+        title: input.title.trim(),
+        venue: input.venue,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        distanceMeters,
+        status: timing.status,
+        statusColor: timing.statusColor,
+        eta: distanceMeters > 1000 ? `${Math.round(etaMinutes / 4)} min drive` : `${etaMinutes} min walk`,
+        etaMode: distanceMeters > 1000 ? 'drive' : 'walk',
+        attendeeCount: 1,
+        isRsvpd: true,
+        radii: [250, 500],
+        visibility: input.visibility,
+        duration: input.duration,
+        origin: 'local',
+        x,
+        y,
+      };
+
+      return {
+        nodes: { ...state.nodes, [id]: node },
+        selectedNodeId: id,
+        selectedEventId: id,
+      };
+    });
+
+    return id;
+  },
+
   updateConfig: (config) => set((state) => ({ ...state, ...config })),
 
   syncProximityNodes: (incomingNodes, timestamp) =>
@@ -272,6 +323,12 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         };
       });
 
+      Object.values(state.nodes).forEach((node) => {
+        if (node.origin === 'local' && !nextNodes[node.id]) {
+          nextNodes[node.id] = node;
+        }
+      });
+
       const nodeKeys = Object.keys(nextNodes);
       let selectedId = state.selectedNodeId;
       if (!selectedId || !nextNodes[selectedId]) {
@@ -294,7 +351,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         node.x <= viewportBounds.maxX &&
         node.y >= viewportBounds.minY &&
         node.y <= viewportBounds.maxY;
-      if (!inBounds) return false;
+      const inView = node.origin === 'local' || inBounds;
+      if (!inView) return false;
 
       if (activeTab === 'RSVPd' && !node.isRsvpd) return false;
       if (selectedTag !== 'All' && node.tag !== selectedTag) return false;
