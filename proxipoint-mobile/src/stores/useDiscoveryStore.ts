@@ -28,6 +28,7 @@ export interface DiscoveryNode {
   attendeeCount: number;
   isRsvpd: boolean;
   radii: number[];
+  startsAt: string | null;
   batteryPct?: number;
   x: number;
   y: number;
@@ -55,6 +56,7 @@ export interface DiscoveryState {
   selectedNodeId: string | null;
   selectedEventId: string;
   activeTab: 'Nearby' | 'RSVPd';
+  shellTab: 'discover' | 'activity';
   selectedTag: string;
   tags: string[];
 
@@ -65,6 +67,7 @@ export interface DiscoveryState {
   setSelectedNodeId: (id: string | null) => void;
   setSelectedEventId: (id: string) => void;
   setActiveTab: (tab: 'Nearby' | 'RSVPd') => void;
+  setShellTab: (tab: 'discover' | 'activity') => void;
   setSelectedTag: (tag: string) => void;
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
@@ -94,7 +97,24 @@ const toCanvasCoordinates = (
   };
 };
 
-const TAG_POOL = ['#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'];
+const TAG_POOL = ['#LiveMusic', '#TechMeetup', '#FoodAndDrink', '#FarmersMarket', '#Fitness', '#Outdoor', '#PostGIS', '#Music'];
+
+const atLocal = (dayOffset: number, hours: number, minutes: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + dayOffset);
+  date.setHours(hours, minutes, 0, 0);
+  return date.toISOString();
+};
+
+const futureSlot = (dayOffset: number, hours: number, minutes: number): string => {
+  const date = new Date();
+  date.setDate(date.getDate() + dayOffset);
+  date.setHours(hours, minutes, 0, 0);
+  if (date.getTime() <= Date.now()) {
+    date.setDate(date.getDate() + 1);
+  }
+  return date.toISOString();
+};
 const VENUE_POOL = [
   'Central Park Plaza',
   'The Rusty Anchor',
@@ -112,13 +132,17 @@ const enrichNodeMetadata = (rawId: string, distanceMeters: number) => {
 
   const isLive = distanceMeters <= 500;
   const etaMinutes = Math.max(2, Math.round(distanceMeters / 80));
+  const dayOffset = hash % 3;
+  const hour = 8 + (hash % 10);
+  const minute = (hash % 2) * 30;
 
   return {
     tag,
     title: `${tag.replace('#', '')} Node • ${shortId}`,
     venue,
-    status: isLive ? 'LIVE NOW' : `Starts in ${Math.round(distanceMeters / 50)}m`,
+    status: isLive ? 'LIVE NOW' : 'Scheduled',
     statusColor: isLive ? '#10b981' : '#38bdf8',
+    startsAt: isLive ? new Date(Date.now() - 15 * 60 * 1000).toISOString() : futureSlot(dayOffset, hour, minute),
     eta: distanceMeters > 1000 ? `${Math.round(etaMinutes / 4)} min drive` : `${etaMinutes} min walk`,
     etaMode: (distanceMeters > 1000 ? 'drive' : 'walk') as 'walk' | 'drive',
     attendeeCount: (hash % 40) + 5,
@@ -130,13 +154,14 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   'event-1': {
     id: 'event-1',
     tag: '#LiveMusic',
-    title: 'The Midnight Owls • Live at The Rusty Anchor',
-    venue: 'Title, Host',
+    title: 'Pearl Street Live Music Night',
+    venue: 'Pearl Street Mall',
     latitude: 40.0632,
     longitude: -105.0365,
-    distanceMeters: 210,
+    distanceMeters: 180,
     status: 'LIVE NOW',
     statusColor: '#10b981',
+    startsAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
     eta: '5 min walk',
     etaMode: 'walk',
     attendeeCount: 45,
@@ -147,17 +172,18 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   },
   'event-2': {
     id: 'event-2',
-    tag: '#FoodTrucks',
-    title: 'Taco Tuesday Truck Rally • Central Park Plaza',
-    venue: 'Central Park Plaza',
+    tag: '#FoodAndDrink',
+    title: 'Rayback Collective Pop-up',
+    venue: 'Rayback Collective',
     latitude: 40.0645,
     longitude: -105.041,
-    distanceMeters: 430,
-    status: 'Starts in 15m',
-    statusColor: '#38bdf8',
-    eta: '12+ here',
+    distanceMeters: 420,
+    status: 'LIVE NOW',
+    statusColor: '#10b981',
+    startsAt: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
+    eta: '11 min walk',
     etaMode: 'walk',
-    attendeeCount: 12,
+    attendeeCount: 28,
     isRsvpd: true,
     radii: [250, 500],
     x: 420,
@@ -166,20 +192,59 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   'event-3': {
     id: 'event-3',
     tag: '#TechMeetup',
-    title: 'Go & Kotlin Devs • Monthly Social • Code & Coffee',
+    title: 'Boulder Tech & GIS Meetup',
     venue: 'Downtown Tech Lab',
     latitude: 40.071,
     longitude: -105.032,
     distanceMeters: 1200,
-    status: 'Tomorrow 18:00',
-    statusColor: '#94a3b8',
+    status: 'Scheduled',
+    statusColor: '#38bdf8',
+    startsAt: futureSlot(0, 18, 0),
     eta: '12 min drive',
     etaMode: 'drive',
     attendeeCount: 38,
     isRsvpd: false,
     radii: [500, 1000],
     x: 300,
-    y: 480,
+    y: 400,
+  },
+  'event-4': {
+    id: 'event-4',
+    tag: '#FarmersMarket',
+    title: 'Farmers Market Tasting',
+    venue: 'Boulder County Farmers Market',
+    latitude: 40.016,
+    longitude: -105.281,
+    distanceMeters: 860,
+    status: 'Scheduled',
+    statusColor: '#f59e0b',
+    startsAt: atLocal(1, 9, 0),
+    eta: '9 min drive',
+    etaMode: 'drive',
+    attendeeCount: 64,
+    isRsvpd: false,
+    radii: [250, 500],
+    x: 250,
+    y: 330,
+  },
+  'event-5': {
+    id: 'event-5',
+    tag: '#Fitness',
+    title: 'Creek Path Group Run',
+    venue: 'Boulder Creek Path',
+    latitude: 40.014,
+    longitude: -105.292,
+    distanceMeters: 1500,
+    status: 'Scheduled',
+    statusColor: '#34d399',
+    startsAt: atLocal(2, 7, 30),
+    eta: '16 min drive',
+    etaMode: 'drive',
+    attendeeCount: 18,
+    isRsvpd: false,
+    radii: [500, 1000],
+    x: 140,
+    y: 470,
   },
 };
 
@@ -199,8 +264,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   selectedNodeId: 'event-1',
   selectedEventId: 'event-1',
   activeTab: 'Nearby',
+  shellTab: 'discover',
   selectedTag: 'All',
-  tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
+  tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodAndDrink', '#FarmersMarket', '#Fitness', '#Outdoor', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
@@ -208,6 +274,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEventId: id || 'event-1' }),
   setSelectedEventId: (id) => set({ selectedNodeId: id, selectedEventId: id }),
   setActiveTab: (tab) => set({ activeTab: tab }),
+  setShellTab: (tab) => set({ shellTab: tab }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
 
   addTag: (tag) => {
@@ -265,6 +332,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           attendeeCount: node.attendees_count ?? existing?.attendeeCount ?? meta.attendeeCount,
           eta: meta.eta,
           etaMode: meta.etaMode,
+          startsAt: meta.startsAt,
           radii: [250, 500],
           isRsvpd: existing ? existing.isRsvpd : false,
           x,

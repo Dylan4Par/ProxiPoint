@@ -8,6 +8,7 @@ export interface EventNode {
   distanceMeters: number;
   status: 'LIVE NOW' | string;
   statusColor?: string;
+  startsAt?: string | null;
   eta: string;
   etaMode: 'walk' | 'drive';
   attendeeCount: number;

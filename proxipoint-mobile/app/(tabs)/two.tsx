@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { formatRelativeTime, partitionContactsByRadius } from '../../src/lib/alertFeed';
 import { useRadarSession } from '../../src/hooks/RadarSession';
 import type { ActiveContact } from '../../src/types/telemetry';
+import { RadarEmptyState, RADAR_EMPTY_MESSAGE } from '../../src/components/discovery/RadarEmptyState';
 
 export default function AlertFeedScreen() {
   const router = useRouter();
@@ -27,6 +28,8 @@ export default function AlertFeedScreen() {
     });
   };
 
+  const sectorClear = inRange.length === 0 && outOfRange.length === 0;
+
   return (
     <View style={styles.container}>
       <Text style={styles.header}>Radar Contacts ({radiusMeters}m Range)</Text>
@@ -37,34 +40,40 @@ export default function AlertFeedScreen() {
         <Text style={styles.paused}>Telemetry broadcasting is off. New contacts pause until you enable it in Settings.</Text>
       ) : null}
 
-      <ScrollView style={styles.listView} contentContainerStyle={styles.list}>
-        <Text style={styles.sectionTitle}>Active Contacts in Range</Text>
-        {inRange.length === 0 ? (
-          <Text style={styles.emptyText}>No contacts within {radiusMeters}m.</Text>
+      <ScrollView style={styles.listView} contentContainerStyle={[styles.list, sectorClear && styles.listEmpty]}>
+        {sectorClear ? (
+          <RadarEmptyState kicker="ACTIVITY" message={RADAR_EMPTY_MESSAGE} />
         ) : (
-          inRange.map((item) => (
-            <ContactCard key={item.id} item={item} now={now} muted={false} onPress={() => handleSelectAlert(item)} />
-          ))
-        )}
+          <>
+            <Text style={styles.sectionTitle}>Active Contacts in Range</Text>
+            {inRange.length === 0 ? (
+              <RadarEmptyState compact kicker="ACTIVITY" message={RADAR_EMPTY_MESSAGE} />
+            ) : (
+              inRange.map((item) => (
+                <ContactCard key={item.id} item={item} now={now} muted={false} onPress={() => handleSelectAlert(item)} />
+              ))
+            )}
 
-        {outOfRange.length > 0 ? (
-          <View style={styles.outOfRangeContainer}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityState={{ expanded: outOfRangeOpen }}
-              onPress={() => setOutOfRangeOpen((open) => !open)}
-            >
-              <Text style={styles.subHeader}>
-                {outOfRangeOpen ? '▾' : '▸'} Out of Range ({outOfRange.length})
-              </Text>
-            </Pressable>
-            {outOfRangeOpen
-              ? outOfRange.map((item) => (
-                  <ContactCard key={item.id} item={item} now={now} muted onPress={() => handleSelectAlert(item)} />
-                ))
-              : null}
-          </View>
-        ) : null}
+            {outOfRange.length > 0 ? (
+              <View style={styles.outOfRangeContainer}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: outOfRangeOpen }}
+                  onPress={() => setOutOfRangeOpen((open) => !open)}
+                >
+                  <Text style={styles.subHeader}>
+                    {outOfRangeOpen ? '▾' : '▸'} Out of Range ({outOfRange.length})
+                  </Text>
+                </Pressable>
+                {outOfRangeOpen
+                  ? outOfRange.map((item) => (
+                      <ContactCard key={item.id} item={item} now={now} muted onPress={() => handleSelectAlert(item)} />
+                    ))
+                  : null}
+              </View>
+            ) : null}
+          </>
+        )}
       </ScrollView>
     </View>
   );
@@ -127,15 +136,15 @@ const styles = StyleSheet.create({
   paused: { color: '#facc15', fontSize: 13, marginTop: -8, marginBottom: 16 },
   sectionTitle: { color: '#f8fafc', fontSize: 15, fontWeight: '700', marginBottom: 10 },
   subHeader: { fontSize: 14, fontWeight: '600', color: '#64748b', marginBottom: 8 },
-  emptyText: { color: '#64748b', fontSize: 14, fontStyle: 'italic', marginBottom: 8 },
   listView: { flex: 1 },
   list: { gap: 12, paddingBottom: 24 },
+  listEmpty: { flexGrow: 1, justifyContent: 'center' },
   card: {
-    backgroundColor: '#1e293b',
-    borderRadius: 8,
-    padding: 16,
+    backgroundColor: '#0f172a',
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#1e293b',
   },
   cardMuted: { opacity: 0.55, backgroundColor: '#0f172a' },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 8 },
