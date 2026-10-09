@@ -20,7 +20,12 @@ export const DiscoverScreen: React.FC = () => {
       <DiscoveryMapCanvas />
       <EventCardList />
       <DropPointModal visible={dropOpen} onClose={() => setDropOpen(false)} />
-      <BottomNavBar onDropPoint={() => setDropOpen((open) => !open)} dropActive={dropOpen} />
+      <BottomNavBar
+        onDiscover={() => setDropOpen(false)}
+        onDropPoint={() => setDropOpen((open) => !open)}
+        onActivity={() => setDropOpen(false)}
+        dropActive={dropOpen}
+      />
     </SafeAreaView>
   );
 };

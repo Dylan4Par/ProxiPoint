@@ -10,7 +10,16 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { Building2, Calendar, Crosshair, Landmark, MapPin, Rocket } from 'lucide-react-native';
+import { Building2, Calendar, Crosshair, Landmark, MapPin, Rocket, UserPlus } from 'lucide-react-native';
+import {
+  LINKED_FACEBOOK_ACCOUNTS,
+  addPhoneInvite,
+  addProxiPointInvite,
+  removeInvite,
+  toggleFacebookInvite,
+  type BeaconInvite,
+  type InviteKind,
+} from '../../lib/beaconInvite';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { createBeaconDraft, formatBroadcastReach, GEOCODE_DEBOUNCE_MS, toBeaconCreatePayload } from '../../lib/beaconDraft';
 import { BeaconApiError, postBeacon } from '../../services/beaconApi';
@@ -75,6 +84,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [revealing, setRevealing] = useState(false);
+  const [invites, setInvites] = useState<BeaconInvite[]>([]);
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteKind, setInviteKind] = useState<InviteKind>('facebook');
+  const [handleInput, setHandleInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [inviteError, setInviteError] = useState('');
   const skipSearch = useRef(false);
   const selectedLabel = useRef<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -111,6 +126,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setFormError(null);
     setSubmitting(false);
     setRevealing(false);
+    setInvites([]);
+    setInviteOpen(false);
+    setInviteKind('facebook');
+    setHandleInput('');
+    setPhoneInput('');
+    setInviteError('');
     skipSearch.current = false;
     selectedLabel.current = null;
     setPreviewGeofence(null);
@@ -472,6 +493,165 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 })}
               </View>
             </View>
+            <View style={styles.inviteBlock}>
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityState={{ expanded: inviteOpen }}
+                testID="invite-button"
+                style={styles.inviteBtn}
+                onPress={() => {
+                  setInviteOpen((openPanel) => !openPanel);
+                  setInviteError('');
+                }}
+              >
+                <UserPlus size={16} color="#22d3ee" strokeWidth={2.25} />
+                <Text style={styles.inviteBtnText}>
+                  {invites.length > 0 ? `Invite · ${invites.length}` : 'Invite'}
+                </Text>
+              </TouchableOpacity>
+
+              {invites.length > 0 ? (
+                <View style={styles.inviteChips}>
+                  {invites.map((invite) => (
+                    <View key={`${invite.kind}-${invite.id}`} style={styles.inviteChip}>
+                      <Text style={styles.inviteChipText}>{invite.label}</Text>
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${invite.label}`}
+                        onPress={() => setInvites((current) => removeInvite(current, invite.id))}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Text style={styles.inviteChipRemove}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {inviteOpen ? (
+                <View style={styles.invitePanel} testID="invite-panel">
+                  <Text style={styles.inviteHeading}>INVITE BY</Text>
+                  <View style={styles.inviteKinds}>
+                    {(
+                      [
+                        ['facebook', 'Facebook'],
+                        ['proxipoint', 'ProxiPoint'],
+                        ['phone', 'Phone'],
+                      ] as const
+                    ).map(([kind, label]) => {
+                      const selected = inviteKind === kind;
+                      return (
+                        <TouchableOpacity
+                          key={kind}
+                          testID={`invite-kind-${kind}`}
+                          accessibilityRole="button"
+                          accessibilityState={{ selected }}
+                          style={[styles.inviteKind, selected && styles.inviteKindSelected]}
+                          onPress={() => {
+                            setInviteKind(kind);
+                            setInviteError('');
+                          }}
+                        >
+                          <Text style={[styles.inviteKindText, selected && styles.inviteKindTextSelected]}>{label}</Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+
+                  {inviteKind === 'facebook' ? (
+                    <View style={styles.inviteList}>
+                      {LINKED_FACEBOOK_ACCOUNTS.map((account) => {
+                        const selected = invites.some((invite) => invite.kind === 'facebook' && invite.id === account.id);
+                        return (
+                          <TouchableOpacity
+                            key={account.id}
+                            testID={`invite-facebook-${account.id}`}
+                            accessibilityRole="button"
+                            accessibilityState={{ selected }}
+                            style={[styles.inviteRow, selected && styles.inviteRowSelected]}
+                            onPress={() => {
+                              const next = toggleFacebookInvite(invites, account.id);
+                              setInvites(next.invites);
+                              setInviteError(next.error);
+                            }}
+                          >
+                            <Text style={styles.inviteRowText}>{account.label}</Text>
+                            <Text style={styles.inviteRowMeta}>{selected ? 'Invited' : 'Linked'}</Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : null}
+
+                  {inviteKind === 'proxipoint' ? (
+                    <View style={styles.inviteEntry}>
+                      <TextInput
+                        testID="invite-handle-input"
+                        value={handleInput}
+                        onChangeText={setHandleInput}
+                        onSubmitEditing={() => {
+                          const next = addProxiPointInvite(invites, handleInput);
+                          setInvites(next.invites);
+                          setInviteError(next.error);
+                          if (!next.error) setHandleInput('');
+                        }}
+                        placeholder="@ranger-7"
+                        placeholderTextColor="#64748b"
+                        autoCapitalize="none"
+                        autoCorrect={false}
+                        style={styles.inviteInput}
+                      />
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        style={styles.inviteAddBtn}
+                        onPress={() => {
+                          const next = addProxiPointInvite(invites, handleInput);
+                          setInvites(next.invites);
+                          setInviteError(next.error);
+                          if (!next.error) setHandleInput('');
+                        }}
+                      >
+                        <Text style={styles.inviteAddText}>Add</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+
+                  {inviteKind === 'phone' ? (
+                    <View style={styles.inviteEntry}>
+                      <TextInput
+                        testID="invite-phone-input"
+                        value={phoneInput}
+                        onChangeText={setPhoneInput}
+                        onSubmitEditing={() => {
+                          const next = addPhoneInvite(invites, phoneInput);
+                          setInvites(next.invites);
+                          setInviteError(next.error);
+                          if (!next.error) setPhoneInput('');
+                        }}
+                        placeholder="(303) 555-0148"
+                        placeholderTextColor="#64748b"
+                        keyboardType="phone-pad"
+                        style={styles.inviteInput}
+                      />
+                      <TouchableOpacity
+                        accessibilityRole="button"
+                        style={styles.inviteAddBtn}
+                        onPress={() => {
+                          const next = addPhoneInvite(invites, phoneInput);
+                          setInvites(next.invites);
+                          setInviteError(next.error);
+                          if (!next.error) setPhoneInput('');
+                        }}
+                      >
+                        <Text style={styles.inviteAddText}>Add</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : null}
+
+                  {inviteError ? <Text style={styles.inviteError} testID="invite-error">{inviteError}</Text> : null}
+                </View>
+              ) : null}
+            </View>
           </ScrollView>
 
           <View style={styles.ctaDock}>
@@ -558,6 +738,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     gap: 16,
     paddingBottom: 8,
+    flexGrow: 1,
   },
   visibilityContainer: {
     flexDirection: 'row',
@@ -816,6 +997,156 @@ const styles = StyleSheet.create({
     paddingTop: 8,
     paddingBottom: 12,
     backgroundColor: '#090f1d',
+    gap: 8,
+  },
+  inviteBlock: {
+    marginTop: 'auto',
+    gap: 8,
+  },
+  inviteBtn: {
+    minHeight: 46,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: '#22d3ee',
+    backgroundColor: '#0f172a',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  inviteBtnText: {
+    color: '#e2e8f0',
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0.4,
+  },
+  inviteChips: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  inviteChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+  },
+  inviteChipText: {
+    color: '#f8fafc',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  inviteChipRemove: {
+    color: '#f87171',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  invitePanel: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    backgroundColor: '#070b13',
+    padding: 12,
+    gap: 8,
+  },
+  inviteHeading: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  inviteKinds: {
+    flexDirection: 'row',
+    gap: 6,
+  },
+  inviteKind: {
+    flex: 1,
+    minHeight: 34,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 4,
+  },
+  inviteKindSelected: {
+    backgroundColor: '#22d3ee',
+    borderColor: '#67e8f9',
+  },
+  inviteKindText: {
+    color: '#94a3b8',
+    fontSize: 11,
+    fontWeight: '800',
+  },
+  inviteKindTextSelected: {
+    color: '#082f49',
+  },
+  inviteList: {
+    gap: 6,
+  },
+  inviteRow: {
+    minHeight: 38,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    backgroundColor: '#0f172a',
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  inviteRowSelected: {
+    borderColor: '#22d3ee',
+  },
+  inviteRowText: {
+    color: '#f8fafc',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  inviteRowMeta: {
+    color: '#64748b',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  inviteEntry: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inviteInput: {
+    flex: 1,
+    backgroundColor: '#0f172a',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    color: '#f8fafc',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    fontSize: 14,
+  },
+  inviteAddBtn: {
+    minHeight: 38,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    backgroundColor: '#22d3ee',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  inviteAddText: {
+    color: '#082f49',
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  inviteError: {
+    color: '#f59e0b',
+    fontSize: 11,
+    fontWeight: '600',
   },
   formError: {
     color: '#f59e0b',
