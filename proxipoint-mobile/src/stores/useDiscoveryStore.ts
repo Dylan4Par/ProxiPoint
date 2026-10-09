@@ -1,7 +1,7 @@
 import { create } from 'zustand';
-import { describeBeaconTiming, parseBeaconTags, primaryBeaconTag } from '../lib/beaconDraft';
+import { describeBeaconTiming, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
 import { calculateDistanceMeters } from '../lib/locationFilter';
-import type { BeaconDuration, BeaconVisibility, DropBeaconInput } from '../types/beacon';
+import type { BeaconDuration, BeaconVisibility, BoundaryTierLevel, DropBeaconInput, PreviewGeofence } from '../types/beacon';
 
 export interface InboundProximityNode {
   id: string;
@@ -34,6 +34,8 @@ export interface DiscoveryNode {
   batteryPct?: number;
   visibility?: BeaconVisibility;
   duration?: BeaconDuration;
+  radiusMeters?: number;
+  tierLevel?: BoundaryTierLevel;
   origin?: 'local';
   x: number;
   y: number;
@@ -63,6 +65,7 @@ export interface DiscoveryState {
   activeTab: 'Nearby' | 'RSVPd';
   selectedTag: string;
   tags: string[];
+  previewGeofence: PreviewGeofence | null;
 
   // Setters & Actions
   setSocketConnected: (connected: boolean) => void;
@@ -72,6 +75,7 @@ export interface DiscoveryState {
   setSelectedEventId: (id: string) => void;
   setActiveTab: (tab: 'Nearby' | 'RSVPd') => void;
   setSelectedTag: (tag: string) => void;
+  setPreviewGeofence: (preview: PreviewGeofence | null) => void;
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
   toggleRsvp: (id: string) => void;
@@ -208,6 +212,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   activeTab: 'Nearby',
   selectedTag: 'All',
   tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
+  previewGeofence: null,
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
@@ -216,6 +221,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   setSelectedEventId: (id) => set({ selectedNodeId: id, selectedEventId: id }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
+  setPreviewGeofence: (preview) => set({ previewGeofence: preview }),
 
   addTag: (tag) => {
     const cleanTag = tag.trim().startsWith('#') ? tag.trim() : `#${tag.trim()}`;
@@ -247,24 +253,25 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     }),
 
   dropBeacon: (input) => {
-    parseBeaconTags(input.tags).forEach((tag) => get().addTag(tag));
+    const draft = createBeaconDraft(input);
+    parseBeaconTags(draft.tags).forEach((tag) => get().addTag(tag));
     const id = `beacon-${Date.now().toString(36)}`;
-    const timing = describeBeaconTiming(input);
+    const timing = describeBeaconTiming(draft);
 
     set((state) => {
       const { latitude: selfLat, longitude: selfLon } = state.selfCoordinates;
-      const { x, y } = toCanvasCoordinates(input.latitude, input.longitude, selfLat, selfLon);
+      const { x, y } = toCanvasCoordinates(draft.latitude, draft.longitude, selfLat, selfLon);
       const distanceMeters = Math.round(
-        calculateDistanceMeters(selfLat, selfLon, input.latitude, input.longitude),
+        calculateDistanceMeters(selfLat, selfLon, draft.latitude, draft.longitude),
       );
       const etaMinutes = Math.max(2, Math.round(distanceMeters / 80));
       const node: DiscoveryNode = {
         id,
-        tag: primaryBeaconTag(input.tags),
-        title: input.title.trim(),
-        venue: input.venue,
-        latitude: input.latitude,
-        longitude: input.longitude,
+        tag: primaryBeaconTag(draft.tags),
+        title: draft.title,
+        venue: draft.venue,
+        latitude: draft.latitude,
+        longitude: draft.longitude,
         distanceMeters,
         status: timing.status,
         statusColor: timing.statusColor,
@@ -272,9 +279,11 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         etaMode: distanceMeters > 1000 ? 'drive' : 'walk',
         attendeeCount: 1,
         isRsvpd: true,
-        radii: [250, 500],
-        visibility: input.visibility,
-        duration: input.duration,
+        radii: [draft.radiusMeters],
+        visibility: draft.visibility,
+        duration: draft.duration,
+        radiusMeters: draft.radiusMeters,
+        tierLevel: draft.tierLevel,
         origin: 'local',
         x,
         y,
@@ -284,6 +293,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         nodes: { ...state.nodes, [id]: node },
         selectedNodeId: id,
         selectedEventId: id,
+        previewGeofence: null,
       };
     });
 

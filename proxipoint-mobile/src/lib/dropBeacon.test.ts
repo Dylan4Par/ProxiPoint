@@ -25,6 +25,9 @@ test('dropping a beacon stores visibility, duration, and survives a feed sync', 
   assert.equal(dropped?.isRsvpd, true);
   assert.ok(useDiscoveryStore.getState().tags.includes('#TechMeetup'));
   assert.ok(useDiscoveryStore.getState().tags.includes('#PostGIS'));
+  assert.equal(dropped?.tierLevel, 'micro');
+  assert.equal(dropped?.radiusMeters, 300);
+  assert.deepEqual(dropped?.radii, [300]);
   assert.equal(useDiscoveryStore.getState().selectedNodeId, id);
 
   useDiscoveryStore.getState().syncProximityNodes(
