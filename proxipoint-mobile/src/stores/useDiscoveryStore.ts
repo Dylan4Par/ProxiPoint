@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { qualifiesAsVerifiedCoordinator, shouldRequestHostFeedback } from '../lib/trust';
+import { postBeaconUpvote } from '../services/beaconApi';
 
 export interface InboundProximityNode {
   id: string;
@@ -29,9 +31,19 @@ export interface DiscoveryNode {
   isRsvpd: boolean;
   radii: number[];
   startsAt: string | null;
+  hostId: string;
+  hostCallsign: string;
+  hostUpvotes: number;
+  hostDrops: number;
+  isVerifiedCoordinator: boolean;
   batteryPct?: number;
   x: number;
   y: number;
+}
+
+export interface HostFeedbackPrompt {
+  beaconId: string;
+  hostCallsign: string;
 }
 
 export interface ViewportBounds {
@@ -59,6 +71,8 @@ export interface DiscoveryState {
   shellTab: 'discover' | 'activity';
   selectedTag: string;
   tags: string[];
+  pendingFeedback: HostFeedbackPrompt | null;
+  promptedFeedbackIds: Record<string, true>;
 
   // Setters & Actions
   setSocketConnected: (connected: boolean) => void;
@@ -72,6 +86,9 @@ export interface DiscoveryState {
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
   toggleRsvp: (id: string) => void;
+  upvoteHost: (id: string) => void;
+  skipHostFeedback: (id: string) => void;
+  markBeaconExpired: (id: string) => void;
   updateConfig: (config: Partial<Pick<DiscoveryState, 'tenantId' | 'deviceId' | 'wsEndpoint' | 'searchRadiusMeters'>>) => void;
   syncProximityNodes: (incomingNodes: InboundProximityNode[], timestamp: string) => void;
   getVisibleNodes: () => DiscoveryNode[];
@@ -115,6 +132,16 @@ const futureSlot = (dayOffset: number, hours: number, minutes: number): string =
   }
   return date.toISOString();
 };
+const CALLSIGN_POOL = ['Viper-2', 'Mesa-4', 'North-1', 'Lark-9', 'Pike-3'];
+
+const hostFields = (callsign: string, hostId: string, drops: number, upvotes: number) => ({
+  hostId,
+  hostCallsign: callsign,
+  hostDrops: drops,
+  hostUpvotes: upvotes,
+  isVerifiedCoordinator: qualifiesAsVerifiedCoordinator(drops, upvotes),
+});
+
 const VENUE_POOL = [
   'Central Park Plaza',
   'The Rusty Anchor',
@@ -146,6 +173,7 @@ const enrichNodeMetadata = (rawId: string, distanceMeters: number) => {
     eta: distanceMeters > 1000 ? `${Math.round(etaMinutes / 4)} min drive` : `${etaMinutes} min walk`,
     etaMode: (distanceMeters > 1000 ? 'drive' : 'walk') as 'walk' | 'drive',
     attendeeCount: (hash % 40) + 5,
+    ...hostFields(CALLSIGN_POOL[hash % CALLSIGN_POOL.length], `host-${hash % 7}`, (hash % 12) + 1, hash % 8),
   };
 };
 
@@ -167,6 +195,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 45,
     isRsvpd: true,
     radii: [250, 500],
+    ...hostFields('Viper-2', 'host-viper-2', 48, 45),
     x: 180,
     y: 220,
   },
@@ -186,6 +215,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 28,
     isRsvpd: true,
     radii: [250, 500],
+    ...hostFields('Mesa-4', 'host-mesa-4', 3, 2),
     x: 420,
     y: 190,
   },
@@ -205,6 +235,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 38,
     isRsvpd: false,
     radii: [500, 1000],
+    ...hostFields('North-1', 'host-north-1', 8, 6),
     x: 300,
     y: 400,
   },
@@ -224,6 +255,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 64,
     isRsvpd: false,
     radii: [250, 500],
+    ...hostFields('Lark-9', 'host-lark-9', 5, 5),
     x: 250,
     y: 330,
   },
@@ -243,6 +275,7 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     attendeeCount: 18,
     isRsvpd: false,
     radii: [500, 1000],
+    ...hostFields('Pike-3', 'host-pike-3', 5, 4),
     x: 140,
     y: 470,
   },
@@ -267,6 +300,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   shellTab: 'discover',
   selectedTag: 'All',
   tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodAndDrink', '#FarmersMarket', '#Fitness', '#Outdoor', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
+  pendingFeedback: null,
+  promptedFeedbackIds: {},
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   setSelfCoordinates: (coords) => set({ selfCoordinates: coords }),
@@ -298,12 +333,67 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     set((state) => {
       const existing = state.nodes[id];
       if (!existing) return state;
+      const leaving = existing.isRsvpd;
+      const pendingFeedback =
+        leaving &&
+        shouldRequestHostFeedback({
+          wasRsvpd: true,
+          stillInside: false,
+          beaconExpired: false,
+          alreadyPrompted: Boolean(state.promptedFeedbackIds[id]),
+        })
+          ? { beaconId: id, hostCallsign: existing.hostCallsign }
+          : state.pendingFeedback;
       return {
         nodes: {
           ...state.nodes,
           [id]: { ...existing, isRsvpd: !existing.isRsvpd },
         },
+        pendingFeedback,
       };
+    }),
+
+  upvoteHost: (id) => {
+    const state = get();
+    const existing = state.nodes[id];
+    if (!existing) return;
+    const hostUpvotes = existing.hostUpvotes + 1;
+    const isVerifiedCoordinator = qualifiesAsVerifiedCoordinator(existing.hostDrops, hostUpvotes);
+    const nodes = Object.fromEntries(
+      Object.entries(state.nodes).map(([key, node]) => {
+        if (node.hostId !== existing.hostId) return [key, node];
+        return [key, { ...node, hostUpvotes, isVerifiedCoordinator }];
+      }),
+    );
+    set({
+      nodes,
+      pendingFeedback: state.pendingFeedback?.beaconId === id ? null : state.pendingFeedback,
+      promptedFeedbackIds: { ...state.promptedFeedbackIds, [id]: true },
+    });
+    void postBeaconUpvote(id, state.deviceId).catch(() => undefined);
+  },
+
+  skipHostFeedback: (id) =>
+    set((state) => ({
+      pendingFeedback: state.pendingFeedback?.beaconId === id ? null : state.pendingFeedback,
+      promptedFeedbackIds: { ...state.promptedFeedbackIds, [id]: true },
+    })),
+
+  markBeaconExpired: (id) =>
+    set((state) => {
+      const existing = state.nodes[id];
+      if (!existing) return state;
+      if (
+        !shouldRequestHostFeedback({
+          wasRsvpd: existing.isRsvpd,
+          stillInside: true,
+          beaconExpired: true,
+          alreadyPrompted: Boolean(state.promptedFeedbackIds[id]),
+        })
+      ) {
+        return state;
+      }
+      return { pendingFeedback: { beaconId: id, hostCallsign: existing.hostCallsign } };
     }),
 
   updateConfig: (config) => set((state) => ({ ...state, ...config })),
@@ -333,6 +423,11 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           eta: meta.eta,
           etaMode: meta.etaMode,
           startsAt: meta.startsAt,
+          hostId: existing?.hostId || meta.hostId,
+          hostCallsign: node.host || existing?.hostCallsign || meta.hostCallsign,
+          hostUpvotes: existing?.hostUpvotes ?? meta.hostUpvotes,
+          hostDrops: existing?.hostDrops ?? meta.hostDrops,
+          isVerifiedCoordinator: existing?.isVerifiedCoordinator ?? meta.isVerifiedCoordinator,
           radii: [250, 500],
           isRsvpd: existing ? existing.isRsvpd : false,
           x,

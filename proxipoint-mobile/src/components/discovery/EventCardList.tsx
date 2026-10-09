@@ -10,6 +10,7 @@ import {
 } from 'react-native';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { chunkChronologicalFeed, formatFeedMeta, type FeedSection } from '../../lib/feedSections';
+import { coordinatorBadgeLabel } from '../../lib/trust';
 import { resolveTagAnchor } from '../../lib/tagIcons';
 import { ChannelBadge } from './ChannelBadge';
 import { PulsingDot } from './PulsingDot';
@@ -52,6 +53,11 @@ export const EventCardList: React.FC = () => {
       venue: 'Pan map to scan',
       isRsvpd: false,
       startsAt: null,
+      hostId: '',
+      hostCallsign: 'Unassigned',
+      hostUpvotes: 0,
+      hostDrops: 0,
+      isVerifiedCoordinator: false,
     };
 
   const selectedAnchor = resolveTagAnchor(selectedNode.tag);
@@ -87,6 +93,9 @@ export const EventCardList: React.FC = () => {
     const isLive = section.tone === 'live';
     const anchor = resolveTagAnchor(item.tag);
     const meta = formatFeedMeta(item);
+    const trustLabel = item.isVerifiedCoordinator
+      ? coordinatorBadgeLabel(item.hostDrops, item.hostUpvotes) || '⭐ Verified Coordinator'
+      : '';
 
     return (
       <View style={[styles.card, isSelected && styles.cardSelected]}>
@@ -103,10 +112,18 @@ export const EventCardList: React.FC = () => {
             <Text style={[styles.channelLabel, { color: anchor.accent }]} numberOfLines={1}>
               {item.tag}
             </Text>
-            <Text style={styles.titleText} numberOfLines={2}>
-              {item.title}
+          <Text style={styles.titleText} numberOfLines={2}>
+            {item.title}
+          </Text>
+          <Text style={styles.hostCallsign} numberOfLines={1}>
+            {item.hostCallsign}
+          </Text>
+          {trustLabel ? (
+            <Text style={styles.verifiedBadge} numberOfLines={2}>
+              {trustLabel}
             </Text>
-            <Text style={styles.subline} numberOfLines={1}>
+          ) : null}
+          <Text style={styles.subline} numberOfLines={1}>
               {item.venue} · {item.attendeeCount} going
             </Text>
           </View>
@@ -322,6 +339,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     lineHeight: 18,
+  },
+  hostCallsign: {
+    color: '#e2e8f0',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 3,
+  },
+  verifiedBadge: {
+    alignSelf: 'flex-start',
+    color: '#facc15',
+    backgroundColor: 'rgba(34, 211, 238, 0.12)',
+    borderColor: 'rgba(250, 204, 21, 0.55)',
+    borderWidth: 1,
+    borderRadius: 999,
+    overflow: 'hidden',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    marginTop: 4,
+    fontSize: 9,
+    fontWeight: '800',
   },
   subline: {
     color: '#64748b',
