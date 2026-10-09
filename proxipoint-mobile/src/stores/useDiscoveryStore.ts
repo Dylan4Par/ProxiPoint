@@ -5,6 +5,7 @@ import { beaconWindowStatus, clampDuration, clampStart, type BeaconVisibility } 
 import { cardListBounds, DISCOVERY_PIXELS_PER_METER, pointInBounds } from '../lib/discoveryFocus';
 import { calculateDistanceMeters } from '../lib/locationFilter';
 import { isInOperatorDistrict } from '../lib/regions';
+import { qualifiesAsVerifiedCoordinator } from '../lib/trust';
 
 export interface InboundProximityNode {
   id: string;
@@ -44,6 +45,10 @@ export interface DiscoveryNode {
   startsAt?: string;
   durationMinutes?: number;
   hostName?: string;
+  hostCallsign?: string;
+  hostDrops?: number;
+  hostUpvotes?: number;
+  isVerifiedCoordinator?: boolean;
   regionName?: string;
   regionChain?: string;
   details?: string;
@@ -179,31 +184,48 @@ const enrichNodeMetadata = (rawId: string, distanceMeters: number) => {
 const DOWNTOWN_REGION = 'Downtown Boulder';
 const DOWNTOWN_CHAIN = 'Downtown Boulder · Boulder · Boulder County';
 
+function atLocal(dayOffset: number, hours: number, minutes: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + dayOffset);
+  date.setHours(hours, minutes, 0, 0);
+  return date.toISOString();
+}
+
+function hostTrust(callsign: string, drops: number, upvotes: number) {
+  return {
+    hostCallsign: callsign,
+    hostDrops: drops,
+    hostUpvotes: upvotes,
+    isVerifiedCoordinator: qualifiesAsVerifiedCoordinator(drops, upvotes),
+  };
+}
+
 // Seed events sit inside Downtown Boulder so the default card list is the district.
 const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
   'event-1': {
     id: 'event-1',
     tag: '#LiveMusic',
     tags: ['#LiveMusic', '#FoodTrucks', '#ArtWalk'],
-    title: 'The Midnight Owls • Live at The Rusty Anchor',
-    venue: 'The Rusty Anchor',
+    title: 'Pearl Street Live Music Night',
+    venue: 'Pearl Street Mall',
     latitude: 40.017458,
     longitude: -105.283779,
-    distanceMeters: 478,
+    distanceMeters: 180,
     status: 'LIVE NOW',
     statusColor: '#10b981',
     eta: '6 min walk',
     etaMode: 'walk',
     attendeeCount: 45,
-    isRsvpd: true,
+    isRsvpd: false,
     hostName: 'The Midnight Owls',
+    ...hostTrust('Viper-2', 48, 46),
     radii: [250, 500],
     x: 266,
     y: 459,
     regionName: DOWNTOWN_REGION,
     regionChain: DOWNTOWN_CHAIN,
     details:
-      'The Midnight Owls are on stage now at The Rusty Anchor in Downtown Boulder. Doors are open, and the set shares the block with food trucks and the art walk. It is a short walk from the Pearl Street side of downtown.',
+      'Pearl Street Live Music Night is on now at Pearl Street Mall. Viper-2 is hosting. The set shares the block with the art walk, a short walk from the rest of Downtown Boulder.',
     sourceUrl: 'https://www.google.com/maps/search/?api=1&query=The+Rusty+Anchor+Boulder+CO',
   },
   'event-2': {
@@ -221,7 +243,9 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     etaMode: 'walk',
     attendeeCount: 12,
     isRsvpd: true,
+    startsAt: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
     hostName: 'Central Park Eats',
+    ...hostTrust('Mesa-4', 2, 2),
     radii: [250, 500],
     x: 670,
     y: 438,
@@ -240,13 +264,15 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     latitude: 40.020368,
     longitude: -105.278189,
     distanceMeters: 370,
-    status: 'Tomorrow 18:00',
+    status: 'Scheduled',
     statusColor: '#94a3b8',
     eta: '5 min walk',
     etaMode: 'walk',
     attendeeCount: 38,
     isRsvpd: false,
+    startsAt: atLocal(1, 18, 0),
     hostName: 'Boulder Devs',
+    ...hostTrust('North-1', 10, 6),
     radii: [500, 1000],
     x: 480,
     y: 314,
@@ -255,6 +281,33 @@ const INITIAL_SEED_NODES: Record<string, DiscoveryNode> = {
     details:
       'Boulder Devs hosts a monthly Go and Kotlin social, Code & Coffee, at Downtown Tech Lab. It starts tomorrow at 18:00. The meetup is public and listed on the Tech Meetup channel.',
     sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Downtown+Boulder+CO',
+  },
+  'event-4': {
+    id: 'event-4',
+    tag: '#FarmersMarket',
+    tags: ['#FarmersMarket'],
+    title: 'Farmers Market Tasting',
+    venue: 'Boulder County Farmers Market',
+    latitude: 40.0168,
+    longitude: -105.2762,
+    distanceMeters: 210,
+    status: 'Scheduled',
+    statusColor: '#94a3b8',
+    eta: '4 min walk',
+    etaMode: 'walk',
+    attendeeCount: 64,
+    isRsvpd: false,
+    startsAt: atLocal(1, 9, 0),
+    hostName: 'Lark-9',
+    ...hostTrust('Lark-9', 5, 5),
+    radii: [250, 500],
+    x: 556,
+    y: 492,
+    regionName: DOWNTOWN_REGION,
+    regionChain: DOWNTOWN_CHAIN,
+    details:
+      'Farmers Market Tasting at the Boulder County Farmers Market. It starts tomorrow at 09:00. Lark-9 is hosting.',
+    sourceUrl: 'https://www.google.com/maps/search/?api=1&query=Boulder+County+Farmers+Market',
   },
 };
 
@@ -277,7 +330,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   mapFocusToken: 0,
   activeTab: 'Nearby',
   selectedTag: 'All',
-  tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk'],
+  tags: ['All', '#LiveMusic', '#TechMeetup', '#FoodTrucks', '#FarmersMarket', '#Pickleball', '#ArtWalk'],
   dropSheetOpen: false,
   previewPin: null,
 
@@ -369,6 +422,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         startsAt: scheduled.start.toISOString(),
         durationMinutes: duration.minutes,
         hostName: state.deviceId,
+        hostCallsign: state.deviceId,
+        hostDrops: 0,
+        hostUpvotes: 0,
+        isVerifiedCoordinator: false,
         regionName: draft.regionName?.trim() || undefined,
         regionChain: draft.regionChain?.trim() || undefined,
       };
@@ -460,6 +517,10 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           details: existing?.details,
           sourceUrl: existing?.sourceUrl,
           hostName: existing?.hostName || node.host,
+          hostCallsign: existing?.hostCallsign,
+          hostDrops: existing?.hostDrops,
+          hostUpvotes: existing?.hostUpvotes,
+          isVerifiedCoordinator: existing?.isVerifiedCoordinator,
           x,
           y,
         };
