@@ -238,7 +238,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   useEffect(() => {
     if (!visible || !isLiveNow) return;
     const tick = () => {
-      if (clockHold.current > 0) return;
+      if (Platform.OS === 'web') {
+        const activeId = document.activeElement?.getAttribute?.('data-testid') ?? '';
+        if (activeId.startsWith('drop-start-') || activeId.startsWith('drop-end-')) return;
+      } else if (clockHold.current > 0) {
+        return;
+      }
       const next = slideLiveWindow(new Date(), durationRef.current);
       setStartsAt((current) => (current.getTime() === next.startsAt.getTime() ? current : next.startsAt));
       setEndsAt((current) => (current.getTime() === next.endsAt.getTime() ? current : next.endsAt));
