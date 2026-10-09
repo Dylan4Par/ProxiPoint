@@ -45,6 +45,8 @@ export const TopFilterHeader: React.FC = () => {
           style={styles.avatarButton}
           onPress={() => setSettingsOpen(true)}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Open profile settings"
         >
           <View style={styles.avatarInner}>
             <Text style={styles.avatarInitial}>R</Text>
@@ -56,6 +58,9 @@ export const TopFilterHeader: React.FC = () => {
           <TouchableOpacity
             style={[styles.segmentBtn, activeTab === 'Nearby' && styles.segmentBtnActive]}
             onPress={() => setActiveTab('Nearby')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === 'Nearby' }}
+            accessibilityLabel="Show nearby events"
           >
             <Text style={[styles.segmentText, activeTab === 'Nearby' && styles.segmentTextActive]}>
               Nearby
@@ -65,6 +70,9 @@ export const TopFilterHeader: React.FC = () => {
           <TouchableOpacity
             style={[styles.segmentBtn, activeTab === 'RSVPd' && styles.segmentBtnActive]}
             onPress={() => setActiveTab('RSVPd')}
+            accessibilityRole="button"
+            accessibilityState={{ selected: activeTab === 'RSVPd' }}
+            accessibilityLabel="Show RSVP'd events"
           >
             <Text style={[styles.segmentText, activeTab === 'RSVPd' && styles.segmentTextActive]}>
               RSVP'd
@@ -86,6 +94,9 @@ export const TopFilterHeader: React.FC = () => {
               key={tag}
               style={[styles.tagPill, isActive && styles.tagPillActive]}
               onPress={() => setSelectedTag(tag)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: isActive }}
+              accessibilityLabel={`Filter ${tag}`}
             >
               <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
                 {tag}
@@ -186,37 +197,39 @@ export const TopFilterHeader: React.FC = () => {
                   </TouchableOpacity>
                 </View>
 
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Device Callsign / Handle</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={callsign}
-                    onChangeText={setCallsign}
-                    placeholder="e.g. Ranger-F0A5ACCF"
-                    placeholderTextColor="#475569"
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Tenant ID (UUID)</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={tenantId}
-                    onChangeText={setTenantId}
-                    autoCapitalize="none"
-                    placeholderTextColor="#475569"
-                  />
-                </View>
-
-                <View style={styles.fieldGroup}>
-                  <Text style={styles.fieldLabel}>Ingest WebSocket URL</Text>
-                  <TextInput
-                    style={styles.textInput}
-                    value={serverUrl}
-                    onChangeText={setServerUrl}
-                    autoCapitalize="none"
-                    placeholderTextColor="#475569"
-                  />
+                <View style={styles.groupedFields}>
+                  <View style={styles.groupedField}>
+                    <Text style={styles.fieldLabel}>Device Callsign / Handle</Text>
+                    <TextInput
+                      style={styles.groupedInput}
+                      value={callsign}
+                      onChangeText={setCallsign}
+                      placeholder="e.g. Ranger-F0A5ACCF"
+                      placeholderTextColor="#475569"
+                    />
+                  </View>
+                  <View style={styles.groupedDivider} />
+                  <View style={styles.groupedField}>
+                    <Text style={styles.fieldLabel}>Tenant ID (UUID)</Text>
+                    <TextInput
+                      style={styles.groupedInput}
+                      value={tenantId}
+                      onChangeText={setTenantId}
+                      autoCapitalize="none"
+                      placeholderTextColor="#475569"
+                    />
+                  </View>
+                  <View style={styles.groupedDivider} />
+                  <View style={styles.groupedField}>
+                    <Text style={styles.fieldLabel}>Ingest WebSocket URL</Text>
+                    <TextInput
+                      style={styles.groupedInput}
+                      value={serverUrl}
+                      onChangeText={setServerUrl}
+                      autoCapitalize="none"
+                      placeholderTextColor="#475569"
+                    />
+                  </View>
                 </View>
 
                 <View style={styles.statusBox}>
@@ -368,11 +381,11 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#0f172a',
+    backgroundColor: '#020617',
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#1e293b',
   },
   modalHeader: {
     flexDirection: 'row',
@@ -404,7 +417,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#1e293b',
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: '#1e293b',
     color: '#f8fafc',
     paddingHorizontal: 12,
     paddingVertical: 9,
@@ -456,8 +469,22 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     paddingHorizontal: 2,
   },
-  fieldGroup: {
-    marginBottom: 14,
+  groupedFields: {
+    backgroundColor: '#0f172a',
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    overflow: 'hidden',
+    marginBottom: 12,
+  },
+  groupedField: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+  },
+  groupedDivider: {
+    height: 1,
+    backgroundColor: '#1e293b',
+    marginLeft: 14,
   },
   fieldLabel: {
     color: '#94a3b8',
@@ -466,15 +493,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
     textTransform: 'uppercase',
   },
-  textInput: {
-    backgroundColor: '#1e293b',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#334155',
+  groupedInput: {
     color: '#f8fafc',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
+    paddingVertical: 2,
+    fontSize: 14,
     fontFamily: 'monospace',
   },
   statusBox: {

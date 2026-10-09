@@ -5,18 +5,27 @@ import { useProximitySocket } from '../hooks/useProximitySocket';
 import { DiscoveryMapCanvas } from '../components/discovery/DiscoveryMapCanvas';
 import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
 import { EventCardList } from '../components/discovery/EventCardList';
+import { ActivityPanel } from '../components/discovery/ActivityPanel';
 import { BottomNavBar } from '../components/discovery/BottomNavBar';
+import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 
 export const DiscoverScreen: React.FC = () => {
   // Live duplex telemetry socket hook
   useProximitySocket();
+  const shellTab = useDiscoveryStore((s) => s.shellTab);
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar barStyle="light-content" translucent backgroundColor="transparent" />
-      <TopFilterHeader />
-      <DiscoveryMapCanvas />
-      <EventCardList />
+      {shellTab === 'activity' ? (
+        <ActivityPanel />
+      ) : (
+        <>
+          <TopFilterHeader />
+          <DiscoveryMapCanvas />
+          <EventCardList />
+        </>
+      )}
       <BottomNavBar />
     </SafeAreaView>
   );

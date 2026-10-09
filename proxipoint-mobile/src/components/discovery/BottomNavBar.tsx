@@ -1,12 +1,26 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 
 export const BottomNavBar: React.FC = () => {
+  const insets = useSafeAreaInsets();
+  const shellTab = useDiscoveryStore((s) => s.shellTab);
+  const setShellTab = useDiscoveryStore((s) => s.setShellTab);
+  const onActivity = shellTab === 'activity';
+  const onDiscover = shellTab === 'discover';
+
   return (
-    <View style={styles.navWrapper}>
+    <View style={[styles.navWrapper, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {/* 1. Discover Button with Scaled Compass */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-        <View style={styles.iconContainer}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ selected: onDiscover }}
+        onPress={() => setShellTab('discover')}
+      >
+        <View style={[styles.iconContainer, !onDiscover && styles.iconMuted]}>
           <View style={styles.compassBadge}>
             <View style={styles.compassNeedleWrap}>
               <View style={styles.needleNorth} />
@@ -15,11 +29,17 @@ export const BottomNavBar: React.FC = () => {
             </View>
           </View>
         </View>
-        <Text style={[styles.navLabel, styles.navLabelActive]}>Discover</Text>
+        <Text style={[styles.navLabel, onDiscover && styles.navLabelActive]}>Discover</Text>
+        <View style={[styles.activeMark, !onDiscover && styles.activeMarkHidden]} />
       </TouchableOpacity>
 
       {/* 2. Drop Point Button with Matched 34px Badge */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel="Drop Point"
+      >
         <View style={styles.iconContainer}>
           <View style={styles.dropPointBadge}>
             <View style={styles.pinHead}>
@@ -29,11 +49,18 @@ export const BottomNavBar: React.FC = () => {
           </View>
         </View>
         <Text style={styles.navLabel}>Drop Point</Text>
+        <View style={[styles.activeMark, styles.activeMarkHidden]} />
       </TouchableOpacity>
 
       {/* 3. Activity Button with Scaled Bell Icon */}
-      <TouchableOpacity style={styles.navItem} activeOpacity={0.7}>
-        <View style={styles.iconContainer}>
+      <TouchableOpacity
+        style={styles.navItem}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ selected: onActivity }}
+        onPress={() => setShellTab('activity')}
+      >
+        <View style={[styles.iconContainer, !onActivity && styles.iconMuted]}>
           <View style={styles.bellWrapper}>
             <View style={styles.bellCap} />
             <View style={styles.bellBody} />
@@ -41,7 +68,8 @@ export const BottomNavBar: React.FC = () => {
             <View style={styles.bellClapper} />
           </View>
         </View>
-        <Text style={styles.navLabel}>Activity</Text>
+        <Text style={[styles.navLabel, onActivity && styles.navLabelActive]}>Activity</Text>
+        <View style={[styles.activeMark, !onActivity && styles.activeMarkHidden]} />
       </TouchableOpacity>
     </View>
   );
@@ -49,15 +77,15 @@ export const BottomNavBar: React.FC = () => {
 
 const styles = StyleSheet.create({
   navWrapper: {
-    height: 72,
+    minHeight: 72,
     backgroundColor: '#0a0f1d',
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     borderTopWidth: 1,
     borderTopColor: '#1e293b',
-    paddingTop: 10,
-    paddingBottom: 10,
+    paddingTop: 8,
+    paddingBottom: 8,
   },
   navItem: {
     alignItems: 'center',
@@ -80,7 +108,20 @@ const styles = StyleSheet.create({
   },
   navLabelActive: {
     color: '#e2e8f0',
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  iconMuted: {
+    opacity: 0.45,
+  },
+  activeMark: {
+    width: 16,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#22d3ee',
+    marginTop: 4,
+  },
+  activeMarkHidden: {
+    opacity: 0,
   },
 
   /* 1. Scaled Compass Badge (34px) */
