@@ -679,7 +679,11 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 </View>
                 <View style={styles.whenBridge}>
                   <View style={styles.whenRail}>
-                    <View style={styles.whenDotted} />
+                    <View style={styles.whenConnector}>
+                      <View style={styles.whenPip} />
+                      <View style={styles.whenPip} />
+                      <View style={styles.whenPip} />
+                    </View>
                   </View>
                   <View style={styles.whenRule} />
                 </View>
@@ -925,7 +929,7 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: '#334155',
     alignSelf: 'center',
-    marginVertical: 12,
+    marginVertical: 8,
   },
   headerRow: {
     flexDirection: 'row',
@@ -1016,7 +1020,7 @@ const styles = StyleSheet.create({
   descriptionInput: {
     color: '#f8fafc',
     fontSize: 13,
-    minHeight: 40,
+    minHeight: 32,
     maxHeight: 88,
     padding: 0,
   },
@@ -1305,7 +1309,7 @@ const styles = StyleSheet.create({
     color: '#f8fafc',
   },
   whenBlock: {
-    marginTop: 14,
+    marginTop: 8,
   },
   whenRow: {
     flexDirection: 'row',
@@ -1334,15 +1338,19 @@ const styles = StyleSheet.create({
   whenBridge: {
     flexDirection: 'row',
     alignItems: 'center',
-    height: 18,
+    height: 14,
     gap: 8,
   },
-  whenDotted: {
-    width: 0,
-    flex: 1,
-    borderLeftWidth: 1,
-    borderStyle: 'dotted',
-    borderColor: '#64748b',
+  whenConnector: {
+    height: 14,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  whenPip: {
+    width: 2,
+    height: 2,
+    borderRadius: 1,
+    backgroundColor: '#64748b',
   },
   whenRule: {
     flex: 1,
@@ -1363,10 +1371,10 @@ const styles = StyleSheet.create({
   },
   whenChip: {
     position: 'relative',
-    backgroundColor: '#1e293b',
+    backgroundColor: '#334155',
     borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
     overflow: 'hidden',
   },
   whenChipText: {
