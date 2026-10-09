@@ -1,10 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   TextInput,
   TouchableOpacity,
-  Pressable,
   StyleSheet,
   ScrollView,
   ActivityIndicator,
@@ -12,12 +11,20 @@ import {
   Platform,
 } from 'react-native';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
-import { GEOCODE_DEBOUNCE_MS } from '../../lib/beaconDraft';
+import { createBeaconDraft, formatBroadcastReach, GEOCODE_DEBOUNCE_MS } from '../../lib/beaconDraft';
+import {
+  BOUNDARY_RADII,
+  getRecommendedTier,
+  inferPlaceType,
+  resolveBoundaryTiers,
+} from '../../lib/boundaryTiers';
 import { captureCurrentFix, geocodePlaces } from '../../services/placeGeocoder';
+import { DiscoveryLeafletMap } from './DiscoveryLeafletMap';
 import {
   BEACON_DURATIONS,
   type BeaconDuration,
   type BeaconVisibility,
+  type BoundaryTierLevel,
   type PlaceSuggestion,
 } from '../../types/beacon';
 
@@ -37,6 +44,7 @@ const VISIBILITY_OPTIONS: Array<{ id: BeaconVisibility; label: string; accent: s
 export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose }) => {
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const dropBeacon = useDiscoveryStore((state) => state.dropBeacon);
+  const setPreviewGeofence = useDiscoveryStore((state) => state.setPreviewGeofence);
 
   const [visibility, setVisibility] = useState<BeaconVisibility>('tag_network');
   const [isLiveNow, setIsLiveNow] = useState(true);
@@ -46,12 +54,22 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [tags, setTags] = useState('');
   const [locationSearch, setLocationSearch] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
+  const [selectedTier, setSelectedTier] = useState<BoundaryTierLevel>('micro');
+  const [selectedRadiusMeters, setSelectedRadiusMeters] = useState<number>(BOUNDARY_RADII.micro);
+  const [placeLabel, setPlaceLabel] = useState('');
+  const [placeType, setPlaceType] = useState<string | undefined>(undefined);
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const skipSearch = useRef(false);
   const selectedLabel = useRef<string | null>(null);
+
+  const boundaryTiers = useMemo(
+    () => resolveBoundaryTiers({ placeName: placeLabel, placeType }),
+    [placeLabel, placeType],
+  );
+  const activeTier = boundaryTiers.find((tier) => tier.id === selectedTier) ?? boundaryTiers[0];
 
   useEffect(() => {
     if (!visible) return;
@@ -63,13 +81,30 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setTags('');
     setLocationSearch('');
     setCoords(null);
+    setSelectedTier('micro');
+    setSelectedRadiusMeters(BOUNDARY_RADII.micro);
+    setPlaceLabel('');
+    setPlaceType(undefined);
     setSuggestions([]);
     setSearching(false);
     setLocating(false);
     setFormError(null);
     skipSearch.current = false;
     selectedLabel.current = null;
-  }, [visible]);
+    setPreviewGeofence(null);
+  }, [visible, setPreviewGeofence]);
+
+  useEffect(() => {
+    if (!visible || !coords) {
+      setPreviewGeofence(null);
+      return;
+    }
+    setPreviewGeofence({
+      latitude: coords.lat,
+      longitude: coords.lon,
+      radiusMeters: selectedRadiusMeters,
+    });
+  }, [visible, coords, selectedRadiusMeters, setPreviewGeofence]);
 
   useEffect(() => {
     if (!visible) return;
@@ -112,6 +147,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setCoords({ lat: place.latitude, lon: place.longitude });
     setSuggestions([]);
     setFormError(null);
+    const semantic = inferPlaceType(place.label, place.placeType);
+    const tier = getRecommendedTier(semantic);
+    setPlaceLabel(place.label);
+    setPlaceType(semantic);
+    setSelectedTier(tier);
+    setSelectedRadiusMeters(BOUNDARY_RADII[tier]);
   };
 
   const handleUseCurrentLocation = () => {
@@ -132,17 +173,21 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
 
-    dropBeacon({
-      title: trimmedTitle,
-      tags,
-      visibility,
-      venue: locationSearch.trim() || 'Dropped beacon',
-      latitude: coords.lat,
-      longitude: coords.lon,
-      isLiveNow,
-      duration,
-      scheduledStart,
-    });
+    dropBeacon(
+      createBeaconDraft({
+        title: trimmedTitle,
+        tags,
+        visibility,
+        venue: locationSearch.trim() || 'Dropped beacon',
+        latitude: coords.lat,
+        longitude: coords.lon,
+        isLiveNow,
+        duration,
+        scheduledStart,
+        radiusMeters: selectedRadiusMeters,
+        tierLevel: selectedTier,
+      }),
+    );
     onClose();
   };
 
@@ -150,7 +195,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
   return (
     <View style={styles.overlay}>
-      <Pressable style={styles.backdrop} onPress={onClose} accessibilityLabel="Dismiss drop beacon" />
+      <View style={styles.mapBand}>
+        <DiscoveryLeafletMap />
+      </View>
       <KeyboardAvoidingView
         style={styles.sheetContainer}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -234,6 +281,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                       if (value !== selectedLabel.current) {
                         selectedLabel.current = null;
                         setCoords(null);
+                        setPlaceLabel('');
+                        setPlaceType(undefined);
+                        setSelectedTier('micro');
+                        setSelectedRadiusMeters(BOUNDARY_RADII.micro);
                       }
                     }}
                     autoCorrect={false}
@@ -276,6 +327,42 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   ))}
                 </View>
               ) : null}
+            </View>
+
+            <View style={styles.scaleRailContainer}>
+              <View style={styles.scaleRailHeaderRow}>
+                <Text style={styles.scaleRailHeading}>BROADCAST PERIMETER</Text>
+                <Text style={styles.scaleRailRadiusBadge}>{activeTier.displayRadius}</Text>
+              </View>
+              <View style={styles.scaleChipsRow}>
+                {boundaryTiers.map((tier) => {
+                  const isActive = selectedTier === tier.id;
+                  return (
+                    <TouchableOpacity
+                      key={tier.id}
+                      style={[styles.scaleChip, isActive && styles.scaleChipActive]}
+                      onPress={() => {
+                        setSelectedTier(tier.id);
+                        setSelectedRadiusMeters(tier.radiusMeters);
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <Text
+                        style={[styles.scaleChipText, isActive && styles.scaleChipTextActive]}
+                        numberOfLines={1}
+                      >
+                        {tier.icon} {tier.label}
+                      </Text>
+                      <Text style={[styles.scaleChipSub, isActive && styles.scaleChipSubActive]}>
+                        {tier.displayRadius}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.broadcastSubtext}>
+                {formatBroadcastReach(tags, activeTier.displayRadius)}
+              </Text>
             </View>
 
             <View style={styles.groupedContainer}>
@@ -346,12 +433,14 @@ const styles = StyleSheet.create({
     right: 0,
     top: 0,
     bottom: NAV_BAR_HEIGHT,
-    justifyContent: 'flex-end',
+    flexDirection: 'column',
     zIndex: 30,
+    backgroundColor: '#070b13',
   },
-  backdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(3, 7, 18, 0.75)',
+  mapBand: {
+    flex: 1,
+    minHeight: 160,
+    backgroundColor: '#0a1120',
   },
   sheetContainer: {
     backgroundColor: '#090f1d',
@@ -359,7 +448,7 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     borderTopWidth: 1,
     borderColor: '#1e293b',
-    maxHeight: '100%',
+    maxHeight: '68%',
     width: '100%',
     paddingHorizontal: 20,
   },
@@ -448,6 +537,75 @@ const styles = StyleSheet.create({
     height: 1,
     backgroundColor: '#1e293b',
     marginVertical: 10,
+  },
+  scaleRailContainer: {
+    backgroundColor: '#070b13',
+    borderRadius: 14,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#1e293b',
+  },
+  scaleRailHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  scaleRailHeading: {
+    color: '#64748b',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.2,
+  },
+  scaleRailRadiusBadge: {
+    color: '#06b6d4',
+    fontSize: 10,
+    fontFamily: 'monospace',
+    fontWeight: '700',
+  },
+  scaleChipsRow: {
+    flexDirection: 'row',
+    gap: 6,
+    marginBottom: 8,
+  },
+  scaleChip: {
+    flex: 1,
+    paddingVertical: 7,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    backgroundColor: '#0f172a',
+    borderWidth: 1,
+    borderColor: '#1e293b',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  scaleChipActive: {
+    backgroundColor: 'rgba(6, 182, 212, 0.15)',
+    borderColor: '#06b6d4',
+  },
+  scaleChipText: {
+    color: '#94a3b8',
+    fontSize: 10,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  scaleChipTextActive: {
+    color: '#38bdf8',
+  },
+  scaleChipSub: {
+    color: '#475569',
+    fontSize: 9,
+    fontFamily: 'monospace',
+    marginTop: 2,
+  },
+  scaleChipSubActive: {
+    color: '#06b6d4',
+    fontWeight: '700',
+  },
+  broadcastSubtext: {
+    color: '#0ea5e9',
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   locationContainer: {
     flexDirection: 'row',

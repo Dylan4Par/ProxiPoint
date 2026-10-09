@@ -6,6 +6,8 @@ import {
   parseBeaconTags,
   primaryBeaconTag,
   GEOCODE_DEBOUNCE_MS,
+  createBeaconDraft,
+  formatBroadcastReach,
 } from './beaconDraft';
 
 test('visibility is the three-way model', () => {
@@ -30,6 +32,29 @@ test('live now and schedule produce distinct status copy', () => {
     describeBeaconTiming({ isLiveNow: false, duration: '4 hrs', scheduledStart: '18:00' }),
     { status: 'Starts 18:00', statusColor: '#38bdf8' },
   );
+});
+
+test('createBeaconDraft keeps the selected tier radius', () => {
+  const draft = createBeaconDraft({
+    title: '  GIS Meetup  ',
+    tags: '#TechMeetup',
+    visibility: 'public',
+    venue: 'Pearl St & Broadway',
+    latitude: 40.0179,
+    longitude: -105.2789,
+    isLiveNow: true,
+    duration: '2 hrs',
+    scheduledStart: '18:00',
+    tierLevel: 'neighborhood',
+  });
+  assert.equal(draft.title, 'GIS Meetup');
+  assert.equal(draft.tierLevel, 'neighborhood');
+  assert.equal(draft.radiusMeters, 1500);
+  assert.equal(
+    formatBroadcastReach('#TechMeetup', '1.5km'),
+    '↳ Broadcasting to #TechMeetup trackers within a 1.5km radius.',
+  );
+  assert.match(formatBroadcastReach('', '300m'), /#Network/);
 });
 
 test('geocode autocomplete waits 300ms', () => {

@@ -9,6 +9,7 @@ export const PLACE_INDEX: PlaceSuggestion[] = [
     subtitle: 'Boulder, CO',
     latitude: 40.0179,
     longitude: -105.2789,
+    placeType: 'address',
   },
   {
     id: 'rusty-anchor',
@@ -16,6 +17,7 @@ export const PLACE_INDEX: PlaceSuggestion[] = [
     subtitle: 'Live music room',
     latitude: 40.0632,
     longitude: -105.0365,
+    placeType: 'poi',
   },
   {
     id: 'central-park',
@@ -23,6 +25,7 @@ export const PLACE_INDEX: PlaceSuggestion[] = [
     subtitle: 'Food trucks',
     latitude: 40.0645,
     longitude: -105.041,
+    placeType: 'poi',
   },
   {
     id: 'tech-lab',
@@ -30,6 +33,7 @@ export const PLACE_INDEX: PlaceSuggestion[] = [
     subtitle: 'Meetups',
     latitude: 40.071,
     longitude: -105.032,
+    placeType: 'poi',
   },
   {
     id: 'meadow-courts',
@@ -37,6 +41,7 @@ export const PLACE_INDEX: PlaceSuggestion[] = [
     subtitle: 'Pickleball',
     latitude: 40.058,
     longitude: -105.045,
+    placeType: 'poi',
   },
   {
     id: 'old-town',
@@ -44,6 +49,7 @@ export const PLACE_INDEX: PlaceSuggestion[] = [
     subtitle: 'Art walk',
     latitude: 40.067,
     longitude: -105.028,
+    placeType: 'neighborhood',
   },
   {
     id: 'creek-pavilion',
@@ -51,6 +57,7 @@ export const PLACE_INDEX: PlaceSuggestion[] = [
     subtitle: 'Creek path',
     latitude: 40.0145,
     longitude: -105.282,
+    placeType: 'poi',
   },
 ];
 

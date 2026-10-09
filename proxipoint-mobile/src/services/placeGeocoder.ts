@@ -46,6 +46,7 @@ export async function geocodePlaces(query: string): Promise<PlaceSuggestion[]> {
       subtitle: `${hit.latitude.toFixed(4)}, ${hit.longitude.toFixed(4)}`,
       latitude: hit.latitude,
       longitude: hit.longitude,
+      placeType: 'address',
     }));
   } catch {
     return [];
@@ -79,6 +80,7 @@ async function readDeviceFix(): Promise<PlaceSuggestion | null> {
     subtitle: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
     latitude,
     longitude,
+    placeType: 'address',
   };
 }
 
@@ -101,5 +103,6 @@ export async function captureCurrentFix(fallback: {
     subtitle: `${fallback.latitude.toFixed(5)}, ${fallback.longitude.toFixed(5)}`,
     latitude: fallback.latitude,
     longitude: fallback.longitude,
+    placeType: 'address',
   };
 }
