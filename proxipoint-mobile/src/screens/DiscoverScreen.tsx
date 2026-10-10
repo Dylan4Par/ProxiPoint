@@ -9,6 +9,39 @@ import { ActivityPanel } from '../components/discovery/ActivityPanel';
 import { BottomNavBar } from '../components/discovery/BottomNavBar';
 import { HostFeedbackModal } from '../components/discovery/HostFeedbackModal';
 import { useDiscoveryStore } from '../stores/useDiscoveryStore';
+import type { ProxiEvent } from '../lib/trust';
+
+const MOCK_EVENTS: ProxiEvent[] = [
+  {
+    id: 'event-1',
+    tag: '#LiveMusic',
+    title: 'Pearl Street Live Music Night',
+    venue: 'Pearl Street Mall',
+    hostCallsign: 'Viper-2',
+    hostDrops: 48,
+    hostUpvotes: 46,
+    attendeeCount: 45,
+    distanceMeters: 180,
+    status: 'LIVE NOW',
+    startsAt: 'earlier today',
+    isRsvpd: false,
+    selected: true,
+  },
+  {
+    id: 'event-4',
+    tag: '#FarmersMarket',
+    title: 'Farmers Market Tasting',
+    venue: 'Boulder County Farmers Market',
+    hostCallsign: 'Lark-9',
+    hostDrops: 5,
+    hostUpvotes: 5,
+    attendeeCount: 64,
+    status: 'Scheduled',
+    startsAt: 'tomorrow 09:00 local',
+    isRsvpd: false,
+    selected: false,
+  },
+];
 
 export const DiscoverScreen: React.FC = () => {
   // Live duplex telemetry socket hook
@@ -27,7 +60,11 @@ export const DiscoverScreen: React.FC = () => {
         <>
           <TopFilterHeader />
           <DiscoveryMapCanvas />
-          <EventCardList />
+          <EventCardList
+            events={MOCK_EVENTS}
+            onSelectEvent={(event) => console.log('Selected:', event.id)}
+            onToggleRsvp={(eventId) => console.log('RSVP toggled for:', eventId)}
+          />
         </>
       )}
       <BottomNavBar />

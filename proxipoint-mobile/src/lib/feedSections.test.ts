@@ -99,6 +99,28 @@ test('tomorrow rolls into the next month', () => {
   assert.equal(title, 'TOMORROW — SUNDAY, NOV 1');
 });
 
+test('handoff phrases keep live distance and tomorrow at 09:00', () => {
+  const live = {
+    id: 'event-1',
+    status: 'LIVE NOW',
+    startsAt: 'earlier today',
+    distanceMeters: 180,
+  };
+  const market = {
+    id: 'event-4',
+    status: 'Scheduled',
+    startsAt: 'tomorrow 09:00 local',
+    distanceMeters: 860,
+  };
+  assert.equal(formatFeedMeta(live, now), '180m away');
+  assert.equal(formatFeedMeta(market, now), '09:00');
+  const sections = chunkChronologicalFeed([market, live], now);
+  assert.deepEqual(
+    sections.map((section) => section.title),
+    ['LIVE NOW', 'TOMORROW — SATURDAY, OCT 10'],
+  );
+});
+
 test('an empty feed has no sections', () => {
   assert.deepEqual(chunkChronologicalFeed([], now), []);
 });

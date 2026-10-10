@@ -40,8 +40,8 @@ export function formatFeedSectionTitle(date: Date, now = new Date()): string {
 export function formatFeedClock(startsAt?: string | null): string | null {
   if (!startsAt) return null;
   const date = new Date(startsAt);
-  if (Number.isNaN(date.getTime())) return null;
-  return clockLabel(date.getHours(), date.getMinutes());
+  if (!Number.isNaN(date.getTime())) return clockLabel(date.getHours(), date.getMinutes());
+  return clockFromStatus(startsAt);
 }
 
 export function formatFeedMeta(
@@ -132,11 +132,12 @@ function scheduledDate(item: ChronologicalFeedItem, now: Date): Date {
     if (!Number.isNaN(parsed.getTime())) return parsed;
   }
 
+  const hint = `${item.startsAt ?? ''} ${item.status}`;
   const inferred = new Date(now);
-  if (/tomorrow/i.test(item.status)) {
+  if (/tomorrow/i.test(hint)) {
     inferred.setDate(inferred.getDate() + 1);
   }
-  const match = item.status.match(/(\d{1,2}):(\d{2})/);
+  const match = hint.match(/(\d{1,2}):(\d{2})/);
   if (match) {
     inferred.setHours(Number(match[1]), Number(match[2]), 0, 0);
   } else {

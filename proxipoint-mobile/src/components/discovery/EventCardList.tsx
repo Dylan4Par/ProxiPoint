@@ -25,10 +25,11 @@ type FeedListSection = FeedSection<ProxiEvent>;
 interface Props {
   events?: ProxiEvent[];
   onSelect?: (id: string) => void;
+  onSelectEvent?: (event: ProxiEvent) => void;
   onToggleRsvp?: (id: string) => void;
 }
 
-export const EventCardList: React.FC<Props> = ({ events, onSelect, onToggleRsvp }) => {
+export const EventCardList: React.FC<Props> = ({ events, onSelect, onSelectEvent, onToggleRsvp }) => {
   const nodes = useDiscoveryStore((s) => s.nodes);
   const viewportBounds = useDiscoveryStore((s) => s.viewportBounds);
   const activeTab = useDiscoveryStore((s) => s.activeTab);
@@ -48,7 +49,9 @@ export const EventCardList: React.FC<Props> = ({ events, onSelect, onToggleRsvp 
   const animatedHeight = useRef(new Animated.Value(EXPANDED_HEIGHT)).current;
 
   const selectedNode =
-    visibleNodes.find((event) => event.id === selectedNodeId) ||
+    (events
+      ? visibleNodes.find((event) => event.selected)
+      : visibleNodes.find((event) => event.id === selectedNodeId)) ||
     visibleNodes[0] || {
       id: 'none',
       tag: '#Perimeter',
@@ -104,7 +107,8 @@ export const EventCardList: React.FC<Props> = ({ events, onSelect, onToggleRsvp 
         live={isLive}
         selected={isSelected}
         onPress={() => {
-          if (onSelect) onSelect(item.id);
+          if (onSelectEvent) onSelectEvent(item);
+          else if (onSelect) onSelect(item.id);
           else if (!events) setSelectedNodeId(item.id);
         }}
         onToggleRsvp={() => {
