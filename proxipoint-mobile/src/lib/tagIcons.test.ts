@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { normalizeTagKey, resolveTagAnchor } from './tagIcons';
+import { getChannelStyle, normalizeTagKey, resolveTagAnchor } from './tagIcons';
 
 test('primary channels map to distinct leading badges', () => {
   assert.equal(resolveTagAnchor('#LiveMusic').icon, 'note');
@@ -20,6 +20,16 @@ test('primary channels map to distinct leading badges', () => {
   assert.equal(resolveTagAnchor('#Outdoor').icon, 'compass');
   assert.equal(resolveTagAnchor('#Fitness').accent, '#34d399');
   assert.equal(resolveTagAnchor('#Outdoor').accent, '#34d399');
+});
+
+test('getChannelStyle returns the night-owl channel colors', () => {
+  assert.equal(getChannelStyle('#LiveMusic').accent, '#22d3ee');
+  assert.equal(getChannelStyle('#LiveMusic').iconName, 'note');
+  assert.equal(getChannelStyle('#FoodTrucks').accent, '#f59e0b');
+  assert.equal(getChannelStyle('#TechMeetup').accent, '#38bdf8');
+  assert.equal(getChannelStyle('#Pickleball').accent, '#34d399');
+  assert.equal(getChannelStyle('#Unknown').accent, '#94a3b8');
+  assert.equal(getChannelStyle('#Unknown').borderColor, '#1e293b');
 });
 
 test('nearby seed aliases stay in the same color families', () => {

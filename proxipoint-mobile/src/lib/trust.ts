@@ -43,6 +43,32 @@ export function coordinatorBadgeLabel(totalDrops: number, upvoteCount: number): 
   return `⭐ Verified Coordinator (${reputation.positivePercent}% • ${reputation.totalDrops} drops)`;
 }
 
+export interface ProxiEvent {
+  id: string;
+  tag: string;
+  title: string;
+  venue: string;
+  hostCallsign: string;
+  hostDrops: number;
+  hostUpvotes: number;
+  attendeeCount: number;
+  status: string;
+  startsAt: string | null;
+  distanceMeters: number;
+  isRsvpd: boolean;
+  selected?: boolean;
+}
+
+export interface TrustBadge {
+  show: boolean;
+  label: string;
+}
+
+export function getTrustBadge(drops: number, upvotes: number): TrustBadge {
+  const label = coordinatorBadgeLabel(drops, upvotes);
+  return { show: label.length > 0, label };
+}
+
 // A post-event prompt is due when an RSVP'd attendee leaves the geofence
 // or the beacon expires, and this device has not already answered.
 export function shouldRequestHostFeedback(gate: FeedbackGate): boolean {

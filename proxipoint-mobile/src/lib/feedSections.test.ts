@@ -4,9 +4,11 @@ import {
   chunkChronologicalFeed,
   formatFeedMeta,
   formatFeedSectionTitle,
+  groupProxiEvents,
   isLiveFeedItem,
   type ChronologicalFeedItem,
 } from './feedSections';
+import type { ProxiEvent } from './trust';
 
 const now = new Date(2026, 9, 9, 15, 0, 0);
 
@@ -99,4 +101,46 @@ test('tomorrow rolls into the next month', () => {
 
 test('an empty feed has no sections', () => {
   assert.deepEqual(chunkChronologicalFeed([], now), []);
+});
+
+test('groupProxiEvents puts live drops first and scheduled drops on their day', () => {
+  const base = {
+    venue: 'Pearl Street Mall',
+    hostCallsign: 'Viper-2',
+    hostDrops: 48,
+    hostUpvotes: 46,
+    attendeeCount: 45,
+    isRsvpd: false,
+  } satisfies Omit<ProxiEvent, 'id' | 'tag' | 'title' | 'status' | 'startsAt' | 'distanceMeters'>;
+  const sections = groupProxiEvents(
+    [
+      {
+        ...base,
+        id: 'market',
+        tag: '#FarmersMarket',
+        title: 'Farmers Market Tasting',
+        hostCallsign: 'Lark-9',
+        status: 'Scheduled',
+        startsAt: '2026-10-10T09:00:00',
+        distanceMeters: 860,
+      },
+      {
+        ...base,
+        id: 'music',
+        tag: '#LiveMusic',
+        title: 'Pearl Street Live Music Night',
+        status: 'LIVE NOW',
+        startsAt: '2026-10-09T14:00:00',
+        distanceMeters: 180,
+      },
+    ],
+    now,
+  );
+  assert.deepEqual(
+    sections.map((section) => [section.title, section.tone, section.data.map((entry) => entry.id)]),
+    [
+      ['LIVE NOW', 'live', ['music']],
+      ['TOMORROW — SATURDAY, OCT 10', 'scheduled', ['market']],
+    ],
+  );
 });

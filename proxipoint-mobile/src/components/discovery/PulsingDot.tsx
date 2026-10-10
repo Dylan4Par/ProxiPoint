@@ -6,16 +6,23 @@ interface Props {
   size?: number;
 }
 
-export const PulsingDot: React.FC<Props> = ({ color = '#10b981', size = 8 }) => {
+export const PulsingDot: React.FC<Props> = ({ color = '#10b981', size = 7 }) => {
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const loop = Animated.loop(
-      Animated.timing(pulse, {
-        toValue: 1,
-        duration: 1400,
-        useNativeDriver: false,
-      }),
+      Animated.sequence([
+        Animated.timing(pulse, {
+          toValue: 1,
+          duration: 700,
+          useNativeDriver: false,
+        }),
+        Animated.timing(pulse, {
+          toValue: 0,
+          duration: 700,
+          useNativeDriver: false,
+        }),
+      ]),
     );
     loop.start();
     return () => {
@@ -23,6 +30,10 @@ export const PulsingDot: React.FC<Props> = ({ color = '#10b981', size = 8 }) => 
     };
   }, [pulse]);
 
+  const coreOpacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.4, 1],
+  });
   const haloScale = pulse.interpolate({
     inputRange: [0, 1],
     outputRange: [1, 2.4],
@@ -47,7 +58,7 @@ export const PulsingDot: React.FC<Props> = ({ color = '#10b981', size = 8 }) => 
           },
         ]}
       />
-      <View
+      <Animated.View
         style={[
           styles.core,
           {
@@ -55,6 +66,7 @@ export const PulsingDot: React.FC<Props> = ({ color = '#10b981', size = 8 }) => 
             height: size,
             borderRadius: size / 2,
             backgroundColor: color,
+            opacity: coreOpacity,
             shadowColor: color,
             shadowOpacity: 0.9,
             shadowRadius: 6,

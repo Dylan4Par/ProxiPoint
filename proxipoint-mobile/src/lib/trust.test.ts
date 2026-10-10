@@ -4,6 +4,7 @@ import {
   VERIFIED_MIN_DROPS,
   VERIFIED_MIN_RATIO,
   coordinatorBadgeLabel,
+  getTrustBadge,
   hostReputation,
   qualifiesAsVerifiedCoordinator,
   shouldRequestHostFeedback,
@@ -24,6 +25,14 @@ test('Viper-2 at 45 upvotes across 48 drops is a verified coordinator at 94 perc
   assert.equal(reputation.positivePercent, 94);
   assert.equal(reputation.isVerifiedCoordinator, true);
   assert.equal(coordinatorBadgeLabel(48, 45), '⭐ Verified Coordinator (94% • 48 drops)');
+});
+
+test('getTrustBadge formats a qualified host and hides the rest', () => {
+  const viper = getTrustBadge(48, 46);
+  assert.equal(viper.show, true);
+  assert.equal(viper.label, '⭐ Verified Coordinator (96% • 48 drops)');
+  assert.equal(getTrustBadge(3, 3).show, false);
+  assert.equal(getTrustBadge(5, 4).show, false);
 });
 
 test('hosts below the bar do not get a badge label', () => {

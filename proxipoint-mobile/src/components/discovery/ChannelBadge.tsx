@@ -10,7 +10,7 @@ import {
   Utensils,
   type LucideIcon,
 } from 'lucide-react-native';
-import { resolveTagAnchor, type ChannelIconName } from '../../lib/tagIcons';
+import { getChannelStyle, type ChannelIconName } from '../../lib/tagIcons';
 
 const ICONS: Record<ChannelIconName, LucideIcon> = {
   note: Music,
@@ -28,8 +28,8 @@ interface Props {
 }
 
 export const ChannelBadge: React.FC<Props> = ({ tag, size = 44 }) => {
-  const anchor = resolveTagAnchor(tag);
-  const Icon = ICONS[anchor.icon];
+  const channel = getChannelStyle(tag);
+  const Icon = ICONS[channel.iconName];
   const iconSize = Math.round(size * 0.48);
 
   return (
@@ -41,12 +41,12 @@ export const ChannelBadge: React.FC<Props> = ({ tag, size = 44 }) => {
           width: size,
           height: size,
           borderRadius: Math.round(size * 0.32),
-          backgroundColor: anchor.surface,
-          borderColor: anchor.border,
+          backgroundColor: channel.bgTint,
+          borderColor: channel.borderColor,
         },
       ]}
     >
-      <Icon color={anchor.accent} size={iconSize} strokeWidth={2.25} />
+      <Icon color={channel.accent} size={iconSize} strokeWidth={2.25} />
     </View>
   );
 };

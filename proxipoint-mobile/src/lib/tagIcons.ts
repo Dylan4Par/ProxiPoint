@@ -76,10 +76,33 @@ const TAG_ANCHORS: Record<string, ChannelAnchor> = {
   outdoor: EMERALD_COMPASS,
 };
 
+export interface ChannelStyle {
+  iconName: ChannelIconName;
+  accent: string;
+  bgTint: string;
+  borderColor: string;
+}
+
 export function normalizeTagKey(tag: string): string {
   return tag.trim().replace(/^#/, '').toLowerCase().replace(/[\s_-]+/g, '');
 }
 
+export function getChannelStyle(tag: string): ChannelStyle {
+  const anchor = TAG_ANCHORS[normalizeTagKey(tag)] ?? SLATE_BEACON;
+  return {
+    iconName: anchor.icon,
+    accent: anchor.accent,
+    bgTint: anchor.surface,
+    borderColor: anchor.border,
+  };
+}
+
 export function resolveTagAnchor(tag: string): ChannelAnchor {
-  return TAG_ANCHORS[normalizeTagKey(tag)] ?? SLATE_BEACON;
+  const style = getChannelStyle(tag);
+  return {
+    icon: style.iconName,
+    accent: style.accent,
+    surface: style.bgTint,
+    border: style.borderColor,
+  };
 }

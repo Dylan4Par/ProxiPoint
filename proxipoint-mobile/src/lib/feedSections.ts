@@ -1,3 +1,5 @@
+import type { ProxiEvent } from './trust';
+
 export interface ChronologicalFeedItem {
   id: string;
   status: string;
@@ -98,6 +100,10 @@ export function chunkChronologicalFeed<T extends ChronologicalFeedItem>(
   }
 
   return sections;
+}
+
+export function groupProxiEvents(events: readonly ProxiEvent[], now = new Date()): FeedSection<ProxiEvent>[] {
+  return chunkChronologicalFeed(events, now);
 }
 
 function startOfDay(date: Date): number {
