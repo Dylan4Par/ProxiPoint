@@ -23,15 +23,14 @@ export function isLiveFeedItem(
   now = new Date(),
 ): boolean {
   if (/live\s*now/i.test(item.status)) return true;
-  if (item.startsAt == null || item.startsAt === '') return false;
-  const start = new Date(item.startsAt);
-  if (Number.isNaN(start.getTime()) || start.getTime() > now.getTime()) return false;
-  return startOfDay(start) === startOfDay(now);
+  const start = item.startsAt ? parseFeedInstant(item.startsAt) : null;
+  if (!start || start.getTime() > now.getTime()) return false;
+  return calendarDayStamp(start) === calendarDayStamp(now);
 }
 
 export function formatFeedSectionTitle(date: Date, now = new Date()): string {
   const label = `${WEEKDAYS[date.getDay()]}, ${MONTHS[date.getMonth()]} ${date.getDate()}`;
-  const delta = Math.round((startOfDay(date) - startOfDay(now)) / DAY_MS);
+  const delta = Math.round((calendarDayStamp(date) - calendarDayStamp(now)) / DAY_MS);
   if (delta === 0) return `TODAY — ${label}`;
   if (delta === 1) return `TOMORROW — ${label}`;
   return label;
@@ -39,8 +38,8 @@ export function formatFeedSectionTitle(date: Date, now = new Date()): string {
 
 export function formatFeedClock(startsAt?: string | null): string | null {
   if (!startsAt) return null;
-  const date = new Date(startsAt);
-  if (!Number.isNaN(date.getTime())) return clockLabel(date.getHours(), date.getMinutes());
+  const date = parseFeedInstant(startsAt);
+  if (date) return clockLabel(date.getHours(), date.getMinutes());
   return clockFromStatus(startsAt);
 }
 
@@ -78,7 +77,7 @@ export function chunkChronologicalFeed<T extends ChronologicalFeedItem>(
 
   live.sort((a, b) => a.distanceMeters - b.distanceMeters || a.id.localeCompare(b.id));
 
-  const scheduled = [...days.values()].sort((a, b) => startOfDay(a.date) - startOfDay(b.date));
+  const scheduled = [...days.values()].sort((a, b) => calendarDayStamp(a.date) - calendarDayStamp(b.date));
   const sections: FeedSection<T>[] = [];
 
   if (live.length > 0) {
@@ -106,8 +105,17 @@ export function groupProxiEvents(events: readonly ProxiEvent[], now = new Date()
   return chunkChronologicalFeed(events, now);
 }
 
-function startOfDay(date: Date): number {
-  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+function calendarDayStamp(date: Date): number {
+  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function parseFeedInstant(value: string): Date | null {
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value.trim());
+  if (dateOnly) {
+    return new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 0, 0, 0, 0);
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function dayKey(date: Date): string {
@@ -128,8 +136,8 @@ function clockFromStatus(status: string): string | null {
 
 function scheduledDate(item: ChronologicalFeedItem, now: Date): Date {
   if (item.startsAt) {
-    const parsed = new Date(item.startsAt);
-    if (!Number.isNaN(parsed.getTime())) return parsed;
+    const parsed = parseFeedInstant(item.startsAt);
+    if (parsed) return parsed;
   }
 
   const hint = `${item.startsAt ?? ''} ${item.status}`;

@@ -45,6 +45,29 @@ export const DiscoveryMapCanvas: React.FC = () => {
     calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
   }, []);
 
+  const skipInitialFocus = useRef(true);
+  useEffect(() => {
+    if (skipInitialFocus.current) {
+      skipInitialFocus.current = false;
+      return;
+    }
+    if (!selectedNodeId) return;
+    const node = nodes[selectedNodeId];
+    if (!node) return;
+    const next = {
+      x: width / 2 - node.x + WORLD_OFFSET,
+      y: CANVAS_HEIGHT / 2 - node.y + WORLD_OFFSET,
+    };
+    Animated.spring(pan, {
+      toValue: next,
+      useNativeDriver: false,
+      friction: 7,
+      tension: 40,
+    }).start();
+    currentPan.current = next;
+    calculateBounds(next.x, next.y);
+  }, [selectedNodeId]);
+
   const handleRecenter = () => {
     Animated.spring(pan, {
       toValue: { x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y },

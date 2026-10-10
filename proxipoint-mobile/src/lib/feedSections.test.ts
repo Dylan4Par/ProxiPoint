@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   chunkChronologicalFeed,
+  formatFeedClock,
   formatFeedMeta,
   formatFeedSectionTitle,
   groupProxiEvents,
@@ -97,6 +98,26 @@ test('tomorrow rolls into the next month', () => {
   const monthEnd = new Date(2026, 9, 31, 12, 0, 0);
   const title = formatFeedSectionTitle(new Date(2026, 10, 1, 9, 0, 0), monthEnd);
   assert.equal(title, 'TOMORROW — SUNDAY, NOV 1');
+});
+
+test('an evening start stays on the local calendar day after a UTC round trip', () => {
+  const evening = new Date(2026, 9, 9, 23, 30, 0);
+  const iso = evening.toISOString();
+  assert.equal(formatFeedClock(iso), '23:30');
+  const sections = chunkChronologicalFeed(
+    [item({ id: 'late', status: 'Scheduled', startsAt: iso, distanceMeters: 20 })],
+    now,
+  );
+  assert.equal(sections[0]?.title, 'TODAY — FRIDAY, OCT 9');
+});
+
+test('a date-only start uses the local calendar day', () => {
+  assert.equal(formatFeedClock('2026-10-10'), '00:00');
+  const sections = chunkChronologicalFeed(
+    [item({ id: 'day', status: 'Scheduled', startsAt: '2026-10-10', distanceMeters: 1 })],
+    now,
+  );
+  assert.equal(sections[0]?.title, 'TOMORROW — SATURDAY, OCT 10');
 });
 
 test('handoff phrases keep live distance and tomorrow at 09:00', () => {
