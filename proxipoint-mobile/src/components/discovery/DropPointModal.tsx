@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Building2, Calendar, Crosshair, Landmark, MapPin, Rocket, UserPlus } from 'lucide-react-native';
@@ -149,6 +150,8 @@ function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
 
 export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
+  // Force Android to use the raw hardware status bar height, fallback to insets for iOS
+  const safeTop = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : insets.top;
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const dropBeacon = useDiscoveryStore((state) => state.dropBeacon);
   const adoptPersistedBeacon = useDiscoveryStore((state) => state.adoptPersistedBeacon);
@@ -431,8 +434,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   };
 
   return (
-    // Apply the top inset as padding to clear the OS icons
-    <View style={[styles.overlay, { flex: 1, paddingTop: insets.top }]} testID="drop-beacon-sheet">
+    <View
+      style={[styles.overlay, { flex: 1, position: 'absolute', top: 0, paddingTop: safeTop }]}
+      testID="drop-beacon-sheet"
+    >
       <View style={styles.mapBand} testID="drop-beacon-map" pointerEvents={sheetCovered ? 'auto' : 'none'}>
         <DiscoveryLeafletMap onMapPick={mapPicking ? handleMapPick : undefined} />
       </View>
@@ -445,7 +450,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
         </View>
       ) : null}
       <KeyboardAvoidingView
-        style={[styles.sheetContainer, { paddingTop: insets.top }, sheetCovered && styles.sheetHidden]}
+        style={[styles.sheetContainer, { paddingTop: safeTop }, sheetCovered && styles.sheetHidden]}
         pointerEvents={sheetCovered ? 'none' : 'auto'}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
