@@ -10,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Building2, Calendar, Crosshair, Landmark, MapPin, Rocket, UserPlus } from 'lucide-react-native';
 import {
   LINKED_FACEBOOK_ACCOUNTS,
@@ -147,6 +148,7 @@ function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
 }
 
 export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose }) => {
+  const insets = useSafeAreaInsets();
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const dropBeacon = useDiscoveryStore((state) => state.dropBeacon);
   const adoptPersistedBeacon = useDiscoveryStore((state) => state.adoptPersistedBeacon);
@@ -429,7 +431,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   };
 
   return (
-    <View style={styles.overlay} testID="drop-beacon-sheet">
+    // Apply the top inset as padding to clear the OS icons
+    <View style={[styles.overlay, { flex: 1, paddingTop: insets.top }]} testID="drop-beacon-sheet">
       <View style={styles.mapBand} testID="drop-beacon-map" pointerEvents={sheetCovered ? 'auto' : 'none'}>
         <DiscoveryLeafletMap onMapPick={mapPicking ? handleMapPick : undefined} />
       </View>
@@ -442,7 +445,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
         </View>
       ) : null}
       <KeyboardAvoidingView
-        style={[styles.sheetContainer, sheetCovered && styles.sheetHidden]}
+        style={[styles.sheetContainer, { paddingTop: insets.top }, sheetCovered && styles.sheetHidden]}
         pointerEvents={sheetCovered ? 'none' : 'auto'}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
