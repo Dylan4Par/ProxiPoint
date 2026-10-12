@@ -65,6 +65,8 @@ import {
 } from '../../types/beacon';
 
 const NAV_BAR_HEIGHT = 72;
+// Used when Android reports no status bar height. Tall enough to clear a punch-hole status row.
+const ANDROID_STATUS_BAR_FALLBACK = 48;
 
 interface DropPointModalProps {
   visible: boolean;
@@ -150,8 +152,11 @@ function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
 
 export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose }) => {
   const insets = useSafeAreaInsets();
-  // Force Android to use the raw hardware status bar height, fallback to insets for iOS
-  const safeTop = Platform.OS === 'android' ? (StatusBar.currentHeight ?? 0) : insets.top;
+  // Android often reports a 0 inset while the status bar still draws over the sheet.
+  // Prefer the hardware height, then the safe-area inset, then a fixed fallback.
+  const measuredTop = Math.max(insets.top, StatusBar.currentHeight ?? 0);
+  const safeTop =
+    measuredTop > 0 ? measuredTop : Platform.OS === 'android' ? ANDROID_STATUS_BAR_FALLBACK : 0;
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const dropBeacon = useDiscoveryStore((state) => state.dropBeacon);
   const adoptPersistedBeacon = useDiscoveryStore((state) => state.adoptPersistedBeacon);
@@ -450,7 +455,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
         </View>
       ) : null}
       <KeyboardAvoidingView
-        style={[styles.sheetContainer, { paddingTop: safeTop }, sheetCovered && styles.sheetHidden]}
+        style={[styles.sheetContainer, { top: safeTop }, sheetCovered && styles.sheetHidden]}
         pointerEvents={sheetCovered ? 'none' : 'auto'}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
