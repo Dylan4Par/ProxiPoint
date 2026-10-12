@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
 } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Building2, Calendar, Crosshair, Landmark, MapPin, Rocket, UserPlus } from 'lucide-react-native';
 import {
   LINKED_FACEBOOK_ACCOUNTS,
@@ -63,6 +65,8 @@ import {
 } from '../../types/beacon';
 
 const NAV_BAR_HEIGHT = 72;
+// Used when Android reports no status bar height. Tall enough to clear a punch-hole status row.
+const ANDROID_STATUS_BAR_FALLBACK = 48;
 
 interface DropPointModalProps {
   visible: boolean;
@@ -147,6 +151,12 @@ function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
 }
 
 export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose }) => {
+  const insets = useSafeAreaInsets();
+  // Android often reports a 0 inset while the status bar still draws over the sheet.
+  // Prefer the hardware height, then the safe-area inset, then a fixed fallback.
+  const measuredTop = Math.max(insets.top, StatusBar.currentHeight ?? 0);
+  const safeTop =
+    measuredTop > 0 ? measuredTop : Platform.OS === 'android' ? ANDROID_STATUS_BAR_FALLBACK : 0;
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const dropBeacon = useDiscoveryStore((state) => state.dropBeacon);
   const adoptPersistedBeacon = useDiscoveryStore((state) => state.adoptPersistedBeacon);
@@ -429,7 +439,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   };
 
   return (
-    <View style={styles.overlay} testID="drop-beacon-sheet">
+    <View
+      style={[styles.overlay, { flex: 1, position: 'absolute', top: 0, paddingTop: safeTop }]}
+      testID="drop-beacon-sheet"
+    >
       <View style={styles.mapBand} testID="drop-beacon-map" pointerEvents={sheetCovered ? 'auto' : 'none'}>
         <DiscoveryLeafletMap onMapPick={mapPicking ? handleMapPick : undefined} />
       </View>
@@ -442,7 +455,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
         </View>
       ) : null}
       <KeyboardAvoidingView
-        style={[styles.sheetContainer, sheetCovered && styles.sheetHidden]}
+        style={[styles.sheetContainer, { top: safeTop }, sheetCovered && styles.sheetHidden]}
         pointerEvents={sheetCovered ? 'none' : 'auto'}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       >
