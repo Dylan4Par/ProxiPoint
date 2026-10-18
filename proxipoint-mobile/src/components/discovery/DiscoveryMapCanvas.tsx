@@ -14,7 +14,7 @@ import { toCanvasCoordinates, useDiscoveryStore } from '../../stores/useDiscover
 import { matchesDiscoverFilters } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
-import { Zap } from 'lucide-react-native';
+import { Plus, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
@@ -90,7 +90,9 @@ export const DiscoveryMapCanvas: React.FC<{
    * bubble's list instead of its details. New key = new request.
    */
   cardRequest?: { id: string; key: number } | null;
-}> = ({ liveOnly = false, onMapTouch, coveredFromY = null, onOpenPoint, cardRequest = null }) => {
+  /** Drop a new Point. Shows a "+" next to the recenter button; leave out to hide it. */
+  onDropPoint?: () => void;
+}> = ({ liveOnly = false, onMapTouch, coveredFromY = null, onOpenPoint, cardRequest = null, onDropPoint }) => {
   const { colors: c, mode } = useTheme();
   const styles = useThemedStyles(createStyles);
   const nodes = useDiscoveryStore((s) => s.nodes);
@@ -756,6 +758,20 @@ export const DiscoveryMapCanvas: React.FC<{
         </View>
       </TouchableOpacity>
 
+      {/* Drop Point: same size and look as the recenter button, just left of it. */}
+      {onDropPoint ? (
+        <TouchableOpacity
+          style={[styles.crosshairBtn, styles.dropBtn]}
+          activeOpacity={0.7}
+          onPress={onDropPoint}
+          accessibilityRole="button"
+          accessibilityLabel="Drop a Point"
+          testID="map-drop-point"
+        >
+          <Plus size={22} color={c.accent} strokeWidth={2.75} />
+        </TouchableOpacity>
+      ) : null}
+
       {/* Zoom buttons (also handy on the emulator, where pinching needs Ctrl + drag) */}
       <View style={styles.zoomStack}>
         <TouchableOpacity
@@ -1034,6 +1050,8 @@ const createStyles = (c: ThemeColors) =>
     shadowOpacity: 0.3,
     shadowRadius: 4,
   },
+  /* Sits left of the recenter button: its 14px inset + 38px width + an 8px gap. */
+  dropBtn: { right: 60 },
   crosshairCircleOuter: {
     width: 20,
     height: 20,

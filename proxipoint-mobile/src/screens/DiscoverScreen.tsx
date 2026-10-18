@@ -22,7 +22,7 @@ import { DiscoverFeedScreen } from './DiscoverFeedScreen';
 import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
 import { setTimeWindow, useTimeWindow } from '../lib/timeWindow';
 import { formatRange } from '../lib/calendarRange';
-import { CalendarDays, ChevronLeft, Plus, X } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, X } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
 import { cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
@@ -333,6 +333,18 @@ export const DiscoverScreen: React.FC = () => {
               coveredFromY={detailId ? detailTopY : null}
               // Picked from a cluster's list (several Points at one spot): show its details.
               onOpenPoint={setDetailId}
+              // "+" next to the recenter button. Hidden while a sheet is up so it never covers the sheet.
+              onDropPoint={
+                detailId || dropOpen || managing
+                  ? undefined
+                  : () => {
+                      setHostHandle(null);
+                      // Always starts a fresh Point.
+                      setManagingId(null);
+                      setDropPrefill(null);
+                      setDropOpen(true);
+                    }
+              }
             />
             {/* Which city Discover is showing; tap to look somewhere else. (Hidden under the full list.) */}
             {cardsFull ? null : (
@@ -378,27 +390,6 @@ export const DiscoverScreen: React.FC = () => {
               resetSignal={cardsReset}
               onFullChange={setCardsFull}
             />
-            {/* Drop Point: floats over the map (moved here from the nav bar).
-                Hidden while a sheet is up, so it never sits on top of the sheet's own buttons. */}
-            {detailId || dropOpen || managing ? null : (
-              <TouchableOpacity
-                style={styles.dropFab}
-                onPress={() => {
-                  setDetailId(null);
-                  setHostHandle(null);
-                  // Always starts a fresh Point.
-                  setManagingId(null);
-                  setDropPrefill(null);
-                  setDropOpen(true);
-                }}
-                activeOpacity={0.85}
-                accessibilityRole="button"
-                accessibilityLabel="Drop a Point"
-                testID="map-drop-point"
-              >
-                <Plus size={26} color={c.onAccent} strokeWidth={2.75} />
-              </TouchableOpacity>
-            )}
           </View>
           <PointDetailSheet
             node={detailNode}
@@ -590,23 +581,6 @@ const createStyles = (c: ThemeColors) =>
     backgroundColor: c.base,
   },
   mapAndCards: { flex: 1 },
-  dropFab: {
-    position: 'absolute',
-    right: 16,
-    bottom: 16,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: c.accent,
-    zIndex: 35,
-    elevation: 8,
-    shadowColor: c.accent,
-    shadowOpacity: 0.45,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 3 },
-  },
   subPage: { flex: 1 },
   subBack: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4, alignSelf: 'flex-start' },
   subBackText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
