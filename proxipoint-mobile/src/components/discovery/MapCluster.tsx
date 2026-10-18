@@ -128,12 +128,8 @@ export const ClusterBubble: React.FC<{
         <View style={[styles.bubble, { backgroundColor: fill }]}>
           <Text style={[styles.count, { color: ink }]}>{cluster.members.length}</Text>
         </View>
-        {boosted ? (
-          <View style={styles.bolt}>
-            <Zap size={9} color={GOLD} fill={GOLD} strokeWidth={2} />
-          </View>
-        ) : null}
-        {/* Posts pinned here: purple speech badge at the lower left (the boost bolt is upper right). */}
+        {/* Posts pinned here: purple speech badge at the upper right. (Boosted bubbles show it
+            through their gold fill and label instead of a bolt, so this corner stays for posts.) */}
         {postCount ? (
           <View style={styles.postBadge} testID="cluster-post-badge">
             <MessageCircle size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
@@ -292,20 +288,6 @@ const createStyles = (c: ThemeColors) =>
       elevation: 4,
     },
     count: { fontSize: 16, fontWeight: '900' },
-    bolt: {
-      position: 'absolute',
-      top: 2,
-      right: 2,
-      width: 18,
-      height: 18,
-      borderRadius: 9,
-      backgroundColor: GOLD_INK,
-      borderWidth: 1.5,
-      borderColor: GOLD,
-      alignItems: 'center',
-      justifyContent: 'center',
-      elevation: 5,
-    },
     label: {
       marginTop: 2,
       height: 20,
@@ -374,8 +356,8 @@ const createStyles = (c: ThemeColors) =>
     rowWhen: { color: c.accentSoft, fontSize: 12, fontWeight: '700' },
     postBadge: {
       position: 'absolute',
-      bottom: 2,
-      left: -2,
+      top: 0,
+      right: -4,
       minWidth: 22,
       height: 18,
       paddingHorizontal: 4,
