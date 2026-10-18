@@ -21,7 +21,7 @@ import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type 
 import { isBoosted, useBoosts } from '../../lib/boost';
 import { getChannel, usePosts, type ChannelPost } from '../../lib/channels';
 import { isPinLive } from '../../lib/postRanking';
-import { clusterPins, nudgeOffMarkers } from '../../lib/postPins';
+import { absorbIntoMarkers, clusterPins, nudgeOffMarkers } from '../../lib/postPins';
 import { PostPickSheet } from './PostPickSheet';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -323,16 +323,23 @@ export const DiscoveryMapCanvas: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeList.map((n) => `${n.id}:${n.x}:${n.y}`).join(','), selectedNodeId, clusterZoom, boostClock]);
 
-  // ---- Post bubbles: grouped like the Points, and kept off the Points' pins -----------------
-  // Posts whose bubbles would overlap become one bubble with a count; a bubble that would cover
-  // a Point (a post pinned at that venue) moves to the pin's upper-right, like a badge.
-  const postGroups = useMemo(() => {
+  // ---- Post bubbles: grouped like the Points, absorbed by Point bubbles, kept off pins ------
+  // Posts whose bubbles would overlap become one bubble with a count. A bubble landing on a Point
+  // cluster bubble is absorbed into it (badge on the bubble, cards in its list). A bubble that
+  // would cover a single Point's pin (a post pinned at that venue) moves to the pin's upper-right.
+  const { postGroups, postsByCluster } = useMemo(() => {
     const spots = postPins.map(({ post, x, y }) => ({ id: post.id, x, y, post }));
-    const markers = [
-      ...singles.map((n) => ({ x: n.x ?? 480, y: n.y ?? 480 })),
-      ...clusters.map((cl) => ({ x: cl.x, y: cl.y })),
-    ];
-    return nudgeOffMarkers(clusterPins(spots, clusterZoom), markers, clusterZoom);
+    const { absorbed, rest } = absorbIntoMarkers(
+      clusterPins(spots, clusterZoom),
+      clusters.map((cl) => ({ key: cl.key, x: cl.x, y: cl.y })),
+      clusterZoom,
+    );
+    const byCluster: Record<string, ChannelPost[]> = {};
+    Object.entries(absorbed).forEach(([key, members]) => {
+      byCluster[key] = members.map((m) => m.post);
+    });
+    const pinMarkers = singles.map((n) => ({ x: n.x ?? 480, y: n.y ?? 480 }));
+    return { postGroups: nudgeOffMarkers(rest, pinMarkers, clusterZoom), postsByCluster: byCluster };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [postPins.map((p) => `${p.post.id}:${p.x}:${p.y}`).join(','), singles, clusters, clusterZoom]);
   const [pickPosts, setPickPosts] = useState<ChannelPost[] | null>(null);
@@ -762,6 +769,7 @@ export const DiscoveryMapCanvas: React.FC<{
               cluster={cluster}
               selected={cluster.selected}
               showLabel={!hiddenLabels.has(cluster.key)}
+              postCount={postsByCluster[cluster.key]?.length ?? 0}
               onPress={() => openCluster(cluster)}
             />
           </Animated.View>
@@ -872,6 +880,12 @@ export const DiscoveryMapCanvas: React.FC<{
           setPickCluster(null);
           setSelectedNodeId(id);
           onOpenPoint?.(id);
+        }}
+        // Posts absorbed into this bubble, listed under its Points.
+        posts={pickCluster ? postsByCluster[pickCluster.key] ?? [] : []}
+        onPickPost={(id) => {
+          setPickCluster(null);
+          onOpenPost?.(id);
         }}
       />
 

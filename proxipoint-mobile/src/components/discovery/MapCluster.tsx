@@ -11,9 +11,11 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Zap } from 'lucide-react-native';
+import { ChevronRight, MessageCircle, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
+import { timeAgo } from '../../lib/activity';
+import { getChannel, type ChannelPost } from '../../lib/channels';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const GOLD = '#f59e0b';
@@ -74,8 +76,10 @@ export const ClusterBubble: React.FC<{
   selected?: boolean;
   /** False when the label would collide with something more important (it's hidden). */
   showLabel?: boolean;
+  /** Pinned channel posts absorbed into this bubble: shown as a purple badge with the count. */
+  postCount?: number;
   onPress: () => void;
-}> = ({ cluster, selected = false, showLabel = true, onPress }) => {
+}> = ({ cluster, selected = false, showLabel = true, postCount = 0, onPress }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const boosted = cluster.members.some((m) => m.boosted);
@@ -116,7 +120,9 @@ export const ClusterBubble: React.FC<{
       onPress={onPress}
       style={styles.column}
       accessibilityRole="button"
-      accessibilityLabel={`${cluster.members.length} Points${boosted ? ', includes boosted' : ''}${live ? ', includes live' : ''}: ${tags.join(', ')}. ${cluster.samePlace ? 'Show the list' : 'Zoom in'}`}
+      accessibilityLabel={`${cluster.members.length} Points${boosted ? ', includes boosted' : ''}${live ? ', includes live' : ''}${
+        postCount ? `, ${postCount} ${postCount === 1 ? 'post' : 'posts'}` : ''
+      }: ${tags.join(', ')}. ${cluster.samePlace ? 'Show the list' : 'Zoom in'}`}
     >
       <View style={[styles.halo, { backgroundColor: halo }, selected && [styles.haloSelected, { borderColor: boosted ? GOLD : live ? c.green : c.accent }]]}>
         <View style={[styles.bubble, { backgroundColor: fill }]}>
@@ -125,6 +131,13 @@ export const ClusterBubble: React.FC<{
         {boosted ? (
           <View style={styles.bolt}>
             <Zap size={9} color={GOLD} fill={GOLD} strokeWidth={2} />
+          </View>
+        ) : null}
+        {/* Posts pinned here: purple speech badge at the lower left (the boost bolt is upper right). */}
+        {postCount ? (
+          <View style={styles.postBadge} testID="cluster-post-badge">
+            <MessageCircle size={9} color="#ffffff" fill="#ffffff" strokeWidth={2} />
+            <Text style={styles.postBadgeText}>{postCount}</Text>
           </View>
         ) : null}
       </View>
@@ -157,7 +170,10 @@ export const ClusterPickSheet: React.FC<{
   highlightId?: string | null;
   onPick: (id: string) => void;
   onClose: () => void;
-}> = ({ cluster, highlightId = null, onPick, onClose }) => {
+  /** Channel posts pinned at this spot: listed under the Points as post cards. */
+  posts?: ChannelPost[];
+  onPickPost?: (id: string) => void;
+}> = ({ cluster, highlightId = null, onPick, onClose, posts = [], onPickPost }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const insets = useSafeAreaInsets();
@@ -170,6 +186,11 @@ export const ClusterPickSheet: React.FC<{
   );
   const first = members[0];
   const place = first?.locationPrivacy?.regionName ? `somewhere in ${first.locationPrivacy.regionName}` : first?.venue;
+  const sortedPosts = [...posts].sort(
+    (a, b) => b.upvotes - a.upvotes || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  );
+  const now = Date.now();
+  const postsLabel = sortedPosts.length ? ` · ${sortedPosts.length} ${sortedPosts.length === 1 ? 'post' : 'posts'}` : '';
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>
@@ -177,7 +198,7 @@ export const ClusterPickSheet: React.FC<{
         <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]} testID="cluster-pick-sheet">
           <View style={styles.handle} />
           <Text style={styles.sheetTitle}>
-            {members.length} Points{cluster.samePlace && place ? ` at ${place}` : ' here'}
+            {members.length} Points{postsLabel}{cluster.samePlace && place ? ` at ${place}` : ' here'}
           </Text>
           <Text style={styles.sheetSub}>
             {cluster.samePlace ? 'Same spot' : 'Right next to each other'} · tap one to see it
@@ -211,6 +232,34 @@ export const ClusterPickSheet: React.FC<{
                 <ChevronRight size={18} color={c.iconFaint} strokeWidth={2.25} />
               </TouchableOpacity>
             ))}
+
+            {sortedPosts.length ? <Text style={styles.postsLabel}>POSTS HERE</Text> : null}
+            {sortedPosts.map((post) => {
+              const channel = getChannel(post.channelId);
+              return (
+                <TouchableOpacity
+                  key={post.id}
+                  style={styles.postRow}
+                  onPress={() => onPickPost?.(post.id)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Post in ${channel?.handle ?? 'a channel'} by ${post.author}: ${post.body}`}
+                  testID={`cluster-post-${post.id}`}
+                >
+                  <View style={styles.postHeader}>
+                    {channel ? <CategoryBadge tag={channel.tags[0]} title={channel.name} size={20} /> : null}
+                    <Text style={styles.postChannel} numberOfLines={1}>
+                      {channel?.handle ?? ''}
+                    </Text>
+                    <Text style={styles.postMeta} numberOfLines={1}>
+                      {post.author} · {timeAgo(post.createdAt, now)}
+                    </Text>
+                  </View>
+                  <Text style={styles.postBody} numberOfLines={3}>
+                    {post.body}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
           </ScrollView>
         </Pressable>
       </Pressable>
@@ -323,4 +372,36 @@ const createStyles = (c: ThemeColors) =>
     boostChipText: { color: GOLD, fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
     rowTitle: { color: c.text, fontSize: 14, fontWeight: '800', alignSelf: 'stretch' },
     rowWhen: { color: c.accentSoft, fontSize: 12, fontWeight: '700' },
+    postBadge: {
+      position: 'absolute',
+      bottom: 2,
+      left: -2,
+      minWidth: 22,
+      height: 18,
+      paddingHorizontal: 4,
+      borderRadius: 9,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 2,
+      backgroundColor: c.violet,
+      borderWidth: 1.5,
+      borderColor: '#ffffff',
+      elevation: 5,
+    },
+    postBadgeText: { color: '#ffffff', fontSize: 10, fontWeight: '900' },
+    postsLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginTop: 8 },
+    // Same look as a post card in Channels: channel, author and time, then the text.
+    postRow: {
+      gap: 8,
+      padding: 12,
+      borderRadius: 14,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    postHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    postChannel: { color: c.accent, fontSize: 13, fontWeight: '800', flexShrink: 1 },
+    postMeta: { color: c.textFaint, fontSize: 12, flexShrink: 1 },
+    postBody: { color: c.text, fontSize: 14, lineHeight: 20 },
   });

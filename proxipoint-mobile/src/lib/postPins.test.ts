@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { NUDGE_X, NUDGE_Y, clusterPins, nudgeOffMarkers } from './postPins';
+import { NUDGE_X, NUDGE_Y, absorbIntoMarkers, clusterPins, nudgeOffMarkers } from './postPins';
 
 const pin = (id: string, x: number, y: number) => ({ id, x, y });
 
@@ -47,4 +47,26 @@ test('a bubble well above a pin is left alone', () => {
   // Spot 80px above the pin: the bubble (34px tall, above its spot) doesn't reach the pin.
   const [g] = nudgeOffMarkers(clusterPins([pin('p', 200, 120)], 1), [{ x: 200, y: 200 }], 1);
   assert.deepEqual([g.dx, g.dy], [0, 0]);
+});
+
+test('bubbles on a Point cluster are absorbed into it; others stay', () => {
+  const groups = clusterPins([pin('at-venue', 300, 300), pin('elsewhere', 700, 700)], 1);
+  const { absorbed, rest } = absorbIntoMarkers(groups, [{ key: 'cl1', x: 300, y: 300 }], 1);
+  assert.deepEqual(absorbed.cl1.map((p) => p.id), ['at-venue']);
+  assert.deepEqual(rest.map((g) => g.key), ['elsewhere']);
+});
+
+test('a grouped bubble hands all its posts to the cluster, nearest cluster wins', () => {
+  const groups = clusterPins([pin('a', 300, 300), pin('b', 306, 302)], 1);
+  const { absorbed, rest } = absorbIntoMarkers(
+    groups,
+    [
+      { key: 'far', x: 340, y: 300 },
+      { key: 'near', x: 305, y: 305 },
+    ],
+    1,
+  );
+  assert.deepEqual(absorbed.near.map((p) => p.id).sort(), ['a', 'b']);
+  assert.equal(absorbed.far, undefined);
+  assert.equal(rest.length, 0);
 });

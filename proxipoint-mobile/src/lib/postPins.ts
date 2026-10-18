@@ -1,8 +1,10 @@
 /**
  * Layout for pinned channel posts on Explore Map (pure, no React, so it's testable):
  * - posts whose bubbles would overlap on screen merge into one bubble with a count;
- * - a bubble that would sit on top of a Point's pin (a post pinned at that venue) slides to the
- *   pin's upper-right, like a badge, so neither hides the other.
+ * - a bubble that lands on a Point cluster bubble is absorbed into it (the cluster shows a post
+ *   badge, and its list shows the posts);
+ * - a bubble that would sit on top of a single Point's pin (a post pinned at that venue) slides to
+ *   the pin's upper-right, like a badge, so neither hides the other.
  *
  * Positions are in map world units; box sizes and offsets are screen pixels, divided by the zoom.
  */
@@ -82,6 +84,40 @@ export const MARKER_HALF_H = 25;
 export const NUDGE_X = 30;
 export const NUDGE_Y = -16;
 
+/** True when a post bubble at `group` would overlap a marker at `m` on screen. */
+function overlaps(group: { x: number; y: number }, m: { x: number; y: number }, zoom: number): boolean {
+  // The bubble covers from its spot up to POST_BOX_H above it, and half its width each side.
+  const sx = (group.x - m.x) * zoom; // screen pixels from the marker's spot
+  const sy = (group.y - m.y) * zoom;
+  return Math.abs(sx) < MARKER_HALF_W + POST_BOX_W / 2 && sy > -MARKER_HALF_H && sy - POST_BOX_H < MARKER_HALF_H;
+}
+
+/**
+ * Post bubbles that land on a Point cluster bubble are absorbed into it: returns each cluster's
+ * posts (by cluster key) and the bubbles that stay on their own. A bubble touching several
+ * clusters goes to the nearest.
+ */
+export function absorbIntoMarkers<T extends PinSpot>(
+  groups: Array<PinGroup<T>>,
+  markers: Array<{ key: string; x: number; y: number }>,
+  zoom: number,
+): { absorbed: Record<string, T[]>; rest: Array<PinGroup<T>> } {
+  const absorbed: Record<string, T[]> = {};
+  const rest: Array<PinGroup<T>> = [];
+  for (const group of groups) {
+    const hits = markers.filter((m) => overlaps(group, m, zoom));
+    if (!hits.length) {
+      rest.push(group);
+      continue;
+    }
+    const nearest = hits.reduce((best, m) =>
+      Math.hypot(m.x - group.x, m.y - group.y) < Math.hypot(best.x - group.x, best.y - group.y) ? m : best,
+    );
+    absorbed[nearest.key] = [...(absorbed[nearest.key] ?? []), ...group.members];
+  }
+  return { absorbed, rest };
+}
+
 /** Slides post bubbles that would cover a Point's pin to that pin's upper-right. */
 export function nudgeOffMarkers<T extends PinSpot>(
   groups: Array<PinGroup<T>>,
@@ -89,12 +125,7 @@ export function nudgeOffMarkers<T extends PinSpot>(
   zoom: number,
 ): Array<PinGroup<T>> {
   return groups.map((group) => {
-    // The bubble covers from its spot up to POST_BOX_H above it, and half its width each side.
-    const hit = markers.find((m) => {
-      const sx = (group.x - m.x) * zoom; // screen pixels from the marker's spot
-      const sy = (group.y - m.y) * zoom;
-      return Math.abs(sx) < MARKER_HALF_W + POST_BOX_W / 2 && sy > -MARKER_HALF_H && sy - POST_BOX_H < MARKER_HALF_H;
-    });
+    const hit = markers.find((m) => overlaps(group, m, zoom));
     if (!hit) return group;
     // Sit beside that marker, measured from the bubble's own spot.
     return {
