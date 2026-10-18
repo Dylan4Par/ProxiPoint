@@ -18,6 +18,8 @@ export interface MyProfile {
   interestTags: string[];
   /** True: shown on your public profile. False: only you see them (alerts work either way). */
   interestTagsPublic: boolean;
+  /** True: the channels you've joined are listed on your public profile. False: only you see them. */
+  channelsPublic: boolean;
   /** Your home city. Null = the app's default area until you pick one. */
   homeCity: { name: string; region?: string; latitude: number; longitude: number } | null;
   /** True: Discover follows your GPS. False: Discover opens on your home city. */
@@ -37,6 +39,7 @@ export const DEFAULT_PROFILE: MyProfile = {
   following: 0,
   interestTags: [],
   interestTagsPublic: false,
+  channelsPublic: false,
   homeCity: null,
   trackLocation: false,
 };

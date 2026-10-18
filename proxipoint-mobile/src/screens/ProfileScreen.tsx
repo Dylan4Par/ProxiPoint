@@ -5,6 +5,7 @@ import { Bell, ChevronLeft, ChevronRight, Image as ImageIcon, Layers, Plus, Sett
 import { RecapCard } from '../components/profile/RecapCard';
 import { RecapComposer } from '../components/profile/RecapComposer';
 import { MyTagsTile } from '../components/profile/MyTagsTile';
+import { MyChannelsTile } from '../components/profile/MyChannelsTile';
 import { LocationTile } from '../components/profile/LocationTile';
 import type { CityPlace } from '../lib/places';
 import { type DroppedPoint } from '../lib/droppedPoint';
@@ -44,6 +45,12 @@ interface ProfileScreenProps {
   onChangeBio: (bio: string) => void;
   /** Saves your #tags and whether they're public. */
   onChangeInterestTags: (tags: string[], isPublic: boolean) => void;
+  /** Saves whether your channels are listed on your public profile. */
+  onChangeChannelsPublic: (isPublic: boolean) => void;
+  /** Opens a channel you're in (Channels tab). */
+  onOpenChannel: (id: string) => void;
+  /** Channels tab → My Channels, to find more. */
+  onBrowseChannels: () => void;
   /** Home city and GPS tracking for Discover. */
   onChangeHomeCity: (city: CityPlace) => void;
   onChangeTracking: (on: boolean) => void;
@@ -85,6 +92,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onChangeAvatar,
   onChangeBio,
   onChangeInterestTags,
+  onChangeChannelsPublic,
+  onOpenChannel,
+  onBrowseChannels,
   onChangeHomeCity,
   onChangeTracking,
   defaultAreaLabel,
@@ -299,6 +309,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             tags={profile.interestTags ?? []}
             isPublic={profile.interestTagsPublic ?? false}
             onChange={onChangeInterestTags}
+          />
+
+          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY CHANNELS</Text>
+          <MyChannelsTile
+            isPublic={profile.channelsPublic ?? false}
+            onChangePublic={onChangeChannelsPublic}
+            onOpenChannel={onOpenChannel}
+            onBrowse={onBrowseChannels}
           />
 
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>LOCATION</Text>

@@ -478,6 +478,16 @@ export const DiscoverScreen: React.FC = () => {
             if (!profile.trackLocation) setViewPlace({ ...city, kind: 'home' });
           }}
           onChangeTracking={(on) => setProfile((current) => ({ ...current, trackLocation: on }))}
+          // Server side: PATCH /me { channelsPublic }
+          onChangeChannelsPublic={(channelsPublic) => setProfile((current) => ({ ...current, channelsPublic }))}
+          onOpenChannel={(id) => {
+            goTo('channels');
+            setChannelId(id);
+          }}
+          onBrowseChannels={() => {
+            goTo('channels');
+            setChannelsSegment('manage');
+          }}
           onChangeInterestTags={(interestTags, interestTagsPublic) =>
             // Server side: PUT /me/interest-tags
             setProfile((current) => ({ ...current, interestTags, interestTagsPublic }))
