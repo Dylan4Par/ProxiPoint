@@ -26,6 +26,7 @@ import { CalendarDays, ChevronLeft, X } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
 import { cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
+import { getPost } from '../lib/channels';
 import { useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
 import { DEFAULT_PROFILE, DEFAULT_SETTINGS, type MyProfile, type MySettings } from '../lib/myProfile';
@@ -49,6 +50,8 @@ export const DiscoverScreen: React.FC = () => {
   const [channelId, setChannelId] = useState<string | null>(null);
   // A channel post's page (comments), opened from a feed, a channel or a pin on the map.
   const [postId, setPostId] = useState<string | null>(null);
+  // Set when that post was opened from a pin on the map: Back returns to the map, at the pin.
+  const [postFromMap, setPostFromMap] = useState<{ latitude: number; longitude: number } | null>(null);
   // "Show on map" for a pinned post: Explore Map opens centered there. New key = new request.
   const [mapFocus, setMapFocus] = useState<{ latitude: number; longitude: number; key: number } | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
@@ -266,6 +269,7 @@ export const DiscoverScreen: React.FC = () => {
     setProfileView('main');
     setChannelId(null);
     setPostId(null);
+    setPostFromMap(null);
     setMapFocus(null);
     setTab(next);
   };
@@ -357,8 +361,10 @@ export const DiscoverScreen: React.FC = () => {
               onOpenPoint={setDetailId}
               // Speech-bubble pins for channel posts: open the post and its comments.
               onOpenPost={(id) => {
+                const place = getPost(id)?.place ?? null;
                 goTo('channels');
                 setPostId(id);
+                setPostFromMap(place ? { latitude: place.latitude, longitude: place.longitude } : null);
               }}
               focusRequest={mapFocus}
               // "+" next to the recenter button. Hidden while a sheet is up so it never covers the sheet.
@@ -434,9 +440,26 @@ export const DiscoverScreen: React.FC = () => {
           segment={channelsSegment}
           onChangeSegment={setChannelsSegment}
           channelId={channelId}
-          onOpenChannel={setChannelId}
+          onOpenChannel={(id) => {
+            setChannelId(id);
+            // A channel opened from a post page replaces it; Back then goes to the channel list.
+            if (id) {
+              setPostId(null);
+              setPostFromMap(null);
+            }
+          }}
           postId={postId}
-          onOpenPost={setPostId}
+          onOpenPost={(id) => {
+            // Back from a post opened on the map: return to the map, centered on its pin.
+            if (id === null && postFromMap) {
+              const spot = postFromMap;
+              goTo('map');
+              setMapFocus({ ...spot, key: Date.now() });
+              return;
+            }
+            setPostId(id);
+            if (id === null) setPostFromMap(null);
+          }}
           myLocation={selfCoordinates}
           onShowPostOnMap={(post) => {
             if (!post.place) return;

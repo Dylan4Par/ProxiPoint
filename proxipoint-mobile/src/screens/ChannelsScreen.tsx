@@ -707,10 +707,8 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
           now={now}
           commentCount={count}
           channel={channel}
-          onOpenChannel={() => {
-            onOpenPost(null);
-            onOpenChannel(post.channelId);
-          }}
+          // Opening the channel replaces the post page (the parent closes the post).
+          onOpenChannel={() => onOpenChannel(post.channelId)}
           onShowOnMap={() => onShowPostOnMap(post)}
         />
 

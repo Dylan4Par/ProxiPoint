@@ -295,6 +295,10 @@ export function getChannel(id: string): Channel | null {
   return channels.find((channel) => channel.id === id) ?? null;
 }
 
+export function getPost(id: string): ChannelPost | null {
+  return posts.find((post) => post.id === id) ?? null;
+}
+
 export function setJoined(id: string, joined: boolean) {
   channels = channels.map((channel) =>
     channel.id === id && channel.joined !== joined
