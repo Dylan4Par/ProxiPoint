@@ -19,8 +19,10 @@ import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
-import { getChannel, usePosts } from '../../lib/channels';
+import { getChannel, usePosts, type ChannelPost } from '../../lib/channels';
 import { isPinLive } from '../../lib/postRanking';
+import { clusterPins, nudgeOffMarkers } from '../../lib/postPins';
+import { PostPickSheet } from './PostPickSheet';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
@@ -320,6 +322,20 @@ export const DiscoveryMapCanvas: React.FC<{
     return { singles: nodeList.filter((n) => singleIds.has(n.id)), clusters: groupsOut, hiddenLabels };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [nodeList.map((n) => `${n.id}:${n.x}:${n.y}`).join(','), selectedNodeId, clusterZoom, boostClock]);
+
+  // ---- Post bubbles: grouped like the Points, and kept off the Points' pins -----------------
+  // Posts whose bubbles would overlap become one bubble with a count; a bubble that would cover
+  // a Point (a post pinned at that venue) moves to the pin's upper-right, like a badge.
+  const postGroups = useMemo(() => {
+    const spots = postPins.map(({ post, x, y }) => ({ id: post.id, x, y, post }));
+    const markers = [
+      ...singles.map((n) => ({ x: n.x ?? 480, y: n.y ?? 480 })),
+      ...clusters.map((cl) => ({ x: cl.x, y: cl.y })),
+    ];
+    return nudgeOffMarkers(clusterPins(spots, clusterZoom), markers, clusterZoom);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [postPins.map((p) => `${p.post.id}:${p.x}:${p.y}`).join(','), singles, clusters, clusterZoom]);
+  const [pickPosts, setPickPosts] = useState<ChannelPost[] | null>(null);
   const [pickCluster, setPickCluster] = useState<MapClusterData | null>(null);
   const [pickHighlight, setPickHighlight] = useState<string | null>(null);
 
@@ -683,32 +699,47 @@ export const DiscoveryMapCanvas: React.FC<{
         </Animated.View>
         ) : null}
 
-        {/* Pinned channel posts: speech bubbles, under the event pins so Points stay on top. */}
-        {postPins.map(({ post, x, y }) => (
-          <Animated.View
-            key={`post-${post.id}`}
-            pointerEvents="box-none"
-            style={[
-              styles.postPin,
-              { top: y - POST_PIN_SIZE, left: x - POST_PIN_SIZE / 2 },
-              // Same size at any zoom, anchored on the bubble's tail (the spot itself).
-              { transformOrigin: [POST_PIN_SIZE / 2, POST_PIN_SIZE, 0], transform: [{ scale: counterZoom }] },
-            ]}
-          >
-            <TouchableOpacity
-              activeOpacity={0.8}
-              onPress={() => onOpenPost?.(post.id)}
-              style={styles.postBubble}
-              accessibilityRole="button"
-              accessibilityLabel={`Post at ${post.place?.label ?? 'this spot'}: ${post.body}`}
-              testID={`map-post-${post.id}`}
+        {/* Pinned channel posts: speech bubbles (one per group), under the Point pins. */}
+        {postGroups.map((group) => {
+          const many = group.members.length > 1;
+          const only = group.members[0].post;
+          // Nudge is in screen pixels; the layer is in world units at this zoom.
+          const left = group.x + group.dx / clusterZoom - POST_PIN_SIZE / 2;
+          const top = group.y + group.dy / clusterZoom - POST_PIN_SIZE;
+          return (
+            <Animated.View
+              key={`post-${group.key}`}
+              pointerEvents="box-none"
+              style={[
+                styles.postPin,
+                { top, left },
+                // Same size at any zoom, anchored on the bubble's tail.
+                { transformOrigin: [POST_PIN_SIZE / 2, POST_PIN_SIZE, 0], transform: [{ scale: counterZoom }] },
+              ]}
             >
-              <MessageCircle size={13} color={c.white} fill={c.white} strokeWidth={2} />
-              <Text style={styles.postBubbleCount}>{post.upvotes}</Text>
-            </TouchableOpacity>
-            <View style={styles.postBubbleTail} />
-          </Animated.View>
-        ))}
+              <TouchableOpacity
+                activeOpacity={0.8}
+                onPress={() => (many ? setPickPosts(group.members.map((m) => m.post)) : onOpenPost?.(only.id))}
+                style={styles.postBubbleWrap}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  many
+                    ? `${group.members.length} posts here. Show the list`
+                    : `Post at ${only.place?.label ?? 'this spot'}: ${only.body}`
+                }
+                testID={many ? `map-posts-${group.key}` : `map-post-${only.id}`}
+              >
+                {/* Grouped: a second bubble peeking out behind, like a stack. */}
+                {many ? <View pointerEvents="none" style={styles.postBubbleBehind} /> : null}
+                <View style={styles.postBubble}>
+                  <MessageCircle size={13} color={c.white} fill={c.white} strokeWidth={2} />
+                  <Text style={styles.postBubbleCount}>{many ? group.members.length : only.upvotes}</Text>
+                </View>
+              </TouchableOpacity>
+              <View style={styles.postBubbleTail} />
+            </Animated.View>
+          );
+        })}
 
         {/* Interactive Event Nodes: pin + main hashtag */}
         {/* Cluster bubbles (several Points close together) */}
@@ -820,6 +851,17 @@ export const DiscoveryMapCanvas: React.FC<{
           );
         })}
       </Animated.View>
+
+      {/* A grouped post bubble: choose which post */}
+      <PostPickSheet
+        posts={pickPosts}
+        now={boostClock}
+        onClose={() => setPickPosts(null)}
+        onPick={(id) => {
+          setPickPosts(null);
+          onOpenPost?.(id);
+        }}
+      />
 
       {/* Points sharing one spot: choose which one */}
       <ClusterPickSheet
@@ -989,6 +1031,18 @@ const createStyles = (c: ThemeColors) =>
     shadowOffset: { width: 0, height: 1 },
   },
   postBubbleCount: { color: c.white, fontSize: 11, fontWeight: '800' },
+  postBubbleWrap: { alignItems: 'center' },
+  postBubbleBehind: {
+    position: 'absolute',
+    top: -3,
+    left: 4,
+    right: -4,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: c.violetSoft,
+    borderWidth: 1.5,
+    borderColor: c.white,
+  },
   postBubbleTail: {
     width: 0,
     height: 0,
