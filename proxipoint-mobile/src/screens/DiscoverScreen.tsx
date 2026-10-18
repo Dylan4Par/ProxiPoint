@@ -378,8 +378,9 @@ export const DiscoverScreen: React.FC = () => {
               resetSignal={cardsReset}
               onFullChange={setCardsFull}
             />
-            {/* Drop Point: floats over the map (moved here from the nav bar). */}
-            {detailId ? null : (
+            {/* Drop Point: floats over the map (moved here from the nav bar).
+                Hidden while a sheet is up, so it never sits on top of the sheet's own buttons. */}
+            {detailId || dropOpen || managing ? null : (
               <TouchableOpacity
                 style={styles.dropFab}
                 onPress={() => {
