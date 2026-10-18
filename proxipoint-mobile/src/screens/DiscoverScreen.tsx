@@ -53,6 +53,8 @@ export const DiscoverScreen: React.FC = () => {
   // Set when that post was opened from a pin on the map: Back returns to the map, at the pin.
   const [postFromMap, setPostFromMap] = useState<{ latitude: number; longitude: number } | null>(null);
   // "Show on map" for a pinned post: Explore Map opens centered there. New key = new request.
+  // Search opened from another tab (Channels' search button). New key = new request.
+  const [searchRequest, setSearchRequest] = useState<{ key: number; text?: string } | null>(null);
   const [mapFocus, setMapFocus] = useState<{ latitude: number; longitude: number; key: number } | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
   // Kept in memory for now; load from the backend (e.g. GET /me/points) once that exists.
@@ -271,6 +273,7 @@ export const DiscoverScreen: React.FC = () => {
     setPostId(null);
     setPostFromMap(null);
     setMapFocus(null);
+    setSearchRequest(null); // one-shot: Discover shouldn't refocus search on later visits
     setTab(next);
   };
 
@@ -335,6 +338,7 @@ export const DiscoverScreen: React.FC = () => {
           // Same area picker as the map's city pill, so Discover and the map stay on one place.
           onPickLocation={() => setCityPickerOpen(true)}
           onShowTagOnMap={showTagOnMap}
+          searchRequest={searchRequest}
         />
       ) : null}
 
@@ -461,6 +465,10 @@ export const DiscoverScreen: React.FC = () => {
             if (id === null) setPostFromMap(null);
           }}
           myLocation={selfCoordinates}
+          onOpenSearch={() => {
+            goTo('discover');
+            setSearchRequest({ key: Date.now() });
+          }}
           onShowPostOnMap={(post) => {
             if (!post.place) return;
             goTo('map');

@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Check, ChevronDown, ChevronRight, Hash, Map as MapIcon, MapPin, Search, Users, X } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { useBoosts } from '../lib/boost';
-import { setJoined, useChannels } from '../lib/channels';
+import { setJoined, useChannels, type Channel } from '../lib/channels';
 import {
   DEFAULT_RANGE_METERS,
   SEARCH_RANGES,
@@ -12,6 +12,7 @@ import {
   formatDistance,
   groupByDay,
   inRange,
+  isChannelQuery,
   recommendChannels,
   searchChannels,
   searchPoints,
@@ -42,9 +43,13 @@ interface DiscoverFeedScreenProps {
   onOpenMap: () => void;
   /** Explore Map filtered to this #tag. */
   onShowTagOnMap: (tag: string) => void;
+  /** Open search from elsewhere (e.g. Channels' search button): focuses the box. New key = new request. */
+  searchRequest?: { key: number; text?: string } | null;
 }
 
 const tagKey = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
+/** Channel rows shown above the Points for a plain search ("All" shows the rest). */
+const MAX_CHANNEL_ROWS = 3;
 
 /**
  * Discover tab: a search bar (#tags or words, an area and a range), then a feed of channels to
@@ -61,6 +66,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   onBrowseChannels,
   onOpenMap,
   onShowTagOnMap,
+  searchRequest = null,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -72,6 +78,14 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const moderation = useModeration();
 
   const [query, setQuery] = useState('');
+  const searchInput = useRef<TextInput | null>(null);
+  // Opened from another tab's search button: fill in any starting text and focus the box.
+  useEffect(() => {
+    if (!searchRequest) return;
+    setQuery(searchRequest.text ?? '');
+    const timer = setTimeout(() => searchInput.current?.focus(), 250); // after the tab has laid out
+    return () => clearTimeout(timer);
+  }, [searchRequest?.key]);
   const [rangeMeters, setRangeMeters] = useState<number | null>(DEFAULT_RANGE_METERS);
   const center = { latitude: viewPlace.latitude, longitude: viewPlace.longitude };
   const searching = query.trim().length > 0;
@@ -101,6 +115,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     [searching, nodes, query, headerTags],
   );
   const channelResults = useMemo(() => (searching ? searchChannels(channels, query) : []), [searching, channels, query]);
+  const channelSearch = isChannelQuery(query);
   // A one-word search that is exactly a #tag can be shown on the map with that tag's filter.
   const words = query.trim().split(/\s+/);
   const exactTag =
@@ -131,10 +146,11 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       <View style={styles.searchBox}>
         <Search size={18} color={c.textMuted} strokeWidth={2.25} />
         <TextInput
+          ref={searchInput}
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search #tags or events"
+          placeholder="Search #tags, c/channels or events"
           placeholderTextColor={c.textFaint}
           autoCapitalize="none"
           autoCorrect={false}
@@ -209,65 +225,60 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             </View>
           ) : null}
 
-          <SectionHeader
-            label={`${results.length} ${results.length === 1 ? 'POINT' : 'POINTS'}${
-              rangeMeters == null ? '' : ` WITHIN ${rangeLabel.toUpperCase()}`
-            }`}
-            action={exactTag ? 'Show on map' : undefined}
-            onAction={exactTag ? () => onShowTagOnMap(exactTag) : undefined}
-          />
-          {results.length ? (
-            <View style={styles.list}>
-              {results.map((node) => (
-                <EventRow
-                  key={node.id}
-                  node={node}
-                  distanceMeters={distanceFrom(center, node)}
-                  onOpen={() => onOpenPoint(node.id)}
-                  onToggleRsvp={() => onToggleRsvp(node.id)}
-                />
-              ))}
-            </View>
-          ) : (
-            <View style={styles.noResults}>
-              <Text style={styles.emptyText}>
-                No Points match “{query.trim()}”
-                {rangeMeters == null ? '' : ` within ${rangeLabel} of ${placeLabel || 'here'}`}.
-              </Text>
-              {rangeMeters != null ? (
-                <TouchableOpacity onPress={() => setRangeMeters(null)} accessibilityRole="button" style={styles.widenBtn}>
-                  <Text style={styles.widenText}>Search any distance</Text>
-                </TouchableOpacity>
-              ) : null}
-            </View>
-          )}
-
+          {/* Channels first, like communities at the top of a search; "c/…" searches only them. */}
           {channelResults.length ? (
             <>
-              <SectionHeader label="CHANNELS" />
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.channelRow}
-                style={styles.channelScroll}
-                keyboardShouldPersistTaps="handled"
-              >
-                {channelResults.map((channel) => (
-                  <ChannelCard
-                    key={channel.id}
-                    pick={{
-                      channel,
-                      matched: [],
-                      activeCount: 0,
-                      reason: channel.tags.slice(0, 2).join(' '),
-                      score: 0,
-                    }}
-                    onOpen={() => onOpenChannel(channel.id)}
+              <SectionHeader
+                label={`${channelResults.length} ${channelResults.length === 1 ? 'CHANNEL' : 'CHANNELS'}`}
+                action={!channelSearch && channelResults.length > MAX_CHANNEL_ROWS ? 'All' : undefined}
+                onAction={() => setQuery(`c/${query.trim().replace(/^#+/, '')}`)}
+              />
+              <View style={styles.list}>
+                {(channelSearch ? channelResults : channelResults.slice(0, MAX_CHANNEL_ROWS)).map((channel) => (
+                  <ChannelResultRow key={channel.id} channel={channel} onOpen={() => onOpenChannel(channel.id)} />
+                ))}
+              </View>
+            </>
+          ) : channelSearch ? (
+            <Text style={styles.emptyText}>No channels match “{query.trim()}”. Try a #tag or a word.</Text>
+          ) : null}
+
+          {channelSearch ? null : (
+            <>
+            <SectionHeader
+              label={`${results.length} ${results.length === 1 ? 'POINT' : 'POINTS'}${
+                rangeMeters == null ? '' : ` WITHIN ${rangeLabel.toUpperCase()}`
+              }`}
+              action={exactTag ? 'Show on map' : undefined}
+              onAction={exactTag ? () => onShowTagOnMap(exactTag) : undefined}
+            />
+            {results.length ? (
+              <View style={styles.list}>
+                {results.map((node) => (
+                  <EventRow
+                    key={node.id}
+                    node={node}
+                    distanceMeters={distanceFrom(center, node)}
+                    onOpen={() => onOpenPoint(node.id)}
+                    onToggleRsvp={() => onToggleRsvp(node.id)}
                   />
                 ))}
-              </ScrollView>
+              </View>
+            ) : (
+              <View style={styles.noResults}>
+                <Text style={styles.emptyText}>
+                  No Points match “{query.trim()}”
+                  {rangeMeters == null ? '' : ` within ${rangeLabel} of ${placeLabel || 'here'}`}.
+                </Text>
+                {rangeMeters != null ? (
+                  <TouchableOpacity onPress={() => setRangeMeters(null)} accessibilityRole="button" style={styles.widenBtn}>
+                    <Text style={styles.widenText}>Search any distance</Text>
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            )}
             </>
-          ) : null}
+          )}
         </>
       ) : (
         <>
@@ -353,6 +364,40 @@ const SectionHeader: React.FC<{ label: string; action?: string; onAction?: () =>
         </TouchableOpacity>
       ) : null}
     </View>
+  );
+};
+
+/** One channel in search results: badge, name, handle and members, with Join. */
+const ChannelResultRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ channel, onOpen }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  return (
+    <TouchableOpacity
+      style={styles.resultRow}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${channel.name}`}
+      testID={`search-channel-${channel.id}`}
+    >
+      <CategoryBadge tag={channel.tags[0]} title={channel.name} size={34} />
+      <View style={styles.resultCopy}>
+        <Text style={styles.resultTitle} numberOfLines={1}>
+          {channel.name}
+        </Text>
+        <Text style={styles.resultMeta} numberOfLines={1}>
+          {channel.handle} · {formatCount(channel.memberCount)} members
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={[styles.joinBtnSmall, channel.joined && styles.joinBtnJoined]}
+        onPress={() => setJoined(channel.id, !channel.joined)}
+        accessibilityRole="button"
+        accessibilityLabel={channel.joined ? `Leave ${channel.name}` : `Join ${channel.name}`}
+      >
+        {channel.joined ? <Check size={13} color={c.accent} strokeWidth={3} /> : null}
+        <Text style={[styles.joinText, channel.joined && styles.joinTextJoined]}>{channel.joined ? 'JOINED' : 'JOIN'}</Text>
+      </TouchableOpacity>
+    </TouchableOpacity>
   );
 };
 
@@ -593,6 +638,29 @@ const createStyles = (c: ThemeColors) =>
       gap: 4,
       minHeight: 34,
       borderRadius: 17,
+      backgroundColor: c.accent,
+    },
+    resultRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      backgroundColor: c.surface,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      padding: 12,
+    },
+    resultCopy: { flex: 1, gap: 2 },
+    resultTitle: { color: c.text, fontSize: 15, fontWeight: '800' },
+    resultMeta: { color: c.textMuted, fontSize: 12 },
+    joinBtnSmall: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 4,
+      minHeight: 32,
+      paddingHorizontal: 14,
+      borderRadius: 16,
       backgroundColor: c.accent,
     },
     joinBtnJoined: { backgroundColor: 'transparent', borderWidth: 1, borderColor: c.accentBorder },

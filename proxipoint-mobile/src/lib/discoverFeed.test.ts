@@ -6,6 +6,7 @@ import {
   formatDistance,
   groupByDay,
   inRange,
+  isChannelQuery,
   recommendChannels,
   searchChannels,
   searchPoints,
@@ -143,4 +144,23 @@ test('searchChannels matches names and tags', () => {
   const list = [channel('a', ['#Hiking']), { ...channel('b', ['#Pickleball']), name: 'Dink Crew' }];
   assert.deepEqual(searchChannels(list, 'hik').map((c) => c.id), ['a']);
   assert.deepEqual(searchChannels(list, 'dink').map((c) => c.id), ['b']);
+});
+
+test('c/ searches channels by handle, name or tag, and only channels', () => {
+  const list = [
+    { ...channel('food', ['#FoodTrucks'], false, 2105), name: 'Food Truck Chasers', handle: 'c/foodtrucks' },
+    { ...channel('trail', ['#Hiking'], false, 1630), name: 'Trail Tribe', handle: 'c/trailtribe' },
+  ];
+  assert.equal(isChannelQuery('c/food'), true);
+  assert.equal(isChannelQuery('#food'), false);
+  assert.deepEqual(searchChannels(list, 'c/foodtr').map((c) => c.id), ['food']);
+  assert.deepEqual(searchChannels(list, 'c/tribe').map((c) => c.id), ['trail']);
+  assert.deepEqual(searchChannels(list, 'c/hik').map((c) => c.id), ['trail']);
+  // Bare "c/" lists every channel, biggest first.
+  assert.deepEqual(searchChannels(list, 'c/').map((c) => c.id), ['food', 'trail']);
+  // Channel searches skip Points and #tag suggestions.
+  assert.deepEqual(searchPoints(placed, 'c/taco', CENTER, null, NOW), []);
+  assert.deepEqual(suggestTags(placed, 'c/li'), []);
+  // Plain words still find channels too.
+  assert.deepEqual(searchChannels(list, 'trucks').map((c) => c.id), ['food']);
 });

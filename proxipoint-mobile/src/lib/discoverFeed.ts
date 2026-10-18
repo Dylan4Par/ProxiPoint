@@ -200,8 +200,13 @@ function terms(query: string): string[] {
   return query
     .toLowerCase()
     .split(/[\s,]+/)
-    .map((word) => word.replace(/^#+/, '').trim())
+    .map((word) => word.replace(/^#+/, '').replace(/^c\//, '').trim())
     .filter(Boolean);
+}
+
+/** "c/…" searches channels only (like a subreddit name): no Points or #tag suggestions. */
+export function isChannelQuery(query: string): boolean {
+  return /^c\//i.test(query.trim());
 }
 
 /**
@@ -217,7 +222,7 @@ export function searchPoints<T extends FeedNode>(
   allow: (node: T) => boolean = () => true,
 ): T[] {
   const words = terms(query);
-  if (!words.length) return [];
+  if (!words.length || isChannelQuery(query)) return [];
   const list = (Array.isArray(nodes) ? nodes : Object.values(nodes ?? {})).filter(
     (node) => node && node.origin !== 'local' && !isEnded(node, now) && allow(node) && inRange(center, node, rangeMeters),
   );
@@ -243,7 +248,7 @@ export function suggestTags(
 ): Array<{ tag: string; count: number }> {
   const words = terms(query);
   const last = words[words.length - 1];
-  if (!last) return [];
+  if (!last || isChannelQuery(query)) return [];
   const counts = new Map<string, { tag: string; count: number }>();
   const add = (raw: string, n: number) => {
     const k = key(raw);
@@ -265,12 +270,19 @@ export function suggestTags(
 }
 
 /** Channels whose name or #tags match every search word. */
+/**
+ * Channels matching every search word in their name, handle (c/…) or #tags. A bare "c/" lists
+ * every channel (biggest first), so it works as a browse.
+ */
 export function searchChannels(channels: Channel[], query: string): Channel[] {
   const words = terms(query);
-  if (!words.length) return [];
+  if (!words.length) {
+    return isChannelQuery(query) ? [...channels].sort((a, b) => b.memberCount - a.memberCount) : [];
+  }
   return channels.filter((channel) => {
     const tags = channel.tags.map(key);
     const name = channel.name.toLowerCase();
-    return words.every((word) => tags.some((tag) => tag.includes(word)) || name.includes(word));
+    const handle = channel.handle.toLowerCase().replace(/^c\//, '');
+    return words.every((word) => tags.some((tag) => tag.includes(word)) || name.includes(word) || handle.includes(word));
   });
 }

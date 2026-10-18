@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowBigUp, Check, ChevronLeft, ChevronRight, CornerDownRight, MapPin, MessageCircle, Plus, Send, Users, X } from 'lucide-react-native';
+import { ArrowBigUp, Check, ChevronLeft, ChevronRight, CornerDownRight, MapPin, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { ActivityScreen } from './ActivityScreen';
 import { timeAgo } from '../lib/activity';
@@ -65,6 +65,8 @@ interface ChannelsScreenProps {
   myLocation: LatLon;
   /** Explore Map, slid to where this post is pinned. */
   onShowPostOnMap: (post: ChannelPost) => void;
+  /** Search button: the Discover search, ready to type. */
+  onOpenSearch: () => void;
 }
 
 const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
@@ -83,6 +85,7 @@ const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
 export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
   const { segment, onChangeSegment, channelId, onOpenChannel, unreadAlerts, postId, onOpenPost } = props;
   const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
   const channels = useChannels();
   const posts = usePosts();
   const open = channelId ? channels.find((channel) => channel.id === channelId) ?? null : null;
@@ -114,6 +117,17 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
     <View style={styles.container} testID="channels-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Channels</Text>
+        {/* Same search as Discover (#tags, c/channels, events). */}
+        <TouchableOpacity
+          style={styles.searchBtn}
+          onPress={props.onOpenSearch}
+          accessibilityRole="button"
+          accessibilityLabel="Search channels, #tags and events"
+          testID="channels-search"
+        >
+          <Search size={18} color={c.accent} strokeWidth={2.5} />
+          <Text style={styles.searchBtnText}>Search</Text>
+        </TouchableOpacity>
       </View>
       <View style={styles.segmentRow} accessibilityRole="tablist">
         {SEGMENTS.map(({ id, label }) => {
@@ -915,7 +929,27 @@ const createStyles = (c: ThemeColors) =>
     container: { flex: 1, backgroundColor: c.base },
     scroll: { flex: 1 },
     content: { paddingHorizontal: 16, paddingBottom: 28 },
-    header: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4 },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      paddingHorizontal: 16,
+      paddingTop: 16,
+      paddingBottom: 4,
+    },
+    searchBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      minHeight: 36,
+      borderRadius: 18,
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+      backgroundColor: c.accentTint,
+    },
+    searchBtnText: { color: c.accent, fontSize: 13, fontWeight: '800' },
     title: { color: c.text, fontSize: 24, fontWeight: '800' },
     segmentRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
     segmentPill: {
