@@ -56,6 +56,8 @@ export interface ChannelPost {
   /** Pinned to the map at this place, until pinnedUntil. The post itself stays in the feed. */
   place?: PostPlace | null;
   pinnedUntil?: string | null;
+  /** Photo URLs, up to 4 (uploaded first, then sent with the post). */
+  photos?: string[];
 }
 
 export interface PostComment {
@@ -72,6 +74,15 @@ export interface PostComment {
 
 const minutesAgo = (minutes: number) => new Date(Date.now() - minutes * 60000).toISOString();
 const hoursFromNow = (hours: number) => new Date(Date.now() + hours * 3600000).toISOString();
+
+/**
+ * Stand-in photos for the sample posts (random stock images from picsum.photos, fixed per seed so
+ * they don't change between launches; same approach as hostProfiles.ts). Real posts carry the
+ * URLs of the photos people uploaded.
+ */
+function samplePostPhotos(postId: string, count: number): string[] {
+  return Array.from({ length: count }, (_, n) => `https://picsum.photos/seed/pp-${postId}-${n + 1}/1200/900`);
+}
 
 // Sample places, placed the same way as the sample Points (meters east/north of the default spot).
 const SAMPLE_ORIGIN = { latitude: 40.061708, longitude: -105.038292 };
@@ -170,6 +181,7 @@ let posts: ChannelPost[] = [
     createdAt: minutesAgo(18),
     upvotes: 42,
     voted: false,
+    photos: samplePostPhotos('p1', 1),
     place: sampleSpot(-260, 180, 'The Rusty Anchor', 'pt-midnight-owls'),
     pinnedUntil: hoursFromNow(3),
   },
@@ -181,6 +193,7 @@ let posts: ChannelPost[] = [
     createdAt: minutesAgo(55),
     upvotes: 19,
     voted: false,
+    photos: samplePostPhotos('p2', 1),
     place: sampleSpot(-700, -350, 'Meadow Park Courts', 'pt-sunset-pickleball'),
     pinnedUntil: hoursFromNow(20),
   },
@@ -201,6 +214,7 @@ let posts: ChannelPost[] = [
     createdAt: minutesAgo(32),
     upvotes: 88,
     voted: false,
+    photos: samplePostPhotos('p4', 3),
     place: sampleSpot(340, 420, 'Central Park Plaza', 'pt-taco-rally'),
     pinnedUntil: hoursFromNow(2),
   },
@@ -212,6 +226,7 @@ let posts: ChannelPost[] = [
     createdAt: minutesAgo(300),
     upvotes: 64,
     voted: false,
+    photos: samplePostPhotos('p5', 2),
     place: sampleSpot(-900, 900, 'Mesa Trailhead', 'pt-sunrise-hike'),
     pinnedUntil: hoursFromNow(10),
   },
@@ -250,6 +265,7 @@ let posts: ChannelPost[] = [
     createdAt: minutesAgo(25),
     upvotes: 14,
     voted: false,
+    photos: samplePostPhotos('p9', 1),
     place: sampleSpot(120, -60, 'Near Briggs St'),
     pinnedUntil: hoursFromNow(5),
   },

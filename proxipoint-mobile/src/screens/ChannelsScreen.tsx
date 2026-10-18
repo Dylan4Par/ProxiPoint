@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { BackHandler, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowBigUp, Check, ChevronLeft, ChevronRight, CornerDownRight, MapPin, MessageCircle, Plus, Send, Users, X } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { ActivityScreen } from './ActivityScreen';
@@ -621,6 +622,7 @@ const PostCard: React.FC<{
       ) : (
         <Text style={styles.postBody}>{post.body}</Text>
       )}
+      {post.photos?.length ? <PostPhotos uris={post.photos} /> : null}
       {pinLeft && post.place ? (
         <TouchableOpacity
           style={styles.pinBadge}
@@ -659,6 +661,108 @@ const PostCard: React.FC<{
         </TouchableOpacity>
       </View>
     </View>
+  );
+};
+
+// ---- Post photos ----------------------------------------------------------------------------
+
+/**
+ * A post's photos: one wide, two side by side, three as one big plus two stacked (four: a 2x2
+ * grid). Tap one to see it full screen and swipe through the rest.
+ */
+const PostPhotos: React.FC<{ uris: string[] }> = ({ uris }) => {
+  const styles = useThemedStyles(createStyles);
+  const [openAt, setOpenAt] = useState<number | null>(null);
+  const shown = uris.slice(0, 4);
+  const tile = (uri: string, index: number, style: object) => (
+    <TouchableOpacity
+      key={uri}
+      style={[styles.photoTile, style]}
+      onPress={() => setOpenAt(index)}
+      activeOpacity={0.85}
+      accessibilityRole="imagebutton"
+      accessibilityLabel={`Photo ${index + 1} of ${shown.length}. Open full screen`}
+    >
+      <Image source={{ uri }} style={styles.photoImage} resizeMode="cover" />
+    </TouchableOpacity>
+  );
+
+  let grid: React.ReactNode;
+  if (shown.length === 1) {
+    grid = tile(shown[0], 0, styles.photoWide);
+  } else if (shown.length === 2) {
+    grid = <View style={styles.photoRow}>{shown.map((uri, i) => tile(uri, i, styles.photoHalf))}</View>;
+  } else if (shown.length === 3) {
+    grid = (
+      <View style={styles.photoRow}>
+        {tile(shown[0], 0, styles.photoBig)}
+        <View style={styles.photoColumn}>
+          {tile(shown[1], 1, styles.photoSmall)}
+          {tile(shown[2], 2, styles.photoSmall)}
+        </View>
+      </View>
+    );
+  } else {
+    grid = (
+      <View style={styles.photoGrid}>
+        {shown.map((uri, i) => tile(uri, i, styles.photoQuarter))}
+      </View>
+    );
+  }
+
+  return (
+    <>
+      {grid}
+      <PhotoViewer uris={shown} index={openAt} onClose={() => setOpenAt(null)} />
+    </>
+  );
+};
+
+/** Full-screen photos, swipe left and right. */
+const PhotoViewer: React.FC<{ uris: string[]; index: number | null; onClose: () => void }> = ({ uris, index, onClose }) => {
+  const styles = useThemedStyles(createStyles);
+  const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [page, setPage] = useState(0);
+  const scroller = useRef<ScrollView | null>(null);
+  useEffect(() => {
+    if (index != null) setPage(index);
+  }, [index]);
+  if (index == null) return null;
+  return (
+    <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.viewer}>
+        <ScrollView
+          ref={scroller}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          // Open on the photo that was tapped (scrollTo works on Android, contentOffset may not).
+          onLayout={() => scroller.current?.scrollTo({ x: index * width, y: 0, animated: false })}
+          onMomentumScrollEnd={(event) => setPage(Math.round(event.nativeEvent.contentOffset.x / width))}
+        >
+          {uris.map((uri) => (
+            <View key={uri} style={[styles.viewerPage, { width }]}>
+              <Image source={{ uri }} style={styles.viewerImage} resizeMode="contain" />
+            </View>
+          ))}
+        </ScrollView>
+        <View style={[styles.viewerTop, { paddingTop: insets.top + 8 }]}>
+          <Text style={styles.viewerCount}>
+            {page + 1} / {uris.length}
+          </Text>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.viewerClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close photo"
+            hitSlop={10}
+          >
+            <X size={22} color="#ffffff" strokeWidth={2.5} />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
   );
 };
 
@@ -983,6 +1087,38 @@ const createStyles = (c: ThemeColors) =>
     postMeta: { color: c.textFaint, fontSize: 12, flexShrink: 1 },
     postBody: { color: c.text, fontSize: 14, lineHeight: 20 },
     postFooter: { flexDirection: 'row', gap: 8 },
+    photoTile: { overflow: 'hidden', borderRadius: 12, backgroundColor: c.surfaceDim },
+    photoImage: { width: '100%', height: '100%' },
+    photoWide: { width: '100%', aspectRatio: 4 / 3 },
+    photoRow: { flexDirection: 'row', gap: 4 },
+    photoHalf: { flex: 1, aspectRatio: 1 },
+    photoBig: { flex: 2, aspectRatio: 2 / 2.05 },
+    photoColumn: { flex: 1, gap: 4 },
+    photoSmall: { flex: 1 },
+    photoGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 4 },
+    photoQuarter: { width: '49%', aspectRatio: 1 },
+    viewer: { flex: 1, backgroundColor: c.viewerBackdrop },
+    viewerPage: { flex: 1, justifyContent: 'center' },
+    viewerImage: { width: '100%', height: '100%' },
+    viewerTop: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: 16,
+    },
+    viewerCount: { color: '#ffffff', fontSize: 14, fontWeight: '700' },
+    viewerClose: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+    },
     pinBadge: {
       alignSelf: 'flex-start',
       flexDirection: 'row',
