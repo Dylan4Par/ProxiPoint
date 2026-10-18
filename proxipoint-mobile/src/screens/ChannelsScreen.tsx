@@ -1,11 +1,36 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { BackHandler, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { ArrowBigUp, Check, ChevronLeft, ChevronRight, MessageCircle, Plus, Users } from 'lucide-react-native';
+import { ArrowBigUp, Check, ChevronLeft, ChevronRight, CornerDownRight, MapPin, MessageCircle, Plus, Send, Users, X } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { ActivityScreen } from './ActivityScreen';
 import { timeAgo } from '../lib/activity';
 import { useBoosts } from '../lib/boost';
-import { addPost, setJoined, toggleVote, useChannels, usePosts, type Channel, type ChannelPost } from '../lib/channels';
+import {
+  addComment,
+  addPost,
+  setJoined,
+  toggleCommentVote,
+  toggleVote,
+  useChannels,
+  useComments,
+  usePosts,
+  type Channel,
+  type ChannelPost,
+  type PostComment,
+  type PostPlace,
+} from '../lib/channels';
+import {
+  PIN_HOURS,
+  POST_SORTS,
+  buildThreads,
+  countComments,
+  pinTimeLeft,
+  postDistance,
+  snapToBlock,
+  sortPosts,
+  type LatLon,
+  type PostSort,
+} from '../lib/postRanking';
 import { channelNodes, formatCount, formatDistance, splitFeed } from '../lib/discoverFeed';
 import { isLiveNode } from '../lib/liveStatus';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
@@ -32,6 +57,13 @@ interface ChannelsScreenProps {
   onEditTags: () => void;
   /** Explore Map filtered to this #tag. */
   onOpenTag: (tag: string) => void;
+  /** Post page (comments) that's open, or null. Opens over a channel page or the segment views. */
+  postId: string | null;
+  onOpenPost: (id: string | null) => void;
+  /** Where you are (or your home city): the Near sort and "pin near me" use it. */
+  myLocation: LatLon;
+  /** Explore Map, slid to where this post is pinned. */
+  onShowPostOnMap: (post: ChannelPost) => void;
 }
 
 const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
@@ -48,21 +80,33 @@ const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
  * Tapping a channel opens its page: its Points, its posts, and a box to post.
  */
 export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
-  const { segment, onChangeSegment, channelId, onOpenChannel, unreadAlerts } = props;
+  const { segment, onChangeSegment, channelId, onOpenChannel, unreadAlerts, postId, onOpenPost } = props;
   const styles = useThemedStyles(createStyles);
   const channels = useChannels();
+  const posts = usePosts();
   const open = channelId ? channels.find((channel) => channel.id === channelId) ?? null : null;
+  const openPost = postId ? posts.find((post) => post.id === postId) ?? null : null;
 
-  // Android back on a channel page returns to the list.
+  // Android back: post page → whatever it was opened from; channel page → the list.
   useEffect(() => {
-    if (!channelId) return;
+    if (!postId && !channelId) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      onOpenChannel(null);
+      if (postId) onOpenPost(null);
+      else onOpenChannel(null);
       return true;
     });
     return () => sub.remove();
-  }, [channelId, onOpenChannel]);
+  }, [postId, channelId, onOpenChannel, onOpenPost]);
 
+  if (openPost) {
+    return (
+      <PostPage
+        {...props}
+        post={openPost}
+        channel={channels.find((channel) => channel.id === openPost.channelId) ?? null}
+      />
+    );
+  }
   if (open) return <ChannelPage {...props} channel={open} />;
 
   return (
@@ -117,14 +161,24 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   channels,
   onOpenChannel,
   onChangeSegment,
+  onOpenPost,
+  onShowPostOnMap,
+  myLocation,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const posts = usePosts();
+  const comments = useComments();
   const now = useBoosts();
+  const [sort, setSort] = useState<PostSort>('hot');
+  const commentCounts = useMemo(() => countComments(comments), [comments]);
   const joined = channels.filter((channel) => channel.joined);
   const joinedIds = new Set(joined.map((channel) => channel.id));
-  const feed = posts.filter((post) => joinedIds.has(post.channelId));
+  const feed = sortPosts(
+    posts.filter((post) => joinedIds.has(post.channelId)),
+    sort,
+    { now, center: myLocation, commentCounts },
+  );
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
 
   if (!joined.length) {
@@ -172,6 +226,8 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
         ))}
       </ScrollView>
 
+      <SortRow sort={sort} onChange={setSort} />
+
       {feed.length ? (
         <View style={styles.list}>
           {feed.map((post) => (
@@ -179,8 +235,12 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
               key={post.id}
               post={post}
               now={now}
+              commentCount={commentCounts[post.id] ?? 0}
+              distanceMeters={sort === 'near' ? postDistance(post, myLocation) : null}
               channel={byId.get(post.channelId) ?? null}
               onOpenChannel={() => onOpenChannel(post.channelId)}
+              onOpen={() => onOpenPost(post.id)}
+              onShowOnMap={() => onShowPostOnMap(post)}
             />
           ))}
         </View>
@@ -270,13 +330,24 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   channel,
   onOpenChannel,
   onOpenPoint,
+  onOpenPost,
+  onShowPostOnMap,
   myHandle,
+  myLocation,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
-  const posts = usePosts().filter((post) => post.channelId === channel.id);
-  const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, DiscoveryNode>;
+  const comments = useComments();
+  const commentCounts = useMemo(() => countComments(comments), [comments]);
+  const [sort, setSort] = useState<PostSort>('hot');
+  const allPosts = usePosts();
   const now = useBoosts();
+  const posts = sortPosts(
+    allPosts.filter((post) => post.channelId === channel.id),
+    sort,
+    { now, center: myLocation, commentCounts },
+  );
+  const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, DiscoveryNode>;
   const moderation = useModeration();
   const points = useMemo(() => {
     const { nearby, upcoming } = splitFeed(nodes, now, isNodeAllowed);
@@ -284,11 +355,25 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel, nodes, now, moderation]);
   const [draft, setDraft] = useState('');
+  // Pin to the map: off, or a place (a Point's venue, or the block you're on) for a few hours.
+  const [pinOn, setPinOn] = useState(false);
+  const [pinPlace, setPinPlace] = useState<PostPlace | null>(null);
+  const [pinHours, setPinHours] = useState(PIN_HOURS[0]);
+  // Venues you can pin at: this channel's Points, except ones whose host hid the exact spot.
+  const venues = points
+    .filter((node) => !node.locationPrivacy && node.venue)
+    .filter((node, i, list) => list.findIndex((other) => other.venue === node.venue) === i)
+    .slice(0, 4)
+    .map((node): PostPlace => ({ latitude: node.latitude, longitude: node.longitude, label: node.venue, pointId: node.id }));
+  const nearMe: PostPlace = { ...snapToBlock(myLocation), label: 'Near you' };
+  const placeKey = (place: PostPlace | null) => (place ? place.pointId ?? place.label : '');
 
   const post = () => {
     if (!draft.trim()) return;
-    addPost(channel.id, myHandle, draft);
+    addPost(channel.id, myHandle, draft, pinOn && pinPlace ? { place: pinPlace, hours: pinHours } : null);
     setDraft('');
+    setPinOn(false);
+    setPinPlace(null);
   };
 
   return (
@@ -374,23 +459,92 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
             accessibilityLabel={`Write a post in ${channel.name}`}
             testID="channel-composer"
           />
-          <TouchableOpacity
-            style={[styles.postBtn, !draft.trim() && styles.postBtnDisabled]}
-            onPress={post}
-            disabled={!draft.trim()}
-            accessibilityRole="button"
-            testID="channel-post"
-          >
-            <Text style={styles.postBtnText}>POST</Text>
-          </TouchableOpacity>
+          {pinOn ? (
+            <View style={styles.pinOptions}>
+              <Text style={styles.pinOptionsLabel}>WHERE</Text>
+              <View style={styles.pinChipRow}>
+                {[nearMe, ...venues].map((place) => {
+                  const active = placeKey(pinPlace) === placeKey(place);
+                  return (
+                    <TouchableOpacity
+                      key={placeKey(place)}
+                      style={[styles.pinChip, active && styles.pinChipActive]}
+                      onPress={() => setPinPlace(place)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                    >
+                      <Text style={[styles.pinChipText, active && styles.pinChipTextActive]} numberOfLines={1}>
+                        {place.label}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.pinOptionsLabel}>FOR</Text>
+              <View style={styles.pinChipRow}>
+                {PIN_HOURS.map((hours) => {
+                  const active = pinHours === hours;
+                  return (
+                    <TouchableOpacity
+                      key={hours}
+                      style={[styles.pinChip, active && styles.pinChipActive]}
+                      onPress={() => setPinHours(hours)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: active }}
+                    >
+                      <Text style={[styles.pinChipText, active && styles.pinChipTextActive]}>{hours}h</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.pinNote}>“Near you” shows the block, never your exact spot.</Text>
+            </View>
+          ) : null}
+          <View style={styles.composerActions}>
+            <TouchableOpacity
+              style={[styles.pinToggle, pinOn && styles.pinToggleOn]}
+              onPress={() => {
+                setPinOn((on) => !on);
+                if (!pinPlace) setPinPlace(venues[0] ?? nearMe);
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: pinOn }}
+              accessibilityLabel="Pin this post to the map"
+              testID="channel-pin-toggle"
+            >
+              <MapPin size={14} color={pinOn ? c.white : c.violet} strokeWidth={2.5} />
+              <Text style={[styles.pinToggleText, pinOn && styles.pinToggleTextOn]}>
+                {pinOn && pinPlace ? `${pinPlace.label} · ${pinHours}h` : 'Pin to map'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.postBtn, !draft.trim() && styles.postBtnDisabled]}
+              onPress={post}
+              disabled={!draft.trim()}
+              accessibilityRole="button"
+              testID="channel-post"
+            >
+              <Text style={styles.postBtnText}>POST</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       ) : (
         <Text style={styles.emptyText}>Join to post in this channel.</Text>
       )}
+      <SortRow sort={sort} onChange={setSort} />
       {posts.length ? (
-        <View style={[styles.list, styles.postsList]}>
+        <View style={styles.list}>
           {posts.map((item) => (
-            <PostCard key={item.id} post={item} now={now} channel={null} />
+            <PostCard
+              key={item.id}
+              post={item}
+              now={now}
+              commentCount={commentCounts[item.id] ?? 0}
+              distanceMeters={sort === 'near' ? postDistance(item, myLocation) : null}
+              channel={null}
+              onOpen={() => onOpenPost(item.id)}
+              onShowOnMap={() => onShowPostOnMap(item)}
+            />
           ))}
         </View>
       ) : (
@@ -400,17 +554,50 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   );
 };
 
+// ---- Sort pills ------------------------------------------------------------------------------
+
+const SortRow: React.FC<{ sort: PostSort; onChange: (sort: PostSort) => void }> = ({ sort, onChange }) => {
+  const styles = useThemedStyles(createStyles);
+  return (
+    <View style={styles.sortRow} accessibilityRole="tablist">
+      {POST_SORTS.map(({ id, label }) => {
+        const active = sort === id;
+        return (
+          <TouchableOpacity
+            key={id}
+            style={[styles.sortPill, active && styles.sortPillActive]}
+            onPress={() => onChange(id)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: active }}
+            testID={`posts-sort-${id}`}
+          >
+            <Text style={[styles.sortText, active && styles.sortTextActive]}>{label}</Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+};
+
 // ---- Post card -------------------------------------------------------------------------------
 
 const PostCard: React.FC<{
   post: ChannelPost;
   now: number;
+  commentCount: number;
+  /** Shown in the Near sort. */
+  distanceMeters?: number | null;
   /** Show which channel it's from (combined feed). Null inside a channel page. */
   channel: Channel | null;
   onOpenChannel?: () => void;
-}> = ({ post, now, channel, onOpenChannel }) => {
+  /** Opens the post page with its comments. Left out on the post page itself. */
+  onOpen?: () => void;
+  onShowOnMap?: () => void;
+}> = ({ post, now, commentCount, distanceMeters = null, channel, onOpenChannel, onOpen, onShowOnMap }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
+  const pinLeft = pinTimeLeft(post, now);
+  const distance = formatDistance(distanceMeters ?? undefined);
   return (
     <View style={styles.post} testID={`post-${post.id}`}>
       <View style={styles.postHeader}>
@@ -424,9 +611,31 @@ const PostCard: React.FC<{
         ) : null}
         <Text style={styles.postMeta} numberOfLines={1}>
           {post.author} · {timeAgo(post.createdAt, now)}
+          {distance ? ` · ${distance}` : ''}
         </Text>
       </View>
-      <Text style={styles.postBody}>{post.body}</Text>
+      {onOpen ? (
+        <TouchableOpacity onPress={onOpen} accessibilityRole="button" accessibilityHint="Opens the comments">
+          <Text style={styles.postBody}>{post.body}</Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.postBody}>{post.body}</Text>
+      )}
+      {pinLeft && post.place ? (
+        <TouchableOpacity
+          style={styles.pinBadge}
+          onPress={onShowOnMap}
+          disabled={!onShowOnMap}
+          accessibilityRole="button"
+          accessibilityLabel={`Pinned at ${post.place.label}, ${pinLeft}. Show on map`}
+          testID={`post-pin-${post.id}`}
+        >
+          <MapPin size={12} color={c.violet} strokeWidth={2.5} />
+          <Text style={styles.pinBadgeText} numberOfLines={1}>
+            {post.place.label} · {pinLeft}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
       <View style={styles.postFooter}>
         <TouchableOpacity
           style={[styles.voteBtn, post.voted && styles.voteBtnOn]}
@@ -438,10 +647,162 @@ const PostCard: React.FC<{
           <ArrowBigUp size={18} color={post.voted ? c.accent : c.textMuted} fill={post.voted ? c.accent : 'transparent'} strokeWidth={2} />
           <Text style={[styles.footerText, post.voted && styles.footerTextOn]}>{post.upvotes}</Text>
         </TouchableOpacity>
-        <View style={styles.voteBtn}>
+        <TouchableOpacity
+          style={styles.voteBtn}
+          onPress={onOpen}
+          disabled={!onOpen}
+          accessibilityRole="button"
+          accessibilityLabel={`${commentCount} comments`}
+        >
           <MessageCircle size={15} color={c.textMuted} strokeWidth={2} />
-          <Text style={styles.footerText}>{post.comments}</Text>
+          <Text style={styles.footerText}>{commentCount}</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
+// ---- Post page (comments) --------------------------------------------------------------------
+
+const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Channel | null }> = ({
+  post,
+  channel,
+  onOpenPost,
+  onOpenChannel,
+  onShowPostOnMap,
+  myHandle,
+}) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const comments = useComments();
+  const now = useBoosts();
+  const threads = useMemo(() => buildThreads(comments, post.id), [comments, post.id]);
+  const count = threads.reduce((sum, thread) => sum + 1 + thread.replies.length, 0);
+  const [draft, setDraft] = useState('');
+  const [replyTo, setReplyTo] = useState<PostComment | null>(null);
+
+  const send = () => {
+    if (!draft.trim()) return;
+    addComment(post.id, myHandle, draft, replyTo?.id ?? null);
+    setDraft('');
+    setReplyTo(null);
+  };
+
+  return (
+    <View style={styles.container} testID={`post-page-${post.id}`}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+        <TouchableOpacity
+          style={styles.backBtn}
+          onPress={() => onOpenPost(null)}
+          accessibilityRole="button"
+          accessibilityLabel="Back"
+          testID="post-back"
+        >
+          <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
+          <Text style={styles.backText}>BACK</Text>
+        </TouchableOpacity>
+
+        <PostCard
+          post={post}
+          now={now}
+          commentCount={count}
+          channel={channel}
+          onOpenChannel={() => {
+            onOpenPost(null);
+            onOpenChannel(post.channelId);
+          }}
+          onShowOnMap={() => onShowPostOnMap(post)}
+        />
+
+        <Text style={[styles.sectionLabel, styles.sectionSpaced]}>
+          {count} {count === 1 ? 'COMMENT' : 'COMMENTS'}
+        </Text>
+        {threads.length ? (
+          <View style={styles.thread}>
+            {threads.map(({ comment, replies }) => (
+              <View key={comment.id} style={styles.threadItem}>
+                <CommentRow comment={comment} now={now} onReply={() => setReplyTo(comment)} />
+                {replies.length ? (
+                  <View style={styles.replies}>
+                    {replies.map((reply) => (
+                      <CommentRow key={reply.id} comment={reply} now={now} onReply={() => setReplyTo(comment)} />
+                    ))}
+                  </View>
+                ) : null}
+              </View>
+            ))}
+          </View>
+        ) : (
+          <Text style={styles.emptyText}>No comments yet. Say something.</Text>
+        )}
+      </ScrollView>
+
+      {/* Comment box, pinned under the thread. */}
+      <View style={styles.commentBar}>
+        {replyTo ? (
+          <View style={styles.replyingRow}>
+            <CornerDownRight size={13} color={c.textMuted} strokeWidth={2.25} />
+            <Text style={styles.replyingText} numberOfLines={1}>
+              Replying to {replyTo.author}
+            </Text>
+            <TouchableOpacity onPress={() => setReplyTo(null)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Cancel reply">
+              <X size={15} color={c.textMuted} strokeWidth={2.25} />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+        <View style={styles.commentInputRow}>
+          <TextInput
+            style={styles.commentInput}
+            value={draft}
+            onChangeText={setDraft}
+            placeholder={replyTo ? `Reply to ${replyTo.author}…` : 'Add a comment…'}
+            placeholderTextColor={c.textFaint}
+            multiline
+            maxLength={500}
+            accessibilityLabel="Write a comment"
+            testID="comment-input"
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, !draft.trim() && styles.postBtnDisabled]}
+            onPress={send}
+            disabled={!draft.trim()}
+            accessibilityRole="button"
+            accessibilityLabel="Send comment"
+            testID="comment-send"
+          >
+            <Send size={16} color={c.onAccent} strokeWidth={2.5} />
+          </TouchableOpacity>
         </View>
+      </View>
+    </View>
+  );
+};
+
+const CommentRow: React.FC<{ comment: PostComment; now: number; onReply: () => void }> = ({ comment, now, onReply }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  return (
+    <View style={styles.comment} testID={`comment-${comment.id}`}>
+      <Text style={styles.postMeta}>
+        <Text style={styles.commentAuthor}>{comment.author}</Text> · {timeAgo(comment.createdAt, now)}
+      </Text>
+      <Text style={styles.commentBody}>{comment.body}</Text>
+      <View style={styles.commentActions}>
+        <TouchableOpacity
+          style={styles.commentAction}
+          onPress={() => toggleCommentVote(comment.id)}
+          accessibilityRole="button"
+          accessibilityState={{ selected: comment.voted }}
+          accessibilityLabel={`${comment.voted ? 'Remove upvote' : 'Upvote'}, ${comment.upvotes} votes`}
+          hitSlop={6}
+        >
+          <ArrowBigUp size={16} color={comment.voted ? c.accent : c.textMuted} fill={comment.voted ? c.accent : 'transparent'} strokeWidth={2} />
+          <Text style={[styles.footerText, comment.voted && styles.footerTextOn]}>{comment.upvotes}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.commentAction} onPress={onReply} accessibilityRole="button" hitSlop={6}>
+          <CornerDownRight size={14} color={c.textMuted} strokeWidth={2.25} />
+          <Text style={styles.footerText}>Reply</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -482,7 +843,6 @@ const createStyles = (c: ThemeColors) =>
     sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8, marginTop: 4 },
     sectionSpaced: { marginTop: 20 },
     list: { gap: 10 },
-    postsList: { marginTop: 12 },
     emptyText: { color: c.textFaint, fontSize: 13, lineHeight: 19 },
 
     chipScroll: { marginHorizontal: -16, marginBottom: 12 },
@@ -568,6 +928,37 @@ const createStyles = (c: ThemeColors) =>
       gap: 8,
     },
     composerInput: { color: c.text, fontSize: 14, minHeight: 44, textAlignVertical: 'top', padding: 4 },
+    composerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+    pinToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      flexShrink: 1,
+      paddingHorizontal: 12,
+      minHeight: 34,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: c.violet,
+    },
+    pinToggleOn: { backgroundColor: c.violet },
+    pinToggleText: { color: c.violet, fontSize: 12, fontWeight: '800', flexShrink: 1 },
+    pinToggleTextOn: { color: c.white },
+    pinOptions: { gap: 6, paddingHorizontal: 4 },
+    pinOptionsLabel: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.1, marginTop: 2 },
+    pinChipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
+    pinChip: {
+      maxWidth: 170,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: c.surfaceDim,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    pinChipActive: { backgroundColor: c.violetTint, borderColor: c.violet },
+    pinChipText: { color: c.textSecondary, fontSize: 12, fontWeight: '700' },
+    pinChipTextActive: { color: c.violetText },
+    pinNote: { color: c.textFaint, fontSize: 11, marginTop: 2 },
     postBtn: {
       alignSelf: 'flex-end',
       paddingHorizontal: 18,
@@ -594,6 +985,73 @@ const createStyles = (c: ThemeColors) =>
     postMeta: { color: c.textFaint, fontSize: 12, flexShrink: 1 },
     postBody: { color: c.text, fontSize: 14, lineHeight: 20 },
     postFooter: { flexDirection: 'row', gap: 8 },
+    pinBadge: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      maxWidth: '100%',
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: c.violetTint,
+      borderWidth: 1,
+      borderColor: c.violetBase,
+    },
+    pinBadgeText: { color: c.violetText, fontSize: 12, fontWeight: '700', flexShrink: 1 },
+    sortRow: { flexDirection: 'row', gap: 6, marginTop: 14, marginBottom: 10 },
+    sortPill: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: c.surfaceDim,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    sortPillActive: { backgroundColor: c.accentTint, borderColor: c.accentDeep },
+    sortText: { color: c.textMuted, fontSize: 12, fontWeight: '700' },
+    sortTextActive: { color: c.accent, fontWeight: '800' },
+    thread: { gap: 14 },
+    threadItem: { gap: 10 },
+    replies: { marginLeft: 14, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: c.border, gap: 10 },
+    comment: { gap: 4 },
+    commentAuthor: { color: c.textBody, fontWeight: '800' },
+    commentBody: { color: c.text, fontSize: 14, lineHeight: 20 },
+    commentActions: { flexDirection: 'row', gap: 16, marginTop: 2 },
+    commentAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    commentBar: {
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      backgroundColor: c.sheet,
+      paddingHorizontal: 12,
+      paddingTop: 8,
+      paddingBottom: 10,
+      gap: 6,
+    },
+    replyingRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 4 },
+    replyingText: { flex: 1, color: c.textMuted, fontSize: 12, fontWeight: '600' },
+    commentInputRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+    commentInput: {
+      flex: 1,
+      maxHeight: 110,
+      minHeight: 40,
+      color: c.text,
+      fontSize: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      borderRadius: 20,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    sendBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.accent,
+    },
     voteBtn: {
       flexDirection: 'row',
       alignItems: 'center',

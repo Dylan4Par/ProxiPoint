@@ -14,11 +14,13 @@ import { toCanvasCoordinates, useDiscoveryStore } from '../../stores/useDiscover
 import { matchesDiscoverFilters } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
-import { Plus, Zap } from 'lucide-react-native';
+import { MessageCircle, Plus, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
+import { getChannel, usePosts } from '../../lib/channels';
+import { isPinLive } from '../../lib/postRanking';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
@@ -42,6 +44,8 @@ const MAX_ZOOM = 3;
 // Live Points: green pins with a ripple, matching the LIVE badges.
 const LIVE_PULSE_MS = 1400;
 const ZOOM_STEP = 1.5;
+/** Box for a pinned post's bubble + tail (the tail tip sits at the bottom middle). */
+const POST_PIN_SIZE = 32;
 const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
 
 // Pin head center sits this far below the top of the pin + label column.
@@ -92,7 +96,20 @@ export const DiscoveryMapCanvas: React.FC<{
   cardRequest?: { id: string; key: number } | null;
   /** Drop a new Point. Shows a "+" next to the recenter button; leave out to hide it. */
   onDropPoint?: () => void;
-}> = ({ liveOnly = false, onMapTouch, coveredFromY = null, onOpenPoint, cardRequest = null, onDropPoint }) => {
+  /** Tapping a pinned channel post (speech-bubble pin). */
+  onOpenPost?: (id: string) => void;
+  /** Slide the map to this spot (e.g. "Show on map" from a post). New key = new request. */
+  focusRequest?: { latitude: number; longitude: number; key: number } | null;
+}> = ({
+  liveOnly = false,
+  onMapTouch,
+  coveredFromY = null,
+  onOpenPoint,
+  cardRequest = null,
+  onDropPoint,
+  onOpenPost,
+  focusRequest = null,
+}) => {
   const { colors: c, mode } = useTheme();
   const styles = useThemedStyles(createStyles);
   const nodes = useDiscoveryStore((s) => s.nodes);
@@ -121,6 +138,26 @@ export const DiscoveryMapCanvas: React.FC<{
   const nodeList = allNodes
     .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab }))
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
+
+  // Channel posts pinned to a place, while their pin lasts. Same #tag chip as the Points
+  // (matched against the post's channel tags); hidden on the RSVP'd view, which is about your plans.
+  const posts = usePosts();
+  const tagKey = (tag: string) => tag.replace(/^#+/, '').toLowerCase();
+  const postPins =
+    activeTab === 'RSVPd'
+      ? []
+      : posts
+          .filter((post) => isPinLive(post, boostClock))
+          .filter(
+            (post) =>
+              !selectedTag ||
+              selectedTag === 'All' ||
+              (getChannel(post.channelId)?.tags ?? []).some((tag) => tagKey(tag) === tagKey(selectedTag)),
+          )
+          .map((post) => ({
+            post,
+            ...toCanvasCoordinates(post.place!.latitude, post.place!.longitude, viewPlace.latitude, viewPlace.longitude),
+          }));
 
   // Respect the system Reduce Motion setting for the beacon pulse.
   const [reducedMotion, setReducedMotion] = useState(false);
@@ -359,6 +396,16 @@ export const DiscoveryMapCanvas: React.FC<{
     y: visibleHeight / 2 + WORLD_OFFSET - z * BEACON_WORLD_Y,
   });
 
+  /** Pan that puts a lat/lon in the middle of the visible map. */
+  const focusTargetFor = (spot: { latitude: number; longitude: number }, visibleHeight = visibleMapHeight()) => {
+    const world = toCanvasCoordinates(spot.latitude, spot.longitude, viewPlace.latitude, viewPlace.longitude);
+    const z = currentZoom.current;
+    return {
+      x: viewSize.current.width / 2 + WORLD_OFFSET - z * world.x,
+      y: visibleHeight / 2 + WORLD_OFFSET - z * world.y,
+    };
+  };
+
   /** Height of the map not hidden by the detail sheet. */
   // Latest values for timers and layout callbacks (which can run after a render).
   const coveredRef = useRef<number | null>(coveredFromY);
@@ -403,7 +450,15 @@ export const DiscoveryMapCanvas: React.FC<{
           if (resizeTimer.current) clearTimeout(resizeTimer.current);
           resizeTimer.current = setTimeout(focusSelected, 180);
         }
-        if (!userMoved.current) {
+        if (focusRequest && focusRequest.key !== lastFocusKey.current) {
+          // Opened to show a spot (e.g. a pinned post): start there instead of on you.
+          lastFocusKey.current = focusRequest.key;
+          userMoved.current = true;
+          const target = focusTargetFor(focusRequest, h);
+          pan.setValue(target);
+          currentPan.current = target;
+          calculateBounds(target.x, target.y);
+        } else if (!userMoved.current) {
           // First layout: put you in the real middle of the map (no animation).
           const home = homeTarget(currentZoom.current, h);
           pan.setValue(home);
@@ -413,6 +468,17 @@ export const DiscoveryMapCanvas: React.FC<{
       }
     });
   };
+
+  // "Show on map" for a spot: slide there now if the map is laid out, otherwise on first layout.
+  const lastFocusKey = useRef(0);
+  useEffect(() => {
+    if (!focusRequest || focusRequest.key === lastFocusKey.current) return;
+    if (viewSize.current.width <= 0) return; // measureFrame handles it once the map has a size
+    lastFocusKey.current = focusRequest.key;
+    userMoved.current = true;
+    animateTo(focusTargetFor(focusRequest));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusRequest?.key]);
 
   // Selecting a Point (card or pin) slides the map so it sits in the middle of the visible area.
   const selectedX = selectedNode?.x;
@@ -616,6 +682,33 @@ export const DiscoveryMapCanvas: React.FC<{
           <View style={styles.userCoreDot} />
         </Animated.View>
         ) : null}
+
+        {/* Pinned channel posts: speech bubbles, under the event pins so Points stay on top. */}
+        {postPins.map(({ post, x, y }) => (
+          <Animated.View
+            key={`post-${post.id}`}
+            pointerEvents="box-none"
+            style={[
+              styles.postPin,
+              { top: y - POST_PIN_SIZE, left: x - POST_PIN_SIZE / 2 },
+              // Same size at any zoom, anchored on the bubble's tail (the spot itself).
+              { transformOrigin: [POST_PIN_SIZE / 2, POST_PIN_SIZE, 0], transform: [{ scale: counterZoom }] },
+            ]}
+          >
+            <TouchableOpacity
+              activeOpacity={0.8}
+              onPress={() => onOpenPost?.(post.id)}
+              style={styles.postBubble}
+              accessibilityRole="button"
+              accessibilityLabel={`Post at ${post.place?.label ?? 'this spot'}: ${post.body}`}
+              testID={`map-post-${post.id}`}
+            >
+              <MessageCircle size={13} color={c.white} fill={c.white} strokeWidth={2} />
+              <Text style={styles.postBubbleCount}>{post.upvotes}</Text>
+            </TouchableOpacity>
+            <View style={styles.postBubbleTail} />
+          </Animated.View>
+        ))}
 
         {/* Interactive Event Nodes: pin + main hashtag */}
         {/* Cluster bubbles (several Points close together) */}
@@ -869,6 +962,43 @@ const createStyles = (c: ThemeColors) =>
     borderWidth: 2,
     borderColor: c.meRing,
     backgroundColor: c.meHalo,
+  },
+  /* Pinned post: violet speech bubble (Points use cyan/green/gold), tail on the spot. */
+  postPin: {
+    position: 'absolute',
+    width: POST_PIN_SIZE,
+    height: POST_PIN_SIZE,
+    alignItems: 'center',
+    zIndex: 3,
+  },
+  postBubble: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    minWidth: 34,
+    height: 24,
+    paddingHorizontal: 7,
+    borderRadius: 12,
+    backgroundColor: c.violet,
+    borderWidth: 1.5,
+    borderColor: c.white,
+    elevation: 3,
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 3,
+    shadowOffset: { width: 0, height: 1 },
+  },
+  postBubbleCount: { color: c.white, fontSize: 11, fontWeight: '800' },
+  postBubbleTail: {
+    width: 0,
+    height: 0,
+    marginTop: -1,
+    borderLeftWidth: 5,
+    borderRightWidth: 5,
+    borderTopWidth: 7,
+    borderLeftColor: 'transparent',
+    borderRightColor: 'transparent',
+    borderTopColor: c.violet,
   },
   nodeCluster: {
     position: 'absolute',

@@ -47,6 +47,10 @@ export const DiscoverScreen: React.FC = () => {
   // Channels tab: which view (Feed / Alerts / My Channels) and which channel page is open.
   const [channelsSegment, setChannelsSegment] = useState<ChannelsSegment>('feed');
   const [channelId, setChannelId] = useState<string | null>(null);
+  // A channel post's page (comments), opened from a feed, a channel or a pin on the map.
+  const [postId, setPostId] = useState<string | null>(null);
+  // "Show on map" for a pinned post: Explore Map opens centered there. New key = new request.
+  const [mapFocus, setMapFocus] = useState<{ latitude: number; longitude: number; key: number } | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
   // Kept in memory for now; load from the backend (e.g. GET /me/points) once that exists.
   const [myDrops, setMyDrops] = useState<DroppedPoint[]>([]);
@@ -74,6 +78,7 @@ export const DiscoverScreen: React.FC = () => {
   const viewPlace = useDiscoveryStore((state) => state.viewPlace);
   const setViewPlace = useDiscoveryStore((state) => state.setViewPlace);
   const setSelfCoordinates = useDiscoveryStore((state) => state.setSelfCoordinates);
+  const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const addTag = useDiscoveryStore((state) => state.addTag);
   const setSelectedTag = useDiscoveryStore((state) => state.setSelectedTag);
   // Public profile of a host, opened from "Hosted by @x" on the detail sheet.
@@ -260,6 +265,8 @@ export const DiscoverScreen: React.FC = () => {
     // A tab always opens on its main view (tapping Channels again leaves a channel page).
     setProfileView('main');
     setChannelId(null);
+    setPostId(null);
+    setMapFocus(null);
     setTab(next);
   };
 
@@ -348,6 +355,12 @@ export const DiscoverScreen: React.FC = () => {
               coveredFromY={detailId ? detailTopY : null}
               // Picked from a cluster's list (several Points at one spot): show its details.
               onOpenPoint={setDetailId}
+              // Speech-bubble pins for channel posts: open the post and its comments.
+              onOpenPost={(id) => {
+                goTo('channels');
+                setPostId(id);
+              }}
+              focusRequest={mapFocus}
               // "+" next to the recenter button. Hidden while a sheet is up so it never covers the sheet.
               onDropPoint={
                 detailId || dropOpen || managing
@@ -422,6 +435,14 @@ export const DiscoverScreen: React.FC = () => {
           onChangeSegment={setChannelsSegment}
           channelId={channelId}
           onOpenChannel={setChannelId}
+          postId={postId}
+          onOpenPost={setPostId}
+          myLocation={selfCoordinates}
+          onShowPostOnMap={(post) => {
+            if (!post.place) return;
+            goTo('map');
+            setMapFocus({ latitude: post.place.latitude, longitude: post.place.longitude, key: Date.now() });
+          }}
           myHandle={profile.handle}
           unreadAlerts={unread}
           interestTags={profile.interestTags ?? []}
