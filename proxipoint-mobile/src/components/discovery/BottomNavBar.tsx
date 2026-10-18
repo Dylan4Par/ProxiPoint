@@ -1,10 +1,11 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, Compass, Layers, MapPin, type LucideIcon } from 'lucide-react-native';
+import { CircleUser, Compass, Map as MapIcon, Users, type LucideIcon } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
-export type NavTab = 'discover' | 'activity' | 'drop' | 'drops';
+/** discover = feed, map = Explore Map, channels = groups + alerts, profile = your profile. */
+export type NavTab = 'discover' | 'map' | 'channels' | 'profile';
 
 /** Height of the tab bar itself (without the phone's navigation bar under it). */
 export const NAV_BAR_BASE_HEIGHT = 72;
@@ -19,16 +20,14 @@ export function useNavBarHeight(): number {
 }
 
 interface BottomNavBarProps {
-  /** Which tab is open. Falls back to the old `dropActive` flag when not given. */
+  /** Which tab is open. */
   activeTab?: NavTab;
   onDiscover?: () => void;
-  onActivity?: () => void;
-  onDropPoint?: () => void;
-  onMyDrops?: () => void;
-  /** Unread Activity items. Shows a yellow dot (1–9) or "9+" on the bell. */
+  onMap?: () => void;
+  onChannels?: () => void;
+  onProfile?: () => void;
+  /** Unread alerts. Shows a yellow dot (1–9) or "9+" on the Channels icon. */
   unreadCount?: number;
-  /** @deprecated Use `activeTab="drop"`. Kept so existing screens keep working. */
-  dropActive?: boolean;
 }
 
 // Ink on the yellow unread dot stays dark in both themes.
@@ -43,30 +42,29 @@ interface TabSpec {
 
 const TABS: TabSpec[] = [
   { id: 'discover', label: 'Discover', Icon: Compass, testID: 'nav-discover' },
-  { id: 'activity', label: 'Activity', Icon: Bell, testID: 'nav-activity' },
-  { id: 'drop', label: 'Drop Point', Icon: MapPin, testID: 'nav-drop' },
-  { id: 'drops', label: 'My Drops', Icon: Layers, testID: 'nav-my-drops' },
+  { id: 'map', label: 'Explore Map', Icon: MapIcon, testID: 'nav-map' },
+  { id: 'channels', label: 'Channels', Icon: Users, testID: 'nav-channels' },
+  { id: 'profile', label: 'Profile', Icon: CircleUser, testID: 'nav-profile' },
 ];
 
 export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   activeTab,
   onDiscover,
-  onActivity,
-  onDropPoint,
-  onMyDrops,
+  onMap,
+  onChannels,
+  onProfile,
   unreadCount = 0,
-  dropActive = false,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
-  const current: NavTab = activeTab ?? (dropActive ? 'drop' : 'discover');
+  const current: NavTab = activeTab ?? 'discover';
   const insets = useSafeAreaInsets();
 
   const handlers: Record<NavTab, (() => void) | undefined> = {
     discover: onDiscover,
-    activity: onActivity,
-    drop: onDropPoint,
-    drops: onMyDrops,
+    map: onMap,
+    channels: onChannels,
+    profile: onProfile,
   };
 
   return (
@@ -76,7 +74,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
     >
       {TABS.map(({ id, label, Icon, testID }) => {
         const active = current === id;
-        const showBadge = id === 'activity' && unreadCount > 0;
+        const showBadge = id === 'channels' && unreadCount > 0;
         return (
           <TouchableOpacity
             key={id}

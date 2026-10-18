@@ -18,9 +18,11 @@ import { SettingsScreen } from './SettingsScreen';
 import { HostProfileScreen } from './HostProfileScreen';
 import { ActivityScreen } from './ActivityScreen';
 import { CalendarScreen } from './CalendarScreen';
+import { DiscoverFeedScreen } from './DiscoverFeedScreen';
+import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
 import { setTimeWindow, useTimeWindow } from '../lib/timeWindow';
 import { formatRange } from '../lib/calendarRange';
-import { CalendarDays, X } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, Plus, X } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
 import { cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
@@ -31,14 +33,20 @@ import type { PointRecap } from '../lib/pointRecap';
 import type { DroppedPoint } from '../lib/droppedPoint';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
-type ScreenTab = Exclude<NavTab, 'drop'>;
+type ScreenTab = NavTab;
 
 export const DiscoverScreen: React.FC = () => {
   const styles = useThemedStyles(createStyles);
   const { mode, colors: c } = useTheme();
   // Live duplex telemetry socket hook
   useProximitySocket();
+  // Opens on the Discover feed; the map lives on Explore Map.
   const [tab, setTab] = useState<ScreenTab>('discover');
+  // Profile tab: the profile itself, or My Drops opened from it.
+  const [profileView, setProfileView] = useState<'main' | 'drops'>('main');
+  // Channels tab: which view (Feed / Alerts / My Channels) and which channel page is open.
+  const [channelsSegment, setChannelsSegment] = useState<ChannelsSegment>('feed');
+  const [channelId, setChannelId] = useState<string | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
   // Kept in memory for now; load from the backend (e.g. GET /me/points) once that exists.
   const [myDrops, setMyDrops] = useState<DroppedPoint[]>([]);
@@ -46,7 +54,7 @@ export const DiscoverScreen: React.FC = () => {
   const [justDroppedId, setJustDroppedId] = useState<string | null>(null);
   // Set by "Drop again" so the Drop Point sheet opens filled in.
   const [dropPrefill, setDropPrefill] = useState<DroppedPoint | null>(null);
-  // Profile and Settings open full-screen over everything (including the nav bar).
+  // Settings and the Calendar open full-screen over everything (including the nav bar).
   // Discover "Live Now" filter (shared by the header chips, the map and the cards).
   const [liveOnly, setLiveOnly] = useState(false);
   // Public detail sheet for a Discover card (the card stays selected after it closes).
@@ -94,14 +102,14 @@ export const DiscoverScreen: React.FC = () => {
     return () => sub.remove();
   }, [hostHandle]);
 
-  // From a host profile: show that Point on the map with its details open.
+  // From a host profile, the feed or a channel: show that Point on Explore Map with its details open.
   const openHostPoint = (id: string) => {
     setHostHandle(null);
-    setTab('discover');
+    setTab('map');
     setSelectedNodeId(id);
     setDetailId(id);
   };
-  const [overlay, setOverlay] = useState<'profile' | 'settings' | 'calendar' | null>(null);
+  const [overlay, setOverlay] = useState<'settings' | 'calendar' | null>(null);
   const [settingsSection, setSettingsSection] = useState<'edit' | null>(null);
   // In memory for now; load and save through the backend (GET/PATCH /me) once sign-in exists.
   const [profile, setProfile] = useState<MyProfile>(DEFAULT_PROFILE);
@@ -202,15 +210,25 @@ export const DiscoverScreen: React.FC = () => {
   useActivity(); // re-render for the unread badge
   const unread = activityUnread();
 
-  // Android back button: Settings → Profile → closed.
+  // Android back button: closes Settings (back to the Profile tab) or the Calendar.
   useEffect(() => {
     if (!overlay) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
-      setOverlay((current) => (current === 'settings' ? 'profile' : null)); // calendar/profile → closed
+      setOverlay(null);
       return true;
     });
     return () => sub.remove();
   }, [overlay]);
+
+  // Android back on My Drops returns to the Profile it was opened from.
+  useEffect(() => {
+    if (tab !== 'profile' || profileView !== 'drops') return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setProfileView('main');
+      return true;
+    });
+    return () => sub.remove();
+  }, [tab, profileView]);
 
   const openSettings = (section: 'edit' | null = null) => {
     setSettingsSection(section);
@@ -239,6 +257,9 @@ export const DiscoverScreen: React.FC = () => {
     setDropOpen(false);
     setDropPrefill(null);
     setManagingId(null);
+    // A tab always opens on its main view (tapping Channels again leaves a channel page).
+    setProfileView('main');
+    setChannelId(null);
     setTab(next);
   };
 
@@ -248,7 +269,8 @@ export const DiscoverScreen: React.FC = () => {
     syncMyPoint(point);
     setDropOpen(false);
     setDropPrefill(null);
-    setTab('drops');
+    setTab('profile');
+    setProfileView('drops');
     setJustDroppedId(point.id);
     setManagingId(point.id);
   };
@@ -273,14 +295,28 @@ export const DiscoverScreen: React.FC = () => {
       />
 
       {tab === 'discover' ? (
+        <DiscoverFeedScreen
+          interestTags={profile.interestTags ?? []}
+          placeLabel={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
+          onOpenPoint={openHostPoint}
+          onToggleRsvp={(id) => toggleRsvp(id)}
+          onOpenChannel={(id) => {
+            goTo('channels');
+            setChannelId(id);
+          }}
+          onBrowseChannels={() => {
+            goTo('channels');
+            setChannelsSegment('manage');
+          }}
+          onOpenMap={() => goTo('map')}
+        />
+      ) : null}
+
+      {tab === 'map' ? (
         <>
           <TopFilterHeader
-            onOpenProfile={() => {
-              setDetailId(null);
-              setOverlay('profile');
-            }}
-            profileInitial={profile.displayName.trim().charAt(0).toUpperCase()}
-            profilePhotoUri={profile.avatarUri}
+            // Profile has its own tab now, so the map header skips the avatar.
+            showAvatar={false}
             liveOnly={liveOnly}
             onToggleLiveOnly={() => setLiveOnly((on) => !on)}
             onOpenCalendar={() => {
@@ -342,6 +378,26 @@ export const DiscoverScreen: React.FC = () => {
               resetSignal={cardsReset}
               onFullChange={setCardsFull}
             />
+            {/* Drop Point: floats over the map (moved here from the nav bar). */}
+            {detailId ? null : (
+              <TouchableOpacity
+                style={styles.dropFab}
+                onPress={() => {
+                  setDetailId(null);
+                  setHostHandle(null);
+                  // Always starts a fresh Point.
+                  setManagingId(null);
+                  setDropPrefill(null);
+                  setDropOpen(true);
+                }}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Drop a Point"
+                testID="map-drop-point"
+              >
+                <Plus size={26} color={c.onAccent} strokeWidth={2.75} />
+              </TouchableOpacity>
+            )}
           </View>
           <PointDetailSheet
             node={detailNode}
@@ -353,96 +409,43 @@ export const DiscoverScreen: React.FC = () => {
         </>
       ) : null}
 
-      {tab === 'activity' ? (
-        <ActivityScreen
+      {tab === 'channels' ? (
+        <ChannelsScreen
+          segment={channelsSegment}
+          onChangeSegment={setChannelsSegment}
+          channelId={channelId}
+          onOpenChannel={setChannelId}
+          myHandle={profile.handle}
+          unreadAlerts={unread}
           interestTags={profile.interestTags ?? []}
           onOpenPoint={openHostPoint}
-          onEditTags={() => {
-            setDetailId(null);
-            setOverlay('profile');
-          }}
           onToggleRsvp={(id) => toggleRsvp(id)}
+          onEditTags={() => goTo('profile')}
           onOpenTag={(tag) => {
-            // Make sure the chip exists in the header, then filter Discover by it.
+            // Make sure the chip exists in the header, then filter Explore Map by it.
             addTag(tag);
             const known = useDiscoveryStore.getState().tags.find(
               (t: string) => t.replace(/^#+/, '').toLowerCase() === tag.replace(/^#+/, '').toLowerCase(),
             );
             setSelectedTag(known ?? tag);
             setLiveOnly(false);
-            goTo('discover');
+            goTo('map');
           }}
         />
       ) : null}
 
-      {tab === 'drops' ? (
-        <MyDropsScreen
-          drops={myDrops}
-          onManage={(id) => {
-            setJustDroppedId(null);
-            setManagingId(id);
-          }}
-          onDropNew={() => {
-            setDropPrefill(null);
-            setDropOpen(true);
-          }}
-          onDropAgain={openDropAgain}
-        />
-      ) : null}
-
-      <DropPointModal
-        visible={dropOpen}
-        prefill={dropPrefill}
-        onClose={closeDrop}
-        onDropped={handleDropped}
-      />
-
-      <ManagePointSheet
-        point={managing}
-        justDropped={managing != null && managing.id === justDroppedId}
-        onChange={updateDrop}
-        onClose={closeManage}
-        onDropAgain={openDropAgain}
-      />
-
-      <BottomNavBar
-        activeTab={dropOpen ? 'drop' : tab}
-        onDiscover={() => {
-          goTo('discover');
-          setCardsReset((n) => n + 1); // full list → back to cards under the map
-        }}
-        onActivity={() => goTo('activity')}
-        onDropPoint={() => {
-          setDetailId(null);
-          setHostHandle(null);
-          // The nav button always starts a fresh Point.
-          setManagingId(null);
-          setDropPrefill(null);
-          setDropOpen((open) => !open);
-        }}
-        onMyDrops={() => goTo('drops')}
-        unreadCount={tab === 'activity' ? 0 : unread}
-      />
-
-      {hostHandle ? (
-        <HostProfileScreen
-          key={hostHandle}
-          handle={hostHandle}
-          onBack={() => setHostHandle(null)}
-          onOpenPoint={openHostPoint}
-        />
-      ) : null}
-
-      {overlay === 'profile' ? (
+      {tab === 'profile' && profileView === 'main' ? (
         <ProfileScreen
           profile={profile}
           drops={myDrops}
-          onBack={() => setOverlay(null)}
+          asTab
           onOpenSettings={() => openSettings()}
-          onOpenMyDrops={() => goTo('drops')}
-          onOpenActivity={() => goTo('activity')}
+          onOpenMyDrops={() => setProfileView('drops')}
+          onOpenActivity={() => {
+            goTo('channels');
+            setChannelsSegment('alerts');
+          }}
           onDropPoint={() => {
-            setOverlay(null);
             setManagingId(null);
             setDropPrefill(null);
             setDropOpen(true);
@@ -466,6 +469,69 @@ export const DiscoverScreen: React.FC = () => {
         />
       ) : null}
 
+      {tab === 'profile' && profileView === 'drops' ? (
+        <View style={styles.subPage}>
+          <TouchableOpacity
+            style={styles.subBack}
+            onPress={() => setProfileView('main')}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Profile"
+            testID="my-drops-back"
+          >
+            <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
+            <Text style={styles.subBackText}>PROFILE</Text>
+          </TouchableOpacity>
+          <MyDropsScreen
+            drops={myDrops}
+            onManage={(id) => {
+              setJustDroppedId(null);
+              setManagingId(id);
+            }}
+            onDropNew={() => {
+              setDropPrefill(null);
+              setDropOpen(true);
+            }}
+            onDropAgain={openDropAgain}
+          />
+        </View>
+      ) : null}
+
+      <DropPointModal
+        visible={dropOpen}
+        prefill={dropPrefill}
+        onClose={closeDrop}
+        onDropped={handleDropped}
+      />
+
+      <ManagePointSheet
+        point={managing}
+        justDropped={managing != null && managing.id === justDroppedId}
+        onChange={updateDrop}
+        onClose={closeManage}
+        onDropAgain={openDropAgain}
+      />
+
+      <BottomNavBar
+        activeTab={tab}
+        onDiscover={() => goTo('discover')}
+        onMap={() => {
+          goTo('map');
+          setCardsReset((n) => n + 1); // full list → back to cards under the map
+        }}
+        onChannels={() => goTo('channels')}
+        onProfile={() => goTo('profile')}
+        unreadCount={tab === 'channels' && channelsSegment === 'alerts' ? 0 : unread}
+      />
+
+      {hostHandle ? (
+        <HostProfileScreen
+          key={hostHandle}
+          handle={hostHandle}
+          onBack={() => setHostHandle(null)}
+          onOpenPoint={openHostPoint}
+        />
+      ) : null}
+
       {overlay === 'calendar' ? (
         <CalendarScreen
           onBack={() => setOverlay(null)}
@@ -473,7 +539,7 @@ export const DiscoverScreen: React.FC = () => {
             setTimeWindow(range); // the map + cards show these dates until reset
             setDetailId(null);
             setOverlay(null);
-            setTab('discover');
+            setTab('map');
           }}
           onOpenPoint={(id) => {
             setOverlay(null);
@@ -489,8 +555,12 @@ export const DiscoverScreen: React.FC = () => {
           profile={profile}
           settings={settings}
           initialSection={settingsSection}
-          onBack={() => setOverlay('profile')}
-          onViewProfile={() => setOverlay('profile')}
+          // Settings opens over the Profile tab, so closing it lands back there.
+          onBack={() => setOverlay(null)}
+          onViewProfile={() => {
+            setOverlay(null);
+            goTo('profile');
+          }}
           onSaveProfile={setProfile}
           onChangeSettings={setSettings}
         />
@@ -519,6 +589,26 @@ const createStyles = (c: ThemeColors) =>
     backgroundColor: c.base,
   },
   mapAndCards: { flex: 1 },
+  dropFab: {
+    position: 'absolute',
+    right: 16,
+    bottom: 16,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.accent,
+    zIndex: 35,
+    elevation: 8,
+    shadowColor: c.accent,
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 3 },
+  },
+  subPage: { flex: 1 },
+  subBack: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4, alignSelf: 'flex-start' },
+  subBackText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
   datePillRow: { position: 'absolute', top: 60, left: 14, flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 15 },
   datePill: {
     flexDirection: 'row',

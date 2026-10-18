@@ -24,6 +24,8 @@ interface TopFilterHeaderProps {
   onToggleLiveOnly?: () => void;
   /** Calendar button next to Nearby / RSVP'd. */
   onOpenCalendar?: () => void;
+  /** Avatar at the left of the top row. Off on Explore Map, where Profile is its own tab. */
+  showAvatar?: boolean;
 }
 
 export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
@@ -33,6 +35,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   liveOnly = false,
   onToggleLiveOnly,
   onOpenCalendar,
+  showAvatar = true,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -65,6 +68,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
     <View style={styles.headerContainer}>
       {/* Top Row: Avatar Pill + Segmented Switcher */}
       <View style={styles.topRow}>
+        {showAvatar ? (
         <TouchableOpacity
           style={styles.avatarButton}
           // Tap: your Profile page. Long-press: the developer connection settings below.
@@ -86,6 +90,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           </View>
           <View style={styles.onlineBadge} />
         </TouchableOpacity>
+        ) : null}
 
         <View style={styles.segmentedWrapper}>
           <TouchableOpacity

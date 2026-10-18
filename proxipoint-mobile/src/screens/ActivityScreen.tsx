@@ -25,7 +25,9 @@ export const ActivityScreen: React.FC<{
   onToggleRsvp: (id: string) => void;
   /** Show Discover filtered to this #tag. */
   onOpenTag: (tag: string) => void;
-}> = ({ interestTags, onOpenPoint, onEditTags, onToggleRsvp, onOpenTag }) => {
+  /** Shown inside Channels (Alerts): no "Activity" title, the Channels header has its own. */
+  embedded?: boolean;
+}> = ({ interestTags, onOpenPoint, onEditTags, onToggleRsvp, onOpenTag, embedded = false }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const items = useActivity();
@@ -60,8 +62,8 @@ export const ActivityScreen: React.FC<{
   const isNew = (item: ActivityItem) => unreadOnOpen.current.has(item.id);
 
   const header = (
-    <View style={styles.header}>
-      <Text style={styles.title}>Activity</Text>
+    <View style={[styles.header, embedded && styles.headerEmbedded]}>
+      {embedded ? null : <Text style={styles.title}>Activity</Text>}
       <TouchableOpacity onPress={onEditTags} style={styles.tagsBtn} accessibilityRole="button" testID="activity-edit-tags">
         <Hash size={14} color={c.accent} strokeWidth={2.5} />
         <Text style={styles.tagsBtnText} numberOfLines={1}>
@@ -177,6 +179,7 @@ const createStyles = (c: ThemeColors) =>
       paddingBottom: 8,
       paddingHorizontal: 0,
     },
+    headerEmbedded: { paddingTop: 4, justifyContent: 'flex-start' },
     title: { color: c.text, fontSize: 24, fontWeight: '800' },
     tagsBtn: {
       flexDirection: 'row',

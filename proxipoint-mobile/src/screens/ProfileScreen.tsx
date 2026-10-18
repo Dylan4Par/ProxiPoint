@@ -15,6 +15,7 @@ import { BIO_CHAR_LIMIT, BIO_MAX_LINES, limitBio, type MyProfile } from '../lib/
 import { useFollowing } from '../lib/hostProfiles';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../components/common/KeyboardAwareScrollView';
+import { useNavBarHeight } from '../components/discovery/BottomNavBar';
 
 /**
  * Fills the parent edge to edge. Written out by hand because StyleSheet.absoluteFillObject
@@ -25,7 +26,10 @@ const ABS_FILL = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 } 
 interface ProfileScreenProps {
   profile: MyProfile;
   drops: DroppedPoint[];
-  onBack: () => void;
+  /** Shown as a BACK button. Leave out when Profile is open as a tab. */
+  onBack?: () => void;
+  /** Profile is the Profile tab: sits above the nav bar instead of covering it. */
+  asTab?: boolean;
   onOpenSettings: () => void;
   onOpenMyDrops: () => void;
   onOpenActivity: () => void;
@@ -74,6 +78,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   profile,
   drops,
   onBack,
+  asTab = false,
   onOpenSettings,
   onOpenMyDrops,
   onOpenActivity,
@@ -92,6 +97,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { colors: c } = useTheme();
   const [bioFocused, setBioFocused] = useState(false);
   const insets = useSafeAreaInsets();
+  const navBarHeight = useNavBarHeight();
   // Hosts you follow from their public profiles (until GET /me/following exists).
   const followedHosts = useFollowing();
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -128,10 +134,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   return (
-    <View style={styles.overlay} testID="profile-screen">
+    // As a tab: stops at the nav bar and stays under the Drop Point sheet (30) and nav bar (40).
+    <View style={[styles.overlay, asTab && { bottom: navBarHeight, zIndex: 20 }]} testID="profile-screen">
       <KeyboardAwareScrollView
         style={styles.scroll}
-        contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+        contentContainerStyle={{ paddingBottom: asTab ? 24 : insets.bottom + 24 }}
         bounces={false}
         keyboardShouldPersistTaps="handled"
       >
@@ -170,10 +177,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           </View>
 
           <View style={styles.topBar}>
-            <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityRole="button" testID="profile-back">
-              <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
-              <Text style={styles.backText}>BACK</Text>
-            </TouchableOpacity>
+            {onBack ? (
+              <TouchableOpacity onPress={onBack} style={styles.backBtn} accessibilityRole="button" testID="profile-back">
+                <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
+                <Text style={styles.backText}>BACK</Text>
+              </TouchableOpacity>
+            ) : (
+              <View />
+            )}
             <View style={styles.bannerActions}>
               <TouchableOpacity
                 onPress={pickBanner}
@@ -317,7 +328,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <View style={styles.rows}>
             <LinkRow Icon={Layers} label="View My Drops" onPress={onOpenMyDrops} testID="profile-my-drops" />
-            <LinkRow Icon={Bell} label="View activity" onPress={onOpenActivity} testID="profile-activity" />
+            <LinkRow Icon={Bell} label="View alerts" onPress={onOpenActivity} testID="profile-activity" />
           </View>
         </View>
       </KeyboardAwareScrollView>
