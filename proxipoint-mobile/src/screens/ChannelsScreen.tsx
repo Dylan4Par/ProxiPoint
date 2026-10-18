@@ -72,6 +72,8 @@ interface ChannelsScreenProps {
   onShowPostOnMap: (post: ChannelPost) => void;
   /** Search button: the Discover search, ready to type. */
   onOpenSearch: () => void;
+  /** Someone's @handle on a post or comment: their profile (yours goes to the Profile tab). */
+  onOpenProfile: (handle: string) => void;
 }
 
 /** Points listed on a channel page (a city channel can have many). */
@@ -199,6 +201,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   onShowPostOnMap,
   myLocation,
   myHandle,
+  onOpenProfile,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -268,6 +271,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
           {feed.map((post) => (
             <PostCard
               myHandle={myHandle}
+              onOpenProfile={onOpenProfile}
               key={post.id}
               post={post}
               now={now}
@@ -369,6 +373,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   onOpenPost,
   onShowPostOnMap,
   myHandle,
+  onOpenProfile,
   myLocation,
 }) => {
   const styles = useThemedStyles(createStyles);
@@ -659,6 +664,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
           {posts.map((item) => (
             <PostCard
               myHandle={myHandle}
+              onOpenProfile={onOpenProfile}
               key={item.id}
               post={item}
               now={now}
@@ -718,7 +724,8 @@ const PostCard: React.FC<{
   onShowOnMap?: () => void;
   /** You: your own posts get no Report button. */
   myHandle: string;
-}> = ({ post, now, commentCount, distanceMeters = null, channel, onOpenChannel, onOpen, onShowOnMap, myHandle }) => {
+  onOpenProfile: (handle: string) => void;
+}> = ({ post, now, commentCount, distanceMeters = null, channel, onOpenChannel, onOpen, onShowOnMap, myHandle, onOpenProfile }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
@@ -736,8 +743,20 @@ const PostCard: React.FC<{
             </Text>
           </TouchableOpacity>
         ) : null}
+        <TouchableOpacity
+          onPress={() => onOpenProfile(post.author)}
+          accessibilityRole="link"
+          accessibilityLabel={`${post.author}'s profile`}
+          hitSlop={6}
+          style={styles.authorLink}
+          testID={`post-author-${post.id}`}
+        >
+          <Text style={styles.authorText} numberOfLines={1}>
+            {post.author}
+          </Text>
+        </TouchableOpacity>
         <Text style={styles.postMeta} numberOfLines={1}>
-          {post.author} · {timeAgo(post.createdAt, now)}
+          · {timeAgo(post.createdAt, now)}
           {distance ? ` · ${distance}` : ''}
         </Text>
         {mine ? null : (
@@ -917,6 +936,7 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
   onOpenChannel,
   onShowPostOnMap,
   myHandle,
+  onOpenProfile,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -950,6 +970,7 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
 
         <PostCard
           myHandle={myHandle}
+          onOpenProfile={onOpenProfile}
           post={post}
           now={now}
           commentCount={count}
@@ -966,11 +987,11 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
           <View style={styles.thread}>
             {threads.map(({ comment, replies }) => (
               <View key={comment.id} style={styles.threadItem}>
-                <CommentRow myHandle={myHandle} comment={comment} now={now} onReply={() => setReplyTo(comment)} />
+                <CommentRow myHandle={myHandle} onOpenProfile={onOpenProfile} comment={comment} now={now} onReply={() => setReplyTo(comment)} />
                 {replies.length ? (
                   <View style={styles.replies}>
                     {replies.map((reply) => (
-                      <CommentRow key={reply.id} myHandle={myHandle} comment={reply} now={now} onReply={() => setReplyTo(comment)} />
+                      <CommentRow key={reply.id} myHandle={myHandle} onOpenProfile={onOpenProfile} comment={reply} now={now} onReply={() => setReplyTo(comment)} />
                     ))}
                   </View>
                 ) : null}
@@ -1023,21 +1044,30 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
   );
 };
 
-const CommentRow: React.FC<{ comment: PostComment; now: number; onReply: () => void; myHandle: string }> = ({
-  comment,
-  now,
-  onReply,
-  myHandle,
-}) => {
+const CommentRow: React.FC<{
+  comment: PostComment;
+  now: number;
+  onReply: () => void;
+  myHandle: string;
+  onOpenProfile: (handle: string) => void;
+}> = ({ comment, now, onReply, myHandle, onOpenProfile }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const mine = sameHandle(comment.author, myHandle);
   return (
     <View style={styles.comment} testID={`comment-${comment.id}`}>
-      <Text style={styles.postMeta}>
-        <Text style={styles.commentAuthor}>{comment.author}</Text> · {timeAgo(comment.createdAt, now)}
-      </Text>
+      <View style={styles.commentMetaRow}>
+        <TouchableOpacity
+          onPress={() => onOpenProfile(comment.author)}
+          accessibilityRole="link"
+          accessibilityLabel={`${comment.author}'s profile`}
+          hitSlop={6}
+        >
+          <Text style={styles.commentAuthor}>{comment.author}</Text>
+        </TouchableOpacity>
+        <Text style={styles.postMeta}>· {timeAgo(comment.createdAt, now)}</Text>
+      </View>
       <Text style={styles.commentBody}>{comment.body}</Text>
       <View style={styles.commentActions}>
         <TouchableOpacity
@@ -1387,7 +1417,10 @@ const createStyles = (c: ThemeColors) =>
     threadItem: { gap: 10 },
     replies: { marginLeft: 14, paddingLeft: 12, borderLeftWidth: 2, borderLeftColor: c.border, gap: 10 },
     comment: { gap: 4 },
-    commentAuthor: { color: c.textBody, fontWeight: '800' },
+    commentAuthor: { color: c.textBody, fontSize: 12, fontWeight: '800' },
+    commentMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+    authorLink: { flexShrink: 1 },
+    authorText: { color: c.textSecondary, fontSize: 12, fontWeight: '700' },
     commentBody: { color: c.text, fontSize: 14, lineHeight: 20 },
     commentActions: { flexDirection: 'row', gap: 16, marginTop: 2 },
     commentAction: { flexDirection: 'row', alignItems: 'center', gap: 4 },

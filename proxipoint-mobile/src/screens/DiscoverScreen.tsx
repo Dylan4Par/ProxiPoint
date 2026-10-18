@@ -472,6 +472,12 @@ export const DiscoverScreen: React.FC = () => {
             if (id === null) setPostFromMap(null);
           }}
           myLocation={selfCoordinates}
+          // Opens over Channels, so Back comes straight back to the post.
+          onOpenProfile={(handle) => {
+            const me = profile.handle.replace(/^@+/, '').toLowerCase();
+            if (handle.replace(/^@+/, '').toLowerCase() === me) goTo('profile');
+            else setHostHandle(handle);
+          }}
           onOpenSearch={() => {
             goTo('discover');
             setSearchRequest({ key: Date.now() });
