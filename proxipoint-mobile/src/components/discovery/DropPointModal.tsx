@@ -6,17 +6,40 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
+  AccessibilityInfo,
   ActivityIndicator,
+  Image,
   KeyboardAvoidingView,
   Platform,
+  StatusBar,
+  Modal,
 } from 'react-native';
-import { Building2, Calendar, Crosshair, Landmark, MapPin, Rocket, UserPlus } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import {
-  LINKED_FACEBOOK_ACCOUNTS,
+  Building2,
+  EyeOff,
+  Map as MapIcon,
+  Calendar,
+  Crosshair,
+  Globe,
+  Landmark,
+  Lock,
+  MapPin,
+  Radio,
+  Rocket,
+  UserPlus,
+  ImagePlus,
+  Move,
+  RotateCcw,
+  X,
+  type LucideIcon,
+} from 'lucide-react-native';
+import {
   addPhoneInvite,
   addProxiPointInvite,
   removeInvite,
-  toggleFacebookInvite,
   type BeaconInvite,
   type InviteKind,
 } from '../../lib/beaconInvite';
@@ -26,12 +49,12 @@ import {
   clampBeaconDescription,
   countBeaconWords,
   createBeaconDraft,
-  formatBroadcastReach,
   GEOCODE_DEBOUNCE_MS,
   parseBeaconTags,
   toBeaconCreatePayload,
 } from '../../lib/beaconDraft';
 import { BeaconApiError, postBeacon } from '../../services/beaconApi';
+import { cleanVenueLabel, type DroppedPoint } from '../../lib/droppedPoint';
 import {
   BOUNDARY_RADII,
   getRecommendedTier,
@@ -40,7 +63,20 @@ import {
 } from '../../lib/boundaryTiers';
 import { captureCurrentFix, geocodePlaces } from '../../services/placeGeocoder';
 import { nearestPlace } from '../../lib/placeSearch';
-import { DiscoveryLeafletMap } from './DiscoveryLeafletMap';
+import { WhenChip } from './WhenChip';
+import { ensurePhotoPolicyAccepted } from '../../lib/photoPolicy';
+import { cropToCircle } from '../../lib/coverPhoto';
+import { currentPosition } from '../../lib/places';
+import { PhotoRulesNote } from '../safety/PhotoRulesNote';
+import { rememberTags, tagsToInput, useTagField } from '../../lib/tagInput';
+import { DiscoveryLeafletMap, type DropAnimation, type PrivacyMapPreview } from './DiscoveryLeafletMap';
+import {
+  lookupPrivacyRegions,
+  type LatLon,
+  type PrivacyRegion,
+  type PrivacyRegionLevel,
+  type RegionGeometry,
+} from '../../services/regionLookup';
 import {
   applyDateInput,
   applyTimeInput,
@@ -52,8 +88,6 @@ import {
   liveBeaconWindow,
   slideLiveWindow,
   presetForHours,
-  toDateInputValue,
-  toTimeInputValue,
   windowDurationHours,
 } from '../../lib/beaconWindow';
 import {
@@ -61,96 +95,170 @@ import {
   type BoundaryTierLevel,
   type PlaceSuggestion,
 } from '../../types/beacon';
+import { useNavBarHeight } from './BottomNavBar';
+import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
+import { KeyboardAwareScrollView } from '../common/KeyboardAwareScrollView';
 
 const NAV_BAR_HEIGHT = 72;
 
 interface DropPointModalProps {
   visible: boolean;
   onClose: () => void;
+  /** Called after a successful drop, so the screen can open the Manage sheet. */
+  onDropped?: (point: DroppedPoint) => void;
+  /**
+   * "Drop again": an earlier Point to copy into the sheet. Everything is filled in except the
+   * time, which starts as Live Now with the same length as the original.
+   */
+  prefill?: DroppedPoint | null;
 }
 
-const VISIBILITY_OPTIONS: Array<{ id: BeaconVisibility; label: string; accent: string }> = [
-  { id: 'private', label: 'Private', accent: '#f59e0b' },
-  { id: 'tag_network', label: '((o)) Tag Net', accent: '#22d3ee' },
-  { id: 'public', label: 'Public', accent: '#34d399' },
+const VISIBILITY_OPTIONS: Array<{
+  id: BeaconVisibility;
+  label: string;
+  accent: string;
+  Icon: LucideIcon;
+  hint: string;
+}> = [
+  {
+    id: 'private',
+    label: 'Private',
+    accent: '#f59e0b',
+    Icon: Lock,
+    hint: 'Only people you invite can see this Point.',
+  },
+  {
+    id: 'tag_network',
+    label: 'Tag Network',
+    accent: '#22d3ee',
+    Icon: Radio,
+    hint: 'Reaches people nearby who follow your tags.',
+  },
+  {
+    id: 'public',
+    label: 'Public',
+    accent: '#34d399',
+    Icon: Globe,
+    hint: 'Anyone nearby on ProxiPoint can see this Point.',
+  },
 ];
 
-function WhenChip({
-  kind,
-  value,
-  display,
-  onCommit,
-  onFocus,
-  onBlur,
-  testID,
-  label,
-}: {
-  kind: 'date' | 'time';
-  value: string;
-  display: string;
-  onCommit: (value: string) => void;
-  onFocus?: () => void;
-  onBlur?: () => void;
-  testID: string;
-  label: string;
-}) {
+/** The one-line summary under the perimeter chips, worded for the chosen visibility. */
+function describeReach(visibility: BeaconVisibility, tags: string, radius: string): string {
+  if (visibility === 'public') return `Visible to anyone on ProxiPoint within ${radius}.`;
+  const tagList = parseBeaconTags(tags)
+    .map((tag) => `#${tag.replace(/^#+/, '')}`)
+    .slice(0, 3);
+  if (tagList.length === 0) return `Add tags to choose who in your Tag Network sees this within ${radius}.`;
+  const more = parseBeaconTags(tags).length > tagList.length ? ' and more' : '';
+  return `Broadcasting to people following ${tagList.join(', ')}${more} within ${radius}.`;
+}
+
+
+/** Chip label and icon for each kind of region the host can hide inside. */
+const PRIVACY_LEVELS: Record<PrivacyRegionLevel, { label: string; Icon: LucideIcon }> = {
+  street: { label: 'Street', Icon: MapPin },
+  neighborhood: { label: 'Neighborhood', Icon: Building2 },
+  city: { label: 'City', Icon: MapIcon },
+};
+/** Radius of a circle with the same area as a region outline (used when a named area is moved). */
+function equivalentRadiusMeters(geometry: RegionGeometry): number {
+  const rings: number[][][] =
+    geometry.type === 'Polygon'
+      ? [(geometry.coordinates as number[][][])[0]]
+      : (geometry.coordinates as number[][][][]).map((polygon) => polygon[0]);
+  let areaM2 = 0;
+  rings.forEach((ring) => {
+    if (!ring || ring.length < 3) return;
+    const lat0 = (ring.reduce((sum, point) => sum + point[1], 0) / ring.length) * (Math.PI / 180);
+    const mx = 111320 * Math.cos(lat0);
+    const my = 110540;
+    let twice = 0;
+    for (let i = 0; i < ring.length; i += 1) {
+      const [x1, y1] = ring[i];
+      const [x2, y2] = ring[(i + 1) % ring.length];
+      twice += x1 * mx * (y2 * my) - x2 * mx * (y1 * my);
+    }
+    areaM2 += Math.abs(twice) / 2;
+  });
+  return Math.max(100, Math.round(Math.sqrt(areaM2 / Math.PI)));
+}
+
+/** Where the host dragged an area to. Keyed by region id. */
+interface RegionMove {
+  center: LatLon;
+  radiusMeters: number;
+}
+
+/** Cover photos are saved as square JPEGs this size and shown as circles. */
+const COVER_PHOTO_SIZE = 512;
+
+interface CoverPhoto {
+  uri: string;
+  base64?: string;
+}
+const DEFAULT_MAX_ATTENDANCE = 10;
+const MAX_ATTENDANCE_LIMIT = 9999;
+
+/**
+ * Keeps the invite field as "@handle": adds the @ for the user, ignores extra @s,
+ * and drops spaces and symbols that can't be part of a handle.
+ * Clearing the field completely (backspacing over the @) leaves it empty.
+ */
+function formatHandleInput(raw: string): string {
+  if (raw === '') return '';
+  const handle = raw.replace(/@/g, '').replace(/[^A-Za-z0-9_.-]/g, '');
+  return `@${handle}`;
+}
+
+
+
+/**
+ * Cyan glow around a box that holds text fields.
+ * The glow is a separate layer that only fades in and out, so switching it on never restyles
+ * the box itself. On Android, adding a shadow/elevation to the box while someone is typing in it
+ * can make the field lose focus and close the keyboard.
+ */
+function GlowFrame({ active, children }: { active: boolean; children: React.ReactNode }) {
+  const styles = useThemedStyles(createStyles);
   return (
-    <View style={styles.whenChip}>
-      <Text style={styles.whenChipText} testID={`${testID}-label`}>
-        {display}
-      </Text>
-      {Platform.OS === 'web' ? (
-        <input
-          type={kind}
-          value={value}
-          aria-label={label}
-          data-testid={testID}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          onChange={(event) => onCommit(event.currentTarget.value)}
-          style={whenInputStyle}
-        />
-      ) : (
-        <TextInput
-          value={value}
-          onChangeText={onCommit}
-          onFocus={onFocus}
-          onBlur={onBlur}
-          style={styles.whenNativeInput}
-          testID={testID}
-          accessibilityLabel={label}
-        />
-      )}
+    <View>
+      <View pointerEvents="none" style={[styles.glowLayer, { opacity: active ? 1 : 0 }]} />
+      {children}
     </View>
   );
 }
 
-const whenInputStyle: React.CSSProperties = {
-  position: 'absolute',
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: 0,
-  width: '100%',
-  height: '100%',
-  opacity: 0,
-  cursor: 'pointer',
-  border: 'none',
-};
-
 function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
-  const color = active ? '#f8fafc' : '#94a3b8';
-  const props = { size: 14, color, strokeWidth: 2.25 };
+  const { colors: c } = useTheme();
+  const color = active ? c.text : c.textSecondary;
+  const props = { size: 18, color, strokeWidth: 2.25 };
   if (id === 'micro') return <MapPin {...props} />;
   if (id === 'neighborhood') return <Building2 {...props} />;
   return <Landmark {...props} />;
 }
 
-export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose }) => {
+export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose, onDropped, prefill = null }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c, tone } = useTheme();
+  const insets = useSafeAreaInsets();
+  const navBarHeight = useNavBarHeight();
+  const rawAndroidHeight = StatusBar.currentHeight ?? 0;
+  const resolvedTop =
+    Platform.OS === 'android'
+      ? Math.max(rawAndroidHeight, insets.top, 56)
+      : Math.max(insets.top, 24);
+
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const dropBeacon = useDiscoveryStore((state) => state.dropBeacon);
   const adoptPersistedBeacon = useDiscoveryStore((state) => state.adoptPersistedBeacon);
   const setPreviewGeofence = useDiscoveryStore((state) => state.setPreviewGeofence);
+  // Existing beacons feed the hashtag suggestions. If your store keeps them under a different
+  // name than `beacons`/`events`, point this selector at that list.
+  const knownBeacons = useDiscoveryStore((state) => {
+    const store = state as unknown as { beacons?: unknown[]; events?: unknown[] };
+    return store.beacons ?? store.events;
+  });
 
   const [visibility, setVisibility] = useState<BeaconVisibility>('tag_network');
   const initialWindow = useRef(liveBeaconWindow());
@@ -162,6 +270,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
+  const tagField = useTagField(tags, setTags, knownBeacons);
   const [locationSearch, setLocationSearch] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedTier, setSelectedTier] = useState<BoundaryTierLevel>('micro');
@@ -176,21 +285,69 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [revealing, setRevealing] = useState(false);
   const [invites, setInvites] = useState<BeaconInvite[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteKind, setInviteKind] = useState<InviteKind>('facebook');
+  const [inviteKind, setInviteKind] = useState<InviteKind>('proxipoint');
   const [handleInput, setHandleInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [mapPicking, setMapPicking] = useState(false);
+  // Select on map: the spot under the fixed center pin, and where to move the map.
+  const pickCenter = useRef<{ latitude: number; longitude: number } | null>(null);
+  const [pickFocus, setPickFocus] = useState<{ key: number; latitude: number; longitude: number; zoom?: number } | null>(
+    null,
+  );
+  const [locatingPick, setLocatingPick] = useState(false);
+  const [pickNotice, setPickNotice] = useState('');
   const [perimeterOn, setPerimeterOn] = useState(false);
+  const [requiresApproval, setRequiresApproval] = useState(false);
+  const [maxAttendance, setMaxAttendance] = useState<number | null>(null);
+  const [coverPhoto, setCoverPhoto] = useState<CoverPhoto | null>(null);
+  const [privacyOn, setPrivacyOn] = useState(false);
+  const [privacyRegions, setPrivacyRegions] = useState<PrivacyRegion[]>([]);
+  const [privacyRegionId, setPrivacyRegionId] = useState<string | null>(null);
+  const [privacySource, setPrivacySource] = useState<'server' | 'approximate'>('approximate');
+  const [regionsLoading, setRegionsLoading] = useState(false);
+  const [regionMoves, setRegionMoves] = useState<Record<string, RegionMove>>({});
+  const [privacyMoving, setPrivacyMoving] = useState(false);
+  const [movingSnapshot, setMovingSnapshot] = useState<PrivacyMapPreview | null>(null);
+  const [dropAnimation, setDropAnimation] = useState<DropAnimation | null>(null);
+  const reducedMotion = useRef(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const skipSearch = useRef(false);
   const selectedLabel = useRef<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /**
+   * Drafts: the sheet keeps what you've filled in while you visit other tabs. It only starts
+   * fresh after the ✕, after a successful drop, or when "Drop again" loads a different Point.
+   */
+  const draftCleared = useRef(true);
+  const appliedPrefillId = useRef<string | null>(null);
+  /** "Start over": clears the form in place (ignoring any "Drop again" source). */
+  const startingOver = useRef(false);
+  const [resetKey, setResetKey] = useState(0);
+  const [confirmingStartOver, setConfirmingStartOver] = useState(false);
+  /** Spot the privacy regions were last looked up for (moved areas survive a re-open). */
+  const lastRegionSpot = useRef<string | null>(null);
+  /** Privacy level to pick once regions load (set by "Drop again"). */
+  const preferredPrivacyLevel = useRef<string | null>(null);
 
   const boundaryTiers = useMemo(
     () => resolveBoundaryTiers({ placeName: placeLabel, placeType }),
     [placeLabel, placeType],
   );
   const activeTier = boundaryTiers.find((tier) => tier.id === selectedTier) ?? boundaryTiers[0];
+  const baseRegion = privacyRegions.find((region) => region.id === privacyRegionId) ?? null;
+  const regionMove = baseRegion ? regionMoves[baseRegion.id] : undefined;
+  // A moved area becomes a circle of the same size, centered where the host dropped it.
+  const selectedRegion: PrivacyRegion | null =
+    baseRegion && regionMove
+      ? {
+          ...baseRegion,
+          name: baseRegion.geometry ? `Near ${baseRegion.name}` : baseRegion.name,
+          center: regionMove.center,
+          radiusMeters: regionMove.radiusMeters,
+          geometry: undefined,
+        }
+      : baseRegion;
 
   useEffect(() => {
     return () => {
@@ -198,8 +355,54 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     };
   }, []);
 
+  // Respect the system "Reduce motion" setting for the drop animation.
+  useEffect(() => {
+    let mounted = true;
+    void AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (mounted) reducedMotion.current = enabled;
+    });
+    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      reducedMotion.current = enabled;
+    });
+    return () => {
+      mounted = false;
+      sub.remove();
+    };
+  }, []);
+
   useEffect(() => {
     if (!visible) return;
+    const startOver = startingOver.current;
+    startingOver.current = false;
+    const loadingPrefill = !startOver && prefill != null && prefill.id !== appliedPrefillId.current;
+    if (!startOver && !loadingPrefill && !draftCleared.current) {
+      // Back to an unfinished draft: keep every field, only reset the in-between UI.
+      setSubmitting(false);
+      setRevealing(false);
+      setMapPicking(false);
+      setPrivacyMoving(false);
+      setMovingSnapshot(null);
+      setDropAnimation(null);
+      setSuggestions([]);
+      setSearching(false);
+      setLocating(false);
+      setFormError(null);
+      clockHold.current = 0;
+      // A Live Now draft whose end has already passed gets a fresh default window.
+      if (isLiveNow && endsAt.getTime() <= Date.now() + 60 * 1000) {
+        const fresh = liveBeaconWindow();
+        durationRef.current = fresh.endsAt.getTime() - fresh.startsAt.getTime();
+        setStartsAt(fresh.startsAt);
+        setEndsAt(fresh.endsAt);
+      }
+      return;
+    }
+    draftCleared.current = false;
+    appliedPrefillId.current = prefill?.id ?? null;
+    // Start over = blank form, even if the sheet was opened from "Drop again".
+    const source = startOver ? null : prefill;
+    lastRegionSpot.current = null;
+
     const window = liveBeaconWindow();
     durationRef.current = window.endsAt.getTime() - window.startsAt.getTime();
     clockHold.current = 0;
@@ -224,16 +427,93 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setRevealing(false);
     setInvites([]);
     setInviteOpen(false);
-    setInviteKind('facebook');
+    setInviteKind('proxipoint');
     setHandleInput('');
     setPhoneInput('');
     setInviteError('');
     setMapPicking(false);
     setPerimeterOn(false);
+    setRequiresApproval(false);
+    setMaxAttendance(null);
+    setCoverPhoto(null);
+    setPrivacyOn(false);
+    setPrivacyRegions([]);
+    setPrivacyRegionId(null);
+    setRegionsLoading(false);
+    setRegionMoves({});
+    setPrivacyMoving(false);
+    setMovingSnapshot(null);
+    setDropAnimation(null);
+    setPhotoBusy(false);
     skipSearch.current = false;
     selectedLabel.current = null;
+    preferredPrivacyLevel.current = null;
     setPreviewGeofence(null);
-  }, [visible, setPreviewGeofence]);
+
+    if (!source) return;
+
+    // ---- "Drop again": copy the earlier Point into the sheet ----
+    setVisibility(source.visibility);
+    setTitle(source.title);
+    setDescription(source.description);
+    setTags(tagsToInput(source.tags));
+    setRequiresApproval(source.requiresApproval);
+    setMaxAttendance(source.maxAttendance);
+    setInvites(source.invites);
+    setInviteOpen(source.visibility === 'private' && source.invites.length > 0);
+
+    // Time: the old dates are over, so start Live Now with the same length as the original.
+    const originalMs = new Date(source.endsAt).getTime() - new Date(source.startsAt).getTime();
+    if (Number.isFinite(originalMs) && originalMs >= 15 * 60 * 1000) {
+      const start = window.startsAt;
+      const end = new Date(start.getTime() + originalMs);
+      durationRef.current = originalMs;
+      setStartsAt(start);
+      setEndsAt(end);
+    }
+
+    // Location: same spot and venue name, without kicking off a new search.
+    const venue = cleanVenueLabel(source.venue);
+    skipSearch.current = true;
+    selectedLabel.current = venue;
+    setLocationSearch(venue);
+    setCoords({ lat: source.latitude, lon: source.longitude });
+    const semantic = inferPlaceType(venue, undefined);
+    setPlaceLabel(venue);
+    setPlaceType(semantic);
+
+    // Beacon: same reach (matched by its label, e.g. "300m"), or the place's usual tier if off.
+    const tiers = resolveBoundaryTiers({ placeName: venue, placeType: semantic });
+    const matchedTier = source.beaconRadius
+      ? tiers.find((tier) => tier.displayRadius === source.beaconRadius)
+      : undefined;
+    const tierId = matchedTier?.id ?? getRecommendedTier(semantic);
+    setSelectedTier(tierId);
+    setSelectedRadiusMeters(BOUNDARY_RADII[tierId]);
+    setPerimeterOn(source.beaconRadius != null);
+
+    // Location privacy: same level; the regions are looked up again from the spot.
+    if (source.locationPrivacy) {
+      preferredPrivacyLevel.current = source.locationPrivacy.level;
+      setPrivacyOn(true);
+    }
+
+    // Cover photo: re-encode the saved file so the photo is sent with the new Point too.
+    if (source.coverPhotoUri) {
+      const uri = source.coverPhotoUri;
+      setCoverPhoto({ uri });
+      setPhotoBusy(true);
+      void ImageManipulator.manipulateAsync(uri, [], {
+        compress: 0.75,
+        format: ImageManipulator.SaveFormat.JPEG,
+        base64: true,
+      })
+        .then((output) => setCoverPhoto({ uri: output.uri, base64: output.base64 }))
+        .catch(() => setCoverPhoto(null)) // file no longer on the phone; pick it again
+        .finally(() => setPhotoBusy(false));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible, prefill, resetKey, setPreviewGeofence]);
 
   useEffect(() => {
     if (!visible || !isLiveNow) return;
@@ -244,9 +524,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       } else if (clockHold.current > 0) {
         return;
       }
+      // Live Now: start is always "now"; End is whatever the user picked and stays fixed.
       const next = slideLiveWindow(new Date(), durationRef.current);
       setStartsAt((current) => (current.getTime() === next.startsAt.getTime() ? current : next.startsAt));
-      setEndsAt((current) => (current.getTime() === next.endsAt.getTime() ? current : next.endsAt));
     };
     tick();
     const timer = setInterval(tick, 1000);
@@ -265,9 +545,50 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     });
   }, [visible, coords, selectedRadiusMeters, setPreviewGeofence]);
 
+  // Find the named regions around the exact spot whenever privacy is on and the spot changes.
+  useEffect(() => {
+    if (!visible || !privacyOn || !coords) {
+      setRegionsLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    setRegionsLoading(true);
+    void lookupPrivacyRegions({ latitude: coords.lat, longitude: coords.lon }, controller.signal)
+      .then((result) => {
+        setPrivacyRegions(result.regions);
+        // A new spot means old positions no longer apply; the same spot (re-opened draft) keeps them.
+        const spotKey = `${coords.lat.toFixed(6)},${coords.lon.toFixed(6)}`;
+        if (lastRegionSpot.current !== spotKey) setRegionMoves({});
+        lastRegionSpot.current = spotKey;
+        setPrivacySource(result.source);
+        setPrivacyRegionId((current) => {
+          if (current && result.regions.some((region) => region.id === current)) return current;
+          // "Drop again": use the same level as the original Point.
+          const preferred = preferredPrivacyLevel.current
+            ? result.regions.find((region) => region.level === preferredPrivacyLevel.current)
+            : undefined;
+          preferredPrivacyLevel.current = null;
+          if (preferred) return preferred.id;
+          // Default to the neighborhood: hides a home well while still saying roughly where.
+          return (result.regions.find((region) => region.level === 'neighborhood') ?? result.regions[0])?.id ?? null;
+        });
+      })
+      .catch(() => {
+        // Aborted because the spot changed again; the next lookup takes over.
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setRegionsLoading(false);
+      });
+    return () => controller.abort();
+  }, [visible, privacyOn, coords]);
+
   useEffect(() => {
     if (!visible) return;
-    if (skipSearch.current) {
+    // Don't search for the place that's already chosen (picked from the list, GPS, the map, or
+    // filled in by "Drop again"). The ref check alone can be used up by an earlier render,
+    // which left the suggestion list open over the Location Privacy tile.
+    const alreadyChosen = selectedLabel.current != null && locationSearch === selectedLabel.current;
+    if (skipSearch.current || alreadyChosen) {
       skipSearch.current = false;
       setSuggestions([]);
       setSearching(false);
@@ -340,66 +661,289 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       .finally(() => setLocating(false));
   };
 
-  const scheduleClose = () => {
+  const scheduleClose = (point?: DroppedPoint, animation?: Omit<DropAnimation, 'key'>) => {
     if (closeTimer.current) clearTimeout(closeTimer.current);
     setRevealing(true);
-    closeTimer.current = setTimeout(() => onClose(), 700);
+    if (animation) setDropAnimation({ ...animation, key: Date.now() });
+    // Long enough to watch the pin land and the beacon spread; short when motion is reduced.
+    const delay = animation && !animation.reducedMotion ? 1800 : 700;
+    if (point) draftCleared.current = true; // dropped: the next open starts fresh
+    closeTimer.current = setTimeout(() => {
+      if (point && onDropped) onDropped(point);
+      else onClose();
+    }, delay);
   };
 
   const handleDropBeacon = () => {
     if (submitting) return;
     const trimmedTitle = title.trim();
     if (!trimmedTitle || !coords) {
-      setFormError(trimmedTitle ? 'Choose a place or tap GPS to set coordinates.' : 'Add a title before dropping this beacon.');
+      setFormError(trimmedTitle ? 'Choose a place or tap GPS to set coordinates.' : 'Add a title before dropping this Point.');
       return;
     }
 
-    const durationHours = windowDurationHours(startsAt, endsAt);
+    if (visibility === 'private' && invites.length === 0) {
+      setInviteOpen(true);
+      setFormError('Private Points need at least one invite. Add someone, or switch to Tag Network or Public.');
+      return;
+    }
+
+    const now = new Date();
+    const effectiveStart = isLiveNow ? now : startsAt;
+    if (endsAt.getTime() <= now.getTime()) {
+      setFormError('The end time has already passed. Pick a later end.');
+      return;
+    }
+    if (endsAt.getTime() <= effectiveStart.getTime()) {
+      setFormError('End must be after start.');
+      return;
+    }
+    if (!isLiveNow && startsAt.getTime() < now.getTime() - 60 * 1000) {
+      setFormError('Scheduled start is in the past. Pick a later start or use Live Now.');
+      return;
+    }
+
+    const durationHours = windowDurationHours(effectiveStart, endsAt);
     const draft = createBeaconDraft({
       title: trimmedTitle,
       description,
       tags,
       visibility,
-      venue: locationSearch.trim() || 'Dropped beacon',
+      venue: cleanVenueLabel(locationSearch) || 'Dropped Point',
       latitude: coords.lat,
       longitude: coords.lon,
       isLiveNow,
       duration: presetForHours(durationHours),
       durationHours,
-      scheduledStart: formatBeaconStart(startsAt),
+      scheduledStart: formatBeaconStart(effectiveStart),
       radiusMeters: selectedRadiusMeters,
       tierLevel: selectedTier,
     });
 
     setSubmitting(true);
     setFormError(null);
-    void postBeacon(toBeaconCreatePayload(draft))
+    // Sent alongside the existing payload; the backend needs to accept these fields.
+    const payload = Object.assign(toBeaconCreatePayload(draft), {
+      requiresRsvpApproval: requiresApproval,
+      maxAttendance, // null = no limit
+      // 512x512 JPEG as a data URI (about 40–80 KB), or null. Shown as a circle by the app.
+      coverPhoto: coverPhoto?.base64 ? `data:image/jpeg;base64,${coverPhoto.base64}` : null,
+      // The server should place a randomly offset circle of this radius around the real spot,
+      // store that offset once, and only send exact coordinates to the host and confirmed guests.
+      // The server re-checks the region from the exact spot; it only uses these to confirm the choice.
+      locationPrivacy:
+        privacyOn && selectedRegion
+          ? {
+              level: selectedRegion.level,
+              regionId: selectedRegion.id,
+              regionName: selectedRegion.name,
+              // Present only when the host moved the area. The server must check the exact
+              // spot is still 25–85% of the radius from this center before accepting it.
+              customArea: regionMove
+                ? {
+                    latitude: regionMove.center.latitude,
+                    longitude: regionMove.center.longitude,
+                    radiusMeters: regionMove.radiusMeters,
+                  }
+                : undefined,
+            }
+          : { level: 'exact' as const },
+    });
+    const buildDroppedPoint = (id: string | undefined, synced: boolean): DroppedPoint => ({
+      id: id ?? `local-${Date.now()}`,
+      title: trimmedTitle,
+      description: description.trim(),
+      tags: parseBeaconTags(tags).map((tag) => tag.replace(/^#+/, '')),
+      visibility,
+      venue: cleanVenueLabel(locationSearch) || 'Dropped Point',
+      latitude: coords.lat,
+      longitude: coords.lon,
+      isLiveNow,
+      startsAt: effectiveStart.toISOString(),
+      endsAt: endsAt.toISOString(),
+      coverPhotoUri: coverPhoto?.uri ?? null,
+      requiresApproval,
+      maxAttendance,
+      locationPrivacy:
+        privacyOn && selectedRegion ? { level: selectedRegion.level, regionName: selectedRegion.name } : null,
+      beaconRadius: visibility !== 'private' && perimeterOn ? activeTier.displayRadius : null,
+      invites,
+      synced,
+      createdAt: new Date().toISOString(),
+    });
+
+    const landing: Omit<DropAnimation, 'key'> = {
+      latitude: coords.lat,
+      longitude: coords.lon,
+      beaconRadiusMeters: visibility !== 'private' && perimeterOn ? selectedRadiusMeters : undefined,
+      privacy:
+        privacyOn && selectedRegion
+          ? {
+              latitude: selectedRegion.center.latitude,
+              longitude: selectedRegion.center.longitude,
+              radiusMeters:
+                selectedRegion.radiusMeters ??
+                (selectedRegion.geometry ? equivalentRadiusMeters(selectedRegion.geometry) : 750),
+            }
+          : undefined,
+      reducedMotion: reducedMotion.current,
+    };
+
+    void postBeacon(payload)
       .then((saved) => {
-        adoptPersistedBeacon(saved, draft);
-        scheduleClose();
+        rememberTags(parseBeaconTags(tags));
+        // Same id as the Point's pin on the map, so My Drops (e.g. Boost) can find it.
+        const nodeId = adoptPersistedBeacon(saved, draft);
+        const savedId = (saved as { id?: unknown } | null)?.id;
+        scheduleClose(buildDroppedPoint(nodeId || (savedId != null ? String(savedId) : undefined), true), landing);
       })
       .catch((error: unknown) => {
         if (error instanceof BeaconApiError && error.status >= 400 && error.status < 500) {
-          setFormError('The beacon service rejected this drop. Check the title and place, then try again.');
+          setFormError('The server rejected this drop. Check the title and place, then try again.');
           setSubmitting(false);
           return;
         }
-        dropBeacon(draft);
-        scheduleClose();
+        rememberTags(parseBeaconTags(tags));
+        const nodeId = dropBeacon(draft);
+        scheduleClose(buildDroppedPoint(nodeId, false), landing);
       });
   };
 
   if (!visible) return null;
 
   const titleAndTagsComplete = title.trim().length > 0 && parseBeaconTags(tags).length > 0;
-  const sheetCovered = revealing || mapPicking;
+  // Shown next to the title so it's clear switching tabs won't lose anything.
+  const hasDraftContent =
+    !revealing &&
+    (title.trim().length > 0 ||
+      description.trim().length > 0 ||
+      parseBeaconTags(tags).length > 0 ||
+      coords != null ||
+      coverPhoto != null ||
+      invites.length > 0);
+
+  const sheetCovered = revealing || mapPicking || privacyMoving;
+
+  const startMovingArea = () => {
+    if (!selectedRegion || !coords) return;
+    const radiusMeters =
+      selectedRegion.radiusMeters ??
+      (selectedRegion.geometry ? equivalentRadiusMeters(selectedRegion.geometry) : 750);
+    // Frozen while dragging, so the map isn't redrawn (and re-zoomed) after every drag.
+    setMovingSnapshot({
+      name: selectedRegion.name,
+      center: selectedRegion.center,
+      radiusMeters,
+      exact: { latitude: coords.lat, longitude: coords.lon },
+      editable: true,
+    });
+    setSuggestions([]);
+    setPrivacyMoving(true);
+  };
+
+  const handlePrivacyMove = (latitude: number, longitude: number) => {
+    if (!baseRegion || !movingSnapshot?.radiusMeters) return;
+    setRegionMoves((current) => ({
+      ...current,
+      [baseRegion.id]: { center: { latitude, longitude }, radiusMeters: movingSnapshot.radiusMeters as number },
+    }));
+  };
+
+  const finishMovingArea = () => {
+    setPrivacyMoving(false);
+    setMovingSnapshot(null);
+  };
+
+  const resetAreaPosition = () => {
+    if (!baseRegion) return;
+    setRegionMoves((current) => {
+      const next = { ...current };
+      delete next[baseRegion.id];
+      return next;
+    });
+  };
 
   const selectLiveNow = () => {
     const window = liveBeaconWindow();
-    durationRef.current = window.endsAt.getTime() - window.startsAt.getTime();
+    // Keep the End the user already chose if it's still in the future; otherwise use the default.
+    const nextEnd = endsAt.getTime() > window.startsAt.getTime() ? endsAt : window.endsAt;
+    durationRef.current = nextEnd.getTime() - window.startsAt.getTime();
     setIsLiveNow(true);
     setStartsAt(window.startsAt);
-    setEndsAt(window.endsAt);
+    setEndsAt(nextEnd);
+    setFormError(null);
+  };
+
+  const selectSchedule = () => {
+    // Start from the current window; both Start and End are now editable and stop auto-ticking.
+    setIsLiveNow(false);
+    setFormError(null);
+  };
+
+  const guestReveal = requiresApproval
+    ? 'Approved guests see the exact spot.'
+    : 'Guests see the exact spot after they RSVP.';
+  const privacyHint = !privacyOn
+    ? 'Everyone who can see this Point sees the exact pin.'
+    : !coords
+      ? 'Set a location first, then choose an area to hide it in.'
+      : selectedRegion
+        ? `Others will see: somewhere in ${selectedRegion.name}. ${guestReveal}`
+        : 'Finding areas around this spot…';
+
+  const activeVisibility = VISIBILITY_OPTIONS.find((option) => option.id === visibility) ?? VISIBILITY_OPTIONS[1];
+
+  const selectVisibility = (next: BeaconVisibility) => {
+    setVisibility(next);
+    setFormError(null);
+    // A private beacon only reaches invitees, so open the invite panel right away.
+    if (next === 'private') {
+      setInviteOpen(true);
+      setInviteError('');
+    }
+  };
+
+  const pickCoverPhoto = async () => {
+    if (photoBusy) return;
+    if (!(await ensurePhotoPolicyAccepted())) return;
+    setPhotoBusy(true);
+    try {
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: false, // ProxiPoint's circle cropper opens next instead of the phone's square one
+        quality: 1,
+      });
+      if (result.canceled || !result.assets?.length) return;
+      // Drag / pinch inside a circle guide, then saved as a 512px square JPEG.
+      const output = await cropToCircle(result.assets[0]);
+      if (!output) return;
+      setCoverPhoto({ uri: output.uri, base64: output.base64 });
+      setFormError(null);
+    } catch {
+      setFormError('Couldn’t load that photo. Try a different one.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const stepMaxAttendance = (delta: number) => {
+    setMaxAttendance((current) => {
+      if (current == null) return delta > 0 ? DEFAULT_MAX_ATTENDANCE : null;
+      const next = current + delta;
+      // Stepping below 1 goes back to "No limit".
+      if (next < 1) return null;
+      return Math.min(MAX_ATTENDANCE_LIMIT, next);
+    });
+  };
+
+  const typeMaxAttendance = (text: string) => {
+    const digits = text.replace(/[^0-9]/g, '');
+    if (!digits) {
+      setMaxAttendance(null);
+      return;
+    }
+    const value = Math.min(MAX_ATTENDANCE_LIMIT, parseInt(digits, 10));
+    setMaxAttendance(value < 1 ? null : value);
   };
 
   const holdClock = () => {
@@ -417,284 +961,708 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     durationRef.current = updated.endsAt.getTime() - updated.startsAt.getTime();
     setStartsAt(updated.startsAt);
     setEndsAt(updated.endsAt);
+    setFormError(null);
     if (updated.switchedToSchedule) setIsLiveNow(false);
   };
 
   const commitEnd = (kind: 'date' | 'time', value: string) => {
     const next = kind === 'date' ? applyDateInput(endsAt, value) : applyTimeInput(endsAt, value);
     if (!next) return;
-    const end = changeWindowEnd(startsAt, next, kind);
-    durationRef.current = end.getTime() - startsAt.getTime();
+    // In Live Now the real start is "now", so measure the end against the current moment.
+    const anchor = isLiveNow ? new Date() : startsAt;
+    const end = changeWindowEnd(anchor, next, kind);
+    durationRef.current = end.getTime() - anchor.getTime();
     setEndsAt(end);
+    setFormError(null);
   };
 
   return (
-    <View style={styles.overlay} testID="drop-beacon-sheet">
+    <View style={[styles.overlay, { bottom: navBarHeight }]} testID="drop-beacon-sheet">
       <View style={styles.mapBand} testID="drop-beacon-map" pointerEvents={sheetCovered ? 'auto' : 'none'}>
-        <DiscoveryLeafletMap onMapPick={mapPicking ? handleMapPick : undefined} />
+        <DiscoveryLeafletMap
+          // Select on map: tapping the map just moves that spot under the center pin.
+          onMapPick={
+            mapPicking
+              ? (latitude, longitude) => setPickFocus({ key: Date.now(), latitude, longitude })
+              : undefined
+          }
+          onCenterChange={
+            mapPicking
+              ? (latitude, longitude) => {
+                  pickCenter.current = { latitude, longitude };
+                }
+              : undefined
+          }
+          focus={mapPicking ? pickFocus : null}
+          // Select on map: a single pin on the current spot instead of the perimeter circles.
+          showGeofence={!privacyMoving && !revealing && !mapPicking}
+          privacyPreview={privacyMoving ? movingSnapshot : null}
+          onPrivacyMove={privacyMoving ? handlePrivacyMove : undefined}
+          dropAnimation={revealing ? dropAnimation : null}
+        />
       </View>
-      {mapPicking ? (
-        <View style={styles.mapPickBar} testID="map-pick-bar">
-          <Text style={styles.mapPickHint}>Tap the map to set the location</Text>
-          <TouchableOpacity onPress={() => setMapPicking(false)} testID="map-pick-cancel" accessibilityRole="button">
-            <Text style={styles.mapPickCancel}>Cancel</Text>
+      {privacyMoving ? (
+        <View style={[styles.mapPickBar, styles.moveBar]} testID="privacy-move-bar">
+          <View style={styles.moveBarCopy}>
+            <Text style={styles.mapPickHint}>Drag the shaded area</Text>
+            <Text style={styles.moveBarSub}>Your exact spot always stays inside it.</Text>
+          </View>
+          <TouchableOpacity onPress={finishMovingArea} testID="privacy-move-done" accessibilityRole="button">
+            <Text style={styles.moveBarDone}>Done</Text>
           </TouchableOpacity>
         </View>
+      ) : null}
+      {mapPicking ? (
+        <>
+          {/* Fixed pin in the middle of the map: move the map underneath it. Its tip marks the spot. */}
+          <View style={styles.centerPinLayer} pointerEvents="none" testID="map-pick-center-pin">
+            <View style={styles.centerPin}>
+              <MapPin size={46} color={c.base} fill={c.accent} strokeWidth={1.75} />
+            </View>
+            <View style={styles.centerPinDot} />
+          </View>
+
+          {/* Back to where you are */}
+          <TouchableOpacity
+            style={styles.locateBtn}
+            onPress={async () => {
+              if (locatingPick) return;
+              setLocatingPick(true);
+              setPickNotice('');
+              const fix = await currentPosition();
+              setLocatingPick(false);
+              const spot = fix.ok
+                ? { latitude: fix.latitude, longitude: fix.longitude }
+                : { latitude: selfCoordinates.latitude, longitude: selfCoordinates.longitude };
+              if (!fix.ok) setPickNotice(fix.reason === 'denied' ? 'Location is off, so this is your home area.' : 'Couldn’t get your location; showing your home area.');
+              setPickFocus({ key: Date.now(), ...spot, zoom: 17 });
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Center on my location"
+            testID="map-pick-locate"
+          >
+            {locatingPick ? (
+              <ActivityIndicator color={c.accent} />
+            ) : (
+              <Crosshair size={22} color={c.accent} strokeWidth={2.25} />
+            )}
+          </TouchableOpacity>
+
+          <View style={styles.mapPickPanel} testID="map-pick-bar">
+            <View style={styles.mapPickRow}>
+              <Text style={styles.mapPickHint}>Move the map to put the pin on the spot</Text>
+              <TouchableOpacity onPress={() => setMapPicking(false)} testID="map-pick-cancel" accessibilityRole="button">
+                <Text style={styles.mapPickCancel}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            {pickNotice ? <Text style={styles.mapPickNotice}>{pickNotice}</Text> : null}
+            <TouchableOpacity
+              style={styles.mapPickAccept}
+              onPress={() => {
+                const spot = pickCenter.current;
+                if (spot) handleMapPick(spot.latitude, spot.longitude);
+                else setMapPicking(false);
+              }}
+              accessibilityRole="button"
+              testID="map-pick-accept"
+            >
+              <Text style={styles.mapPickAcceptText}>ACCEPT LOCATION</Text>
+            </TouchableOpacity>
+          </View>
+        </>
       ) : null}
       <KeyboardAvoidingView
         style={[styles.sheetContainer, sheetCovered && styles.sheetHidden]}
         pointerEvents={sheetCovered ? 'none' : 'auto'}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        keyboardVerticalOffset={navBarHeight}
       >
+        <View style={{ paddingTop: resolvedTop }}>
           <View style={styles.pullBar} />
           <View style={styles.headerRow}>
-            <Text style={styles.headerTitle}>DROP BEACON</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeBtn} accessibilityLabel="Close drop beacon">
-              <Text style={styles.closeText}>✕</Text>
-            </TouchableOpacity>
+            <View style={styles.headerTitleRow}>
+              <Text style={styles.headerTitle}>DROP POINT</Text>
+              {hasDraftContent ? (
+                <View style={styles.draftPill} testID="drop-draft-pill">
+                  <Text style={styles.draftPillText}>DRAFT SAVED</Text>
+                </View>
+              ) : null}
+            </View>
+            {hasDraftContent ? (
+              <TouchableOpacity
+                onPress={() => setConfirmingStartOver(true)}
+                style={styles.startOverBtn}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityRole="button"
+                accessibilityLabel="Start over"
+                testID="drop-start-over"
+              >
+                <RotateCcw size={14} color={c.textSecondary} strokeWidth={2.25} />
+                <Text style={styles.startOverText}>Start over</Text>
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        </View>
+
+        <KeyboardAwareScrollView
+          style={styles.scroll}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          contentContainerStyle={styles.scrollContent}
+        >
+          <View style={styles.visibilityBlock}>
+          <View style={styles.visibilityContainer}>
+            {VISIBILITY_OPTIONS.map((option) => {
+              const active = visibility === option.id;
+              const { Icon } = option;
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  style={[
+                    styles.visibilityTab,
+                    active && {
+                      backgroundColor: `${tone(option.accent)}22`,
+                      borderWidth: 1,
+                      borderColor: tone(option.accent),
+                    },
+                  ]}
+                  onPress={() => selectVisibility(option.id)}
+                  testID={`drop-visibility-${option.id}`}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${option.label}. ${option.hint}`}
+                  accessibilityState={{ selected: active }}
+                >
+                  <Icon size={14} color={active ? tone(option.accent) : c.textMuted} strokeWidth={2.25} />
+                  <Text
+                    style={[styles.visibilityText, active && styles.visibilityTextActive]}
+                    numberOfLines={1}
+                  >
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={styles.visibilityHint} testID="drop-visibility-hint">
+            {activeVisibility.hint}
+          </Text>
           </View>
 
-          <ScrollView
-            style={styles.scroll}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            contentContainerStyle={styles.scrollContent}
-          >
-            <View style={styles.visibilityContainer}>
-              {VISIBILITY_OPTIONS.map((option) => {
-                const active = visibility === option.id;
-                return (
-                  <TouchableOpacity
-                    key={option.id}
-                    style={[
-                      styles.visibilityTab,
-                      active && {
-                        backgroundColor: `${option.accent}22`,
-                        borderWidth: 1,
-                        borderColor: option.accent,
-                      },
-                    ]}
-                    onPress={() => setVisibility(option.id)}
-                    testID={`drop-visibility-${option.id}`}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <Text style={[styles.visibilityText, active && styles.visibilityTextActive]}>
-                      {option.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            <View style={[styles.groupedContainer, titleAndTagsComplete && styles.fieldGlow]} testID="drop-details">
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Title</Text>
-                <TextInput
-                  placeholder="e.g. Boulder Tech & GIS Meetup"
-                  placeholderTextColor="#64748b"
-                  style={styles.textInput}
-                  value={title}
-                  onChangeText={setTitle}
-                  testID="drop-title"
-                />
+          <GlowFrame active={titleAndTagsComplete}>
+          <View style={[styles.groupedContainer, titleAndTagsComplete && styles.glowBorder]} testID="drop-details">
+            <View style={styles.photoRow}>
+              <TouchableOpacity
+                onPress={pickCoverPhoto}
+                disabled={photoBusy}
+                style={[styles.photoCircle, coverPhoto && styles.photoCircleFilled]}
+                accessibilityRole="button"
+                accessibilityLabel={coverPhoto ? 'Change cover photo' : 'Add cover photo'}
+                testID="drop-photo"
+              >
+                {photoBusy ? (
+                  <ActivityIndicator color={c.accent} />
+                ) : coverPhoto ? (
+                  <Image source={{ uri: coverPhoto.uri }} style={styles.photoImage} />
+                ) : (
+                  <ImagePlus size={22} color={c.accent} strokeWidth={2} />
+                )}
+              </TouchableOpacity>
+              <View style={styles.photoCopy}>
+                <Text style={styles.descriptionLabel}>Cover photo</Text>
+                <Text style={styles.photoHint}>
+                  {coverPhoto ? 'Tap the circle to change it.' : 'Optional. Cropped to a circle for the map and cards.'}
+                </Text>
+                <PhotoRulesNote style={{ marginTop: 3 }} />
               </View>
-              <View style={styles.hairline} />
-              <View style={styles.inputRow}>
-                <Text style={styles.inputLabel}>Tags</Text>
-                <TextInput
-                  placeholder="#TechMeetup, #PostGIS"
-                  placeholderTextColor="#64748b"
-                  style={styles.textInput}
-                  value={tags}
-                  onChangeText={setTags}
-                  autoCapitalize="none"
-                  testID="drop-tags"
-                />
-              </View>
-              <View style={styles.hairline} />
-              <View style={styles.descriptionBlock}>
-                <View style={styles.descriptionHeader}>
-                  <Text style={styles.descriptionLabel}>Description</Text>
-                  <Text
-                    style={[
-                      styles.wordCount,
-                      countBeaconWords(description) >= BEACON_DESCRIPTION_WORD_LIMIT && styles.wordCountFull,
-                    ]}
-                    testID="drop-description-count"
-                  >
-                    {countBeaconWords(description)} / {BEACON_DESCRIPTION_WORD_LIMIT}
-                  </Text>
-                </View>
-                <TextInput
-                  placeholder="What should people nearby know?"
-                  placeholderTextColor="#64748b"
-                  style={styles.descriptionInput}
-                  value={description}
-                  onChangeText={(value) => setDescription(clampBeaconDescription(value))}
-                  multiline
-                  textAlignVertical="top"
-                  testID="drop-description"
-                />
-              </View>
-            </View>
-
-            <View style={styles.locationBlock}>
-              <View style={[styles.locationContainer, coords && styles.fieldGlow]}>
-                <View style={styles.locationCopy}>
-                  <TextInput
-                    placeholder="Search location or venue..."
-                    placeholderTextColor="#64748b"
-                    style={styles.locationInput}
-                    value={locationSearch}
-                    onChangeText={(value) => {
-                      setLocationSearch(value);
-                      setFormError(null);
-                      if (value !== selectedLabel.current) {
-                        selectedLabel.current = null;
-                        setCoords(null);
-                        setPlaceLabel('');
-                        setPlaceType(undefined);
-                        setSelectedTier('micro');
-                        setSelectedRadiusMeters(BOUNDARY_RADII.micro);
-                      }
-                    }}
-                    autoCorrect={false}
-                    testID="drop-place"
-                  />
-                  {coords ? (
-                    <>
-                      <View style={styles.locationDivider} />
-                      <Text style={styles.coordReadout} testID="drop-coordinates">
-                        {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
-                      </Text>
-                    </>
-                  ) : null}
-                  <TouchableOpacity
-                    onPress={() => {
-                      setSuggestions([]);
-                      setMapPicking(true);
-                    }}
-                    style={styles.mapPickBtn}
-                    testID="drop-select-on-map"
-                    accessibilityRole="button"
-                  >
-                    <MapPin size={14} color="#22d3ee" strokeWidth={2.25} />
-                    <Text style={styles.mapPickBtnText}>Select on map</Text>
-                  </TouchableOpacity>
-                </View>
+              {coverPhoto && !photoBusy ? (
                 <TouchableOpacity
-                  onPress={handleUseCurrentLocation}
-                  style={styles.targetIconBtn}
-                  accessibilityLabel="Use current location"
-                  disabled={locating}
-                  testID="drop-gps"
+                  onPress={() => setCoverPhoto(null)}
+                  style={styles.photoRemove}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove cover photo"
+                  testID="drop-photo-remove"
                 >
-                  {locating ? (
-                    <ActivityIndicator size="small" color="#22d3ee" />
-                  ) : (
-                    <Crosshair size={20} color="#22d3ee" strokeWidth={2} />
-                  )}
+                  <X size={16} color={c.textMuted} strokeWidth={2.25} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
+            <View style={styles.hairline} />
+            <View style={styles.inputRow}>
+              <Text style={styles.inputLabel}>Title</Text>
+              <TextInput
+                placeholder="e.g. Boulder Tech & GIS Meetup"
+                placeholderTextColor={c.textFaint}
+                style={styles.textInput}
+                value={title}
+                onChangeText={setTitle}
+                testID="drop-title"
+              />
+            </View>
+            <View style={styles.hairline} />
+            <View style={styles.inputRow}>
+              <Text style={styles.inputLabel}>Tags</Text>
+              <TextInput
+                placeholder="#TechMeetup, #PostGIS"
+                placeholderTextColor={c.textFaint}
+                style={styles.textInput}
+                value={tags}
+                onChangeText={tagField.onChangeText}
+                onFocus={tagField.onFocus}
+                onBlur={tagField.onBlur}
+                autoCapitalize="none"
+                autoCorrect={false}
+                testID="drop-tags"
+              />
+            </View>
+            {/* Always mounted (just collapsed when empty) so the layout under the field never jumps. */}
+            <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                keyboardShouldPersistTaps="always"
+                style={tagField.suggestions.length > 0 ? null : styles.collapsed}
+                contentContainerStyle={tagField.suggestions.length > 0 ? styles.tagSuggestionRow : null}
+                testID="drop-tag-suggestions"
+              >
+                {tagField.suggestions.map((tag) => (
+                  <TouchableOpacity
+                    key={tag}
+                    style={styles.tagSuggestion}
+                    onPress={() => tagField.applySuggestion(tag)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Add tag ${tag}`}
+                    testID={`drop-tag-suggestion-${tag}`}
+                  >
+                    <Text style={styles.tagSuggestionText}>#{tag}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            <View style={styles.hairline} />
+            <View style={styles.descriptionBlock}>
+              <View style={styles.descriptionHeader}>
+                <Text style={styles.descriptionLabel}>Description</Text>
+                <Text
+                  style={[
+                    styles.wordCount,
+                    countBeaconWords(description) >= BEACON_DESCRIPTION_WORD_LIMIT && styles.wordCountFull,
+                  ]}
+                  testID="drop-description-count"
+                >
+                  {countBeaconWords(description)} / {BEACON_DESCRIPTION_WORD_LIMIT}
+                </Text>
+              </View>
+              <TextInput
+                placeholder="What should people nearby know?"
+                placeholderTextColor={c.textFaint}
+                style={styles.descriptionInput}
+                value={description}
+                onChangeText={(value) => setDescription(clampBeaconDescription(value))}
+                multiline
+                textAlignVertical="top"
+                testID="drop-description"
+              />
+            </View>
+          </View>
+
+          </GlowFrame>
+
+          <View style={styles.locationBlock}>
+            <GlowFrame active={Boolean(coords)}>
+            <View style={[styles.locationContainer, coords && styles.glowBorder]}>
+              <View style={styles.locationCopy}>
+                <TextInput
+                  placeholder="Search location or venue..."
+                  placeholderTextColor={c.textFaint}
+                  style={styles.locationInput}
+                  value={locationSearch}
+                  onChangeText={(value) => {
+                    setLocationSearch(value);
+                    setFormError(null);
+                    if (value !== selectedLabel.current) {
+                      selectedLabel.current = null;
+                      setCoords(null);
+                      setPlaceLabel('');
+                      setPlaceType(undefined);
+                      setSelectedTier('micro');
+                      setSelectedRadiusMeters(BOUNDARY_RADII.micro);
+                    }
+                  }}
+                  autoCorrect={false}
+                  testID="drop-place"
+                />
+                {coords ? (
+                  <>
+                    <View style={styles.locationDivider} />
+                    <Text style={styles.coordReadout} testID="drop-coordinates">
+                      {coords.lat.toFixed(5)}, {coords.lon.toFixed(5)}
+                    </Text>
+                  </>
+                ) : null}
+                <TouchableOpacity
+                  onPress={() => {
+                    setSuggestions([]);
+                    // Start with the Point's spot (or yours) under the center pin.
+                    const start = coords
+                      ? { latitude: coords.lat, longitude: coords.lon }
+                      : { latitude: selfCoordinates.latitude, longitude: selfCoordinates.longitude };
+                    pickCenter.current = start;
+                    setPickFocus({ key: Date.now(), ...start, zoom: 16 });
+                    setPickNotice('');
+                    setMapPicking(true);
+                  }}
+                  style={styles.mapPickBtn}
+                  testID="drop-select-on-map"
+                  accessibilityRole="button"
+                >
+                  <MapPin size={14} color={c.accent} strokeWidth={2.25} />
+                  <Text style={styles.mapPickBtnText}>Select on map</Text>
                 </TouchableOpacity>
               </View>
-
-              {searching && suggestions.length === 0 ? (
-                <Text style={styles.searchingText}>Searching places…</Text>
-              ) : null}
-
-              {suggestions.length > 0 ? (
-                <View style={styles.suggestionList}>
-                  {suggestions.map((place) => (
-                    <TouchableOpacity
-                      key={place.id}
-                      style={styles.suggestionRow}
-                      onPress={() => applyPlace(place)}
-                      testID={`drop-place-option-${place.id}`}
-                    >
-                      <Text style={styles.suggestionLabel}>{place.label}</Text>
-                      <Text style={styles.suggestionSubtitle}>{place.subtitle}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              ) : null}
+              <TouchableOpacity
+                onPress={handleUseCurrentLocation}
+                style={styles.targetIconBtn}
+                accessibilityLabel="Use current location"
+                disabled={locating}
+                testID="drop-gps"
+              >
+                {locating ? (
+                  <ActivityIndicator size="small" color={c.accent} />
+                ) : (
+                  <Crosshair size={20} color={c.accent} strokeWidth={2} />
+                )}
+              </TouchableOpacity>
             </View>
+            </GlowFrame>
 
-            <View style={[styles.scaleRailContainer, perimeterOn && styles.fieldGlow]} testID="drop-perimeter">
-              <View style={styles.scaleRailHeaderRow}>
-                <Text style={styles.scaleRailHeading}>BROADCAST PERIMETER</Text>
-                <View style={styles.perimeterControls}>
-                  {perimeterOn ? <Text style={styles.scaleRailRadiusBadge}>{activeTier.displayRadius}</Text> : null}
+            {searching && suggestions.length === 0 ? (
+              <Text style={styles.searchingText}>Searching places…</Text>
+            ) : null}
+
+            {suggestions.length > 0 ? (
+              <View style={styles.suggestionList}>
+                {suggestions.map((place) => (
                   <TouchableOpacity
-                    onPress={() => setPerimeterOn((on) => !on)}
-                    style={[styles.perimeterToggle, perimeterOn ? styles.perimeterToggleOn : styles.perimeterToggleOff]}
-                    testID="drop-perimeter-toggle"
-                    accessibilityRole="switch"
-                    accessibilityLabel="Broadcast perimeter"
-                    accessibilityState={{ checked: perimeterOn }}
+                    key={place.id}
+                    style={styles.suggestionRow}
+                    onPress={() => applyPlace(place)}
+                    testID={`drop-place-option-${place.id}`}
                   >
-                    <View style={[styles.perimeterThumb, perimeterOn && styles.perimeterThumbOn]} />
+                    <Text style={styles.suggestionLabel}>{place.label}</Text>
+                    <Text style={styles.suggestionSubtitle}>{place.subtitle}</Text>
                   </TouchableOpacity>
-                </View>
+                ))}
               </View>
-              {perimeterOn ? (
-              <View testID="drop-perimeter-body">
-              <View style={styles.scaleChipsRow}>
-                {boundaryTiers.map((tier) => {
-                  const isActive = selectedTier === tier.id;
-                  return (
-                    <TouchableOpacity
-                      key={tier.id}
-                      style={[styles.scaleChip, isActive && styles.scaleChipActive]}
-                      onPress={() => {
-                        setSelectedTier(tier.id);
-                        setSelectedRadiusMeters(tier.radiusMeters);
+            ) : null}
+          </View>
+
+          <View style={[styles.scaleRailContainer, privacyOn && styles.privacyGlow]} testID="drop-privacy">
+            <View style={styles.scaleRailHeaderRow}>
+              <View style={styles.privacyHeading}>
+                <EyeOff size={13} color={privacyOn ? c.violetSoft : c.textMuted} strokeWidth={2.25} />
+                <Text style={styles.scaleRailHeading}>LOCATION PRIVACY</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => setPrivacyOn((on) => !on)}
+                style={[styles.perimeterToggle, privacyOn ? styles.privacyToggleOn : styles.perimeterToggleOff]}
+                testID="drop-privacy-toggle"
+                accessibilityRole="switch"
+                accessibilityLabel="Location privacy"
+                accessibilityState={{ checked: privacyOn }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <View style={[styles.perimeterThumb, privacyOn && styles.privacyThumbOn]} />
+              </TouchableOpacity>
+            </View>
+            {privacyOn && coords ? (
+              <View testID="drop-privacy-body">
+                {regionsLoading && privacyRegions.length === 0 ? (
+                  <View style={styles.privacyLoading}>
+                    <ActivityIndicator size="small" color={c.violet} />
+                  </View>
+                ) : (
+                  <View style={styles.scaleChipsRow}>
+                    {privacyRegions.map((region) => {
+                      const isActive = region.id === privacyRegionId;
+                      const { label, Icon } = PRIVACY_LEVELS[region.level];
+                      return (
+                        <TouchableOpacity
+                          key={region.id}
+                          style={[styles.scaleChip, isActive && styles.privacyChipActive]}
+                          onPress={() => setPrivacyRegionId(region.id)}
+                          activeOpacity={0.8}
+                          testID={`drop-privacy-${region.level}`}
+                          accessibilityRole="button"
+                          accessibilityLabel={`${label}: ${region.name}`}
+                          accessibilityState={{ selected: isActive }}
+                        >
+                          {/* Blurred-area glyph: a soft filled disc instead of the perimeter's ring. */}
+                          <View style={[styles.privacyBlob, isActive && styles.privacyBlobActive]}>
+                            <Icon size={14} color={isActive ? c.text : c.textSecondary} strokeWidth={2.25} />
+                          </View>
+                          <Text
+                            style={[styles.scaleChipText, isActive && styles.scaleChipTextActive]}
+                            numberOfLines={1}
+                            adjustsFontSizeToFit
+                            minimumFontScale={0.85}
+                          >
+                            {label}
+                          </Text>
+                          <Text
+                            style={[styles.scaleChipSub, isActive && styles.privacyChipSubActive]}
+                            numberOfLines={1}
+                          >
+                            {region.name}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                )}
+
+                {selectedRegion ? (
+                  <View style={styles.privacyPreview} testID="drop-privacy-preview">
+                    <DiscoveryLeafletMap
+                      showGeofence={false}
+                      interactive={false}
+                      privacyPreview={{
+                        name: selectedRegion.name,
+                        center: selectedRegion.center,
+                        geometry: selectedRegion.geometry,
+                        radiusMeters: selectedRegion.radiusMeters,
+                        exact: { latitude: coords.lat, longitude: coords.lon },
                       }}
-                      activeOpacity={0.8}
-                      testID={`drop-tier-${tier.id}`}
+                    />
+                    <View style={styles.privacyLegend} pointerEvents="none">
+                      <View style={styles.legendItem}>
+                        <View style={styles.legendDotPublic} />
+                        <Text style={styles.legendText}>What others see</Text>
+                      </View>
+                      <View style={styles.legendItem}>
+                        <View style={styles.legendDotExact} />
+                        <Text style={styles.legendText}>Your exact spot</Text>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+
+                {selectedRegion ? (
+                  <View style={styles.moveRow}>
+                    <TouchableOpacity
+                      onPress={startMovingArea}
+                      style={styles.moveBtn}
+                      accessibilityRole="button"
+                      accessibilityLabel="Move the shaded area"
+                      testID="drop-privacy-move"
                     >
-                      <View style={styles.scaleChipLabel}>
+                      <Move size={14} color={c.violetSoft} strokeWidth={2.25} />
+                      <Text style={styles.moveBtnText}>Move area</Text>
+                    </TouchableOpacity>
+                    {regionMove ? (
+                      <TouchableOpacity
+                        onPress={resetAreaPosition}
+                        style={styles.resetBtn}
+                        accessibilityRole="button"
+                        accessibilityLabel="Reset the area position"
+                        testID="drop-privacy-reset"
+                      >
+                        <RotateCcw size={13} color={c.textMuted} strokeWidth={2.25} />
+                        <Text style={styles.resetBtnText}>Reset</Text>
+                      </TouchableOpacity>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {privacySource === 'approximate' && selectedRegion ? (
+                  <Text style={styles.privacySourceNote}>
+                    Approximate areas until region data is connected.
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+            <Text style={styles.broadcastSubtext} testID="drop-privacy-hint">
+              {privacyHint}
+            </Text>
+          </View>
+
+          {visibility !== 'private' ? (
+          <View style={[styles.scaleRailContainer, perimeterOn && styles.fieldGlow]} testID="drop-perimeter">
+            <View style={styles.scaleRailHeaderRow}>
+              <Text style={styles.scaleRailHeading}>BROADCAST PERIMETER</Text>
+              <View style={styles.perimeterControls}>
+                <TouchableOpacity
+                  onPress={() => setPerimeterOn((on) => !on)}
+                  style={[styles.perimeterToggle, perimeterOn ? styles.perimeterToggleOn : styles.perimeterToggleOff]}
+                  testID="drop-perimeter-toggle"
+                  accessibilityRole="switch"
+                  accessibilityLabel="Broadcast perimeter"
+                  accessibilityState={{ checked: perimeterOn }}
+                >
+                  <View style={[styles.perimeterThumb, perimeterOn && styles.perimeterThumbOn]} />
+                </TouchableOpacity>
+              </View>
+            </View>
+            {perimeterOn ? (
+              <View testID="drop-perimeter-body">
+                <View style={styles.scaleChipsRow}>
+                  {boundaryTiers.map((tier) => {
+                    const isActive = selectedTier === tier.id;
+                    return (
+                      <TouchableOpacity
+                        key={tier.id}
+                        style={[styles.scaleChip, isActive && styles.scaleChipActive]}
+                        onPress={() => {
+                          setSelectedTier(tier.id);
+                          setSelectedRadiusMeters(tier.radiusMeters);
+                        }}
+                        activeOpacity={0.8}
+                        testID={`drop-tier-${tier.id}`}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${tier.label}, ${tier.displayRadius}`}
+                        accessibilityState={{ selected: isActive }}
+                      >
                         <TierGlyph id={tier.id} active={isActive} />
                         <Text
                           style={[styles.scaleChipText, isActive && styles.scaleChipTextActive]}
                           numberOfLines={1}
+                          adjustsFontSizeToFit
+                          minimumFontScale={0.85}
                         >
                           {tier.label}
                         </Text>
-                      </View>
-                      <Text style={[styles.scaleChipSub, isActive && styles.scaleChipSubActive]}>
-                        {tier.displayRadius}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+                        <Text style={[styles.scaleChipSub, isActive && styles.scaleChipSubActive]}>
+                          {tier.displayRadius}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+                <Text style={styles.broadcastSubtext} testID="drop-broadcast">
+                  {describeReach(visibility, tags, activeTier.displayRadius)}
+                </Text>
               </View>
-              <Text style={styles.broadcastSubtext} testID="drop-broadcast">
-                {formatBroadcastReach(tags, activeTier.displayRadius)}
-              </Text>
+            ) : null}
+          </View>
+          ) : null}
+
+          <View style={[styles.scaleRailContainer, requiresApproval && styles.fieldGlow]} testID="drop-approval">
+            <View style={[styles.scaleRailHeaderRow, styles.approvalHeaderRow]}>
+              <Text style={styles.scaleRailHeading}>REQUIRES RSVP APPROVAL</Text>
+              <TouchableOpacity
+                onPress={() => setRequiresApproval((on) => !on)}
+                style={[styles.perimeterToggle, requiresApproval ? styles.perimeterToggleOn : styles.perimeterToggleOff]}
+                testID="drop-approval-toggle"
+                accessibilityRole="switch"
+                accessibilityLabel="Requires RSVP approval"
+                accessibilityState={{ checked: requiresApproval }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <View style={[styles.perimeterThumb, requiresApproval && styles.perimeterThumbOn]} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.broadcastSubtext} testID="drop-approval-hint">
+              {requiresApproval
+                ? 'People request to join, and you approve each RSVP before they’re in.'
+                : 'Anyone who can see this Point can RSVP right away.'}
+            </Text>
+
+            <View style={styles.hairline} />
+
+            <View style={styles.capacityRow} testID="drop-capacity">
+              <View style={styles.capacityCopy}>
+                <Text style={styles.scaleRailHeading}>MAX ATTENDANCE</Text>
+                <Text style={styles.capacityHint}>
+                  {maxAttendance == null ? 'No limit' : `Closes RSVPs at ${maxAttendance}`}
+                </Text>
               </View>
-              ) : null}
+              <View style={styles.stepper}>
+                <TouchableOpacity
+                  onPress={() => stepMaxAttendance(-1)}
+                  disabled={maxAttendance == null}
+                  style={[styles.stepperBtn, maxAttendance == null && styles.stepperBtnDisabled]}
+                  accessibilityRole="button"
+                  accessibilityLabel="Decrease max attendance"
+                  testID="drop-capacity-minus"
+                >
+                  <Text style={styles.stepperBtnText}>−</Text>
+                </TouchableOpacity>
+                <TextInput
+                  value={maxAttendance == null ? '' : String(maxAttendance)}
+                  onChangeText={typeMaxAttendance}
+                  placeholder="∞"
+                  placeholderTextColor={c.textMuted}
+                  keyboardType="number-pad"
+                  maxLength={4}
+                  style={styles.stepperInput}
+                  accessibilityLabel="Max attendance"
+                  testID="drop-capacity-input"
+                />
+                <TouchableOpacity
+                  onPress={() => stepMaxAttendance(1)}
+                  disabled={maxAttendance != null && maxAttendance >= MAX_ATTENDANCE_LIMIT}
+                  style={styles.stepperBtn}
+                  accessibilityRole="button"
+                  accessibilityLabel="Increase max attendance"
+                  testID="drop-capacity-plus"
+                >
+                  <Text style={styles.stepperBtnText}>+</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.groupedContainer}>
+            <View style={styles.timeToggleRow}>
+              <TouchableOpacity
+                style={[styles.pillToggle, isLiveNow && styles.pillToggleActive]}
+                onPress={selectLiveNow}
+                testID="drop-live"
+              >
+                <Rocket size={14} color={isLiveNow ? c.accent : c.textFaint} strokeWidth={2.25} />
+                <Text style={[styles.pillToggleText, isLiveNow && styles.pillToggleTextActive]}>Live Now</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.pillToggle, !isLiveNow && styles.pillToggleActive]}
+                onPress={selectSchedule}
+                testID="drop-schedule"
+              >
+                <Calendar size={14} color={!isLiveNow ? c.accent : c.textFaint} strokeWidth={2.25} />
+                <Text style={[styles.pillToggleText, !isLiveNow && styles.pillToggleTextActive]}>Schedule</Text>
+              </TouchableOpacity>
             </View>
 
-            <View style={styles.groupedContainer}>
-              <View style={styles.timeToggleRow}>
-                <TouchableOpacity
-                  style={[styles.pillToggle, isLiveNow && styles.pillToggleActive]}
-                  onPress={selectLiveNow}
-                  testID="drop-live"
-                >
-                  <Rocket size={14} color={isLiveNow ? '#22d3ee' : '#64748b'} strokeWidth={2.25} />
-                  <Text style={[styles.pillToggleText, isLiveNow && styles.pillToggleTextActive]}>Live Now</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.pillToggle, !isLiveNow && styles.pillToggleActive]}
-                  onPress={() => setIsLiveNow(false)}
-                  testID="drop-schedule"
-                >
-                  <Calendar size={14} color={!isLiveNow ? '#22d3ee' : '#64748b'} strokeWidth={2.25} />
-                  <Text style={[styles.pillToggleText, !isLiveNow && styles.pillToggleTextActive]}>Schedule</Text>
-                </TouchableOpacity>
+            {isLiveNow ? (
+              <View style={styles.whenBlock} testID="drop-live-window">
+                <View style={styles.whenRow}>
+                  <View style={styles.whenRail}>
+                    <View style={styles.whenDotOpen} />
+                  </View>
+                  <Text style={styles.whenLabel}>End</Text>
+                  <View style={styles.whenChips}>
+                    <WhenChip
+                      kind="date"
+                      date={endsAt}
+                      minimumDate={startsAt}
+                      display={formatBeaconDate(endsAt)}
+                      onCommit={(value) => commitEnd('date', value)}
+                      onFocus={holdClock}
+                      onBlur={releaseClock}
+                      testID="drop-end-date"
+                      label="End date"
+                    />
+                    <WhenChip
+                      kind="time"
+                      date={endsAt}
+                      display={formatBeaconTime(endsAt)}
+                      onCommit={(value) => commitEnd('time', value)}
+                      onFocus={holdClock}
+                      onBlur={releaseClock}
+                      testID="drop-end-time"
+                      label="End time"
+                    />
+                  </View>
+                </View>
               </View>
-
+            ) : (
               <View style={styles.whenBlock} testID="drop-window">
                 <View style={styles.whenRow}>
                   <View style={styles.whenRail}>
@@ -704,7 +1672,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   <View style={styles.whenChips}>
                     <WhenChip
                       kind="date"
-                      value={toDateInputValue(startsAt)}
+                      date={startsAt}
+                      minimumDate={new Date()}
                       display={formatBeaconDate(startsAt)}
                       onCommit={(value) => commitStart('date', value)}
                       onFocus={holdClock}
@@ -714,7 +1683,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     />
                     <WhenChip
                       kind="time"
-                      value={toTimeInputValue(startsAt)}
+                      date={startsAt}
                       display={formatBeaconTime(startsAt)}
                       onCommit={(value) => commitStart('time', value)}
                       onFocus={holdClock}
@@ -742,7 +1711,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   <View style={styles.whenChips}>
                     <WhenChip
                       kind="date"
-                      value={toDateInputValue(endsAt)}
+                      date={endsAt}
+                      minimumDate={startsAt}
                       display={formatBeaconDate(endsAt)}
                       onCommit={(value) => commitEnd('date', value)}
                       onFocus={holdClock}
@@ -752,7 +1722,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     />
                     <WhenChip
                       kind="time"
-                      value={toTimeInputValue(endsAt)}
+                      date={endsAt}
                       display={formatBeaconTime(endsAt)}
                       onCommit={(value) => commitEnd('time', value)}
                       onFocus={holdClock}
@@ -763,189 +1733,219 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   </View>
                 </View>
               </View>
-            </View>
-            <View style={styles.inviteBlock}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityState={{ expanded: inviteOpen }}
-                testID="invite-button"
-                style={styles.inviteBtn}
-                onPress={() => {
-                  setInviteOpen((openPanel) => !openPanel);
-                  setInviteError('');
-                }}
-              >
-                <UserPlus size={16} color="#22d3ee" strokeWidth={2.25} />
-                <Text style={styles.inviteBtnText}>
-                  {invites.length > 0 ? `Invite · ${invites.length}` : 'Invite'}
-                </Text>
-              </TouchableOpacity>
+            )}
+          </View>
 
-              {invites.length > 0 ? (
-                <View style={styles.inviteChips}>
-                  {invites.map((invite) => (
-                    <View key={`${invite.kind}-${invite.id}`} style={styles.inviteChip}>
-                      <Text style={styles.inviteChipText}>{invite.label}</Text>
+          {/* Private Points need their guest list up front. Everything else invites from the Manage sheet. */}
+          {visibility === 'private' ? (
+          <View style={styles.inviteBlock}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityState={{ expanded: inviteOpen }}
+              testID="invite-button"
+              style={styles.inviteBtn}
+              onPress={() => {
+                setInviteOpen((openPanel) => !openPanel);
+                setInviteError('');
+              }}
+            >
+              <UserPlus size={16} color={c.accent} strokeWidth={2.25} />
+              <Text style={styles.inviteBtnText}>
+                {invites.length > 0 ? `Invite · ${invites.length}` : 'Invite'}
+              </Text>
+            </TouchableOpacity>
+
+            {invites.length > 0 ? (
+              <View style={styles.inviteChips}>
+                {invites.map((invite) => (
+                  <View key={`${invite.kind}-${invite.id}`} style={styles.inviteChip}>
+                    <Text style={styles.inviteChipText}>{invite.label}</Text>
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${invite.label}`}
+                      onPress={() => setInvites((current) => removeInvite(current, invite.id))}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Text style={styles.inviteChipRemove}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                ))}
+              </View>
+            ) : null}
+
+            {inviteOpen ? (
+              <View style={styles.invitePanel} testID="invite-panel">
+                <Text style={styles.inviteHeading}>INVITE BY</Text>
+                <View style={styles.inviteKinds}>
+                  {(
+                    [
+                      ['proxipoint', 'Users'],
+                      ['phone', 'Phone'],
+                    ] as const
+                  ).map(([kind, label]) => {
+                    const selected = inviteKind === kind;
+                    return (
                       <TouchableOpacity
+                        key={kind}
+                        testID={`invite-kind-${kind}`}
                         accessibilityRole="button"
-                        accessibilityLabel={`Remove ${invite.label}`}
-                        onPress={() => setInvites((current) => removeInvite(current, invite.id))}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      >
-                        <Text style={styles.inviteChipRemove}>✕</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </View>
-              ) : null}
-
-              {inviteOpen ? (
-                <View style={styles.invitePanel} testID="invite-panel">
-                  <Text style={styles.inviteHeading}>INVITE BY</Text>
-                  <View style={styles.inviteKinds}>
-                    {(
-                      [
-                        ['facebook', 'Facebook'],
-                        ['proxipoint', 'ProxiPoint'],
-                        ['phone', 'Phone'],
-                      ] as const
-                    ).map(([kind, label]) => {
-                      const selected = inviteKind === kind;
-                      return (
-                        <TouchableOpacity
-                          key={kind}
-                          testID={`invite-kind-${kind}`}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          style={[styles.inviteKind, selected && styles.inviteKindSelected]}
-                          onPress={() => {
+                        accessibilityState={{ selected }}
+                        style={[styles.inviteKind, selected && styles.inviteKindSelected]}
+                        onPress={() => {
                             setInviteKind(kind);
                             setInviteError('');
-                          }}
-                        >
-                          <Text style={[styles.inviteKindText, selected && styles.inviteKindTextSelected]}>{label}</Text>
-                        </TouchableOpacity>
-                      );
-                    })}
-                  </View>
-
-                  {inviteKind === 'facebook' ? (
-                    <View style={styles.inviteList}>
-                      {LINKED_FACEBOOK_ACCOUNTS.map((account) => {
-                        const selected = invites.some((invite) => invite.kind === 'facebook' && invite.id === account.id);
-                        return (
-                          <TouchableOpacity
-                            key={account.id}
-                            testID={`invite-facebook-${account.id}`}
-                            accessibilityRole="button"
-                            accessibilityState={{ selected }}
-                            style={[styles.inviteRow, selected && styles.inviteRowSelected]}
-                            onPress={() => {
-                              const next = toggleFacebookInvite(invites, account.id);
-                              setInvites(next.invites);
-                              setInviteError(next.error);
-                            }}
-                          >
-                            <Text style={styles.inviteRowText}>{account.label}</Text>
-                            <Text style={styles.inviteRowMeta}>{selected ? 'Invited' : 'Linked'}</Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </View>
-                  ) : null}
-
-                  {inviteKind === 'proxipoint' ? (
-                    <View style={styles.inviteEntry}>
-                      <TextInput
-                        testID="invite-handle-input"
-                        value={handleInput}
-                        onChangeText={setHandleInput}
-                        onSubmitEditing={() => {
-                          const next = addProxiPointInvite(invites, handleInput);
-                          setInvites(next.invites);
-                          setInviteError(next.error);
-                          if (!next.error) setHandleInput('');
-                        }}
-                        placeholder="@ranger-7"
-                        placeholderTextColor="#64748b"
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                        style={styles.inviteInput}
-                      />
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        style={styles.inviteAddBtn}
-                        onPress={() => {
-                          const next = addProxiPointInvite(invites, handleInput);
-                          setInvites(next.invites);
-                          setInviteError(next.error);
-                          if (!next.error) setHandleInput('');
                         }}
                       >
-                        <Text style={styles.inviteAddText}>Add</Text>
+                        <Text style={[styles.inviteKindText, selected && styles.inviteKindTextSelected]}>{label}</Text>
                       </TouchableOpacity>
-                    </View>
-                  ) : null}
-
-                  {inviteKind === 'phone' ? (
-                    <View style={styles.inviteEntry}>
-                      <TextInput
-                        testID="invite-phone-input"
-                        value={phoneInput}
-                        onChangeText={setPhoneInput}
-                        onSubmitEditing={() => {
-                          const next = addPhoneInvite(invites, phoneInput);
-                          setInvites(next.invites);
-                          setInviteError(next.error);
-                          if (!next.error) setPhoneInput('');
-                        }}
-                        placeholder="(303) 555-0148"
-                        placeholderTextColor="#64748b"
-                        keyboardType="phone-pad"
-                        style={styles.inviteInput}
-                      />
-                      <TouchableOpacity
-                        accessibilityRole="button"
-                        style={styles.inviteAddBtn}
-                        onPress={() => {
-                          const next = addPhoneInvite(invites, phoneInput);
-                          setInvites(next.invites);
-                          setInviteError(next.error);
-                          if (!next.error) setPhoneInput('');
-                        }}
-                      >
-                        <Text style={styles.inviteAddText}>Add</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-
-                  {inviteError ? <Text style={styles.inviteError} testID="invite-error">{inviteError}</Text> : null}
+                    );
+                  })}
                 </View>
-              ) : null}
-            </View>
-          </ScrollView>
 
-          <View style={styles.ctaDock}>
-            {formError ? <Text style={styles.formError} testID="drop-error">{formError}</Text> : null}
-            <TouchableOpacity
-              style={[styles.primaryDropBtn, submitting && styles.primaryDropBtnBusy]}
-              onPress={handleDropBeacon}
-              activeOpacity={0.85}
-              disabled={submitting}
-              testID="drop-submit"
-              accessibilityRole="button"
-              accessibilityState={{ disabled: submitting }}
-            >
-              {submitting ? <ActivityIndicator color="#070b13" style={styles.dropSpinner} /> : null}
-              <Text style={styles.primaryDropText}>{submitting ? 'DROPPING' : 'DROP BEACON'}</Text>
-            </TouchableOpacity>
+                {inviteKind === 'proxipoint' ? (
+                  <Text style={styles.inviteHint}>Invite people already on ProxiPoint by their @handle.</Text>
+                ) : null}
+                {inviteKind === 'phone' ? (
+                  <Text style={styles.inviteHint}>
+                    They’ll get a text with a link to this Point, even if they don’t have the app yet.
+                  </Text>
+                ) : null}
+
+                {inviteKind === 'proxipoint' ? (
+                  <View style={styles.inviteEntry}>
+                    <TextInput
+                      testID="invite-handle-input"
+                      value={handleInput}
+                      onChangeText={(text) => setHandleInput(formatHandleInput(text))}
+                      onFocus={() => setHandleInput((current) => current || '@')}
+                      onBlur={() => setHandleInput((current) => (current === '@' ? '' : current))}
+                      onSubmitEditing={() => {
+                        const next = addProxiPointInvite(invites, handleInput);
+                        setInvites(next.invites);
+                        setInviteError(next.error);
+                        if (!next.error) setHandleInput('');
+                      }}
+                      placeholder="@ranger-7"
+                      placeholderTextColor={c.textFaint}
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      style={styles.inviteInput}
+                    />
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      style={styles.inviteAddBtn}
+                      onPress={() => {
+                        const next = addProxiPointInvite(invites, handleInput);
+                        setInvites(next.invites);
+                        setInviteError(next.error);
+                        if (!next.error) setHandleInput('');
+                      }}
+                    >
+                      <Text style={styles.inviteAddText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                {inviteKind === 'phone' ? (
+                  <View style={styles.inviteEntry}>
+                    <TextInput
+                      testID="invite-phone-input"
+                      value={phoneInput}
+                      onChangeText={setPhoneInput}
+                      onSubmitEditing={() => {
+                        const next = addPhoneInvite(invites, phoneInput);
+                        setInvites(next.invites);
+                        setInviteError(next.error);
+                        if (!next.error) setPhoneInput('');
+                      }}
+                      placeholder="(303) 555-0148"
+                      placeholderTextColor={c.textFaint}
+                      keyboardType="phone-pad"
+                      style={styles.inviteInput}
+                    />
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      style={styles.inviteAddBtn}
+                      onPress={() => {
+                        const next = addPhoneInvite(invites, phoneInput);
+                        setInvites(next.invites);
+                        setInviteError(next.error);
+                        if (!next.error) setPhoneInput('');
+                      }}
+                    >
+                      <Text style={styles.inviteAddText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
+                {inviteError ? <Text style={styles.inviteError} testID="invite-error">{inviteError}</Text> : null}
+              </View>
+            ) : null}
           </View>
+          ) : null}
+        </KeyboardAwareScrollView>
+
+        <View style={styles.ctaDock}>
+          {formError ? <Text style={styles.formError} testID="drop-error">{formError}</Text> : null}
+          <TouchableOpacity
+            style={[styles.primaryDropBtn, submitting && styles.primaryDropBtnBusy]}
+            onPress={handleDropBeacon}
+            activeOpacity={0.85}
+            disabled={submitting}
+            testID="drop-submit"
+            accessibilityRole="button"
+            accessibilityState={{ disabled: submitting }}
+          >
+            {submitting ? <ActivityIndicator color={c.base} style={styles.dropSpinner} /> : null}
+            <Text style={styles.primaryDropText}>{submitting ? 'DROPPING' : 'DROP POINT'}</Text>
+          </TouchableOpacity>
+        </View>
       </KeyboardAvoidingView>
+      <Modal
+        visible={confirmingStartOver}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setConfirmingStartOver(false)}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmCard} testID="drop-start-over-confirm">
+            <Text style={styles.confirmTitle}>Start over?</Text>
+            <Text style={styles.confirmBody}>
+              Everything you’ve filled in for this Point will be cleared: photo, details, location, privacy,
+              beacon, RSVP settings, times and invites. This can’t be undone.
+            </Text>
+            <View style={styles.confirmButtons}>
+              <TouchableOpacity
+                style={[styles.confirmBtn, styles.confirmKeep]}
+                onPress={() => setConfirmingStartOver(false)}
+                accessibilityRole="button"
+                testID="drop-start-over-cancel"
+              >
+                <Text style={styles.confirmKeepText}>Keep editing</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.confirmBtn, styles.confirmClear]}
+                onPress={() => {
+                  setConfirmingStartOver(false);
+                  draftCleared.current = true;
+                  startingOver.current = true;
+                  setResetKey((key) => key + 1);
+                }}
+                accessibilityRole="button"
+                testID="drop-start-over-confirm-button"
+              >
+                <Text style={styles.confirmClearText}>Clear all</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (c: ThemeColors) =>
+  StyleSheet.create({
   overlay: {
     position: 'absolute',
     left: 0,
@@ -954,11 +1954,11 @@ const styles = StyleSheet.create({
     bottom: NAV_BAR_HEIGHT,
     flexDirection: 'column',
     zIndex: 30,
-    backgroundColor: '#070b13',
+    backgroundColor: c.base,
   },
   mapBand: {
     flex: 1,
-    backgroundColor: '#0a1120',
+    backgroundColor: c.mapBase,
   },
   sheetContainer: {
     position: 'absolute',
@@ -966,7 +1966,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: '#090f1d',
+    backgroundColor: c.sheet,
     borderTopLeftRadius: 18,
     borderTopRightRadius: 18,
     paddingHorizontal: 16,
@@ -978,7 +1978,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#334155',
+    backgroundColor: c.borderStrong,
     alignSelf: 'center',
     marginVertical: 8,
   },
@@ -989,7 +1989,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   headerTitle: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 1.5,
@@ -998,7 +1998,7 @@ const styles = StyleSheet.create({
     padding: 6,
   },
   closeText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 16,
   },
   scroll: {
@@ -1013,35 +2013,91 @@ const styles = StyleSheet.create({
   },
   visibilityContainer: {
     flexDirection: 'row',
-    backgroundColor: '#070b13',
+    backgroundColor: c.base,
     borderRadius: 12,
     padding: 4,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
     gap: 4,
+  },
+  visibilityBlock: {
+    gap: 8,
   },
   visibilityTab: {
     flex: 1,
-    paddingVertical: 8,
+    flexDirection: 'row',
+    paddingVertical: 9,
+    paddingHorizontal: 4,
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'transparent',
   },
   visibilityText: {
-    color: '#64748b',
+    color: c.textMuted,
     fontSize: 12,
     fontWeight: '700',
+    flexShrink: 1,
   },
   visibilityTextActive: {
-    color: '#f8fafc',
+    color: c.text,
+  },
+  visibilityHint: {
+    color: c.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    paddingHorizontal: 4,
   },
   groupedContainer: {
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
     padding: 14,
+  },
+  photoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  photoCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: c.accent,
+    backgroundColor: c.base,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  photoCircleFilled: {
+    borderStyle: 'solid',
+    borderWidth: 2,
+  },
+  photoImage: {
+    width: '100%',
+    height: '100%',
+  },
+  photoCopy: {
+    flex: 1,
+    gap: 3,
+  },
+  photoHint: {
+    color: c.textMuted,
+    fontSize: 12,
+    lineHeight: 16,
+  },
+  photoRemove: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.border,
   },
   inputRow: {
     flexDirection: 'row',
@@ -1049,13 +2105,31 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   inputLabel: {
-    color: '#94a3b8',
+    color: c.textMuted,
     width: 60,
     fontSize: 12,
     fontWeight: '600',
   },
+  tagSuggestionRow: {
+    gap: 8,
+    paddingTop: 10,
+    paddingLeft: 60,
+  },
+  tagSuggestion: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    backgroundColor: c.base,
+  },
+  tagSuggestionText: {
+    color: c.accentSoft,
+    fontSize: 12,
+    fontWeight: '700',
+  },
   descriptionLabel: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },
@@ -1069,38 +2143,38 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   descriptionInput: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 13,
     minHeight: 32,
     maxHeight: 88,
     padding: 0,
   },
   wordCount: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 11,
     fontWeight: '700',
     fontVariant: ['tabular-nums'],
   },
   wordCountFull: {
-    color: '#f59e0b',
+    color: c.amber,
   },
   textInput: {
     flex: 1,
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 13,
     padding: 0,
   },
   hairline: {
     height: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     marginVertical: 10,
   },
   scaleRailContainer: {
-    backgroundColor: '#070b13',
+    backgroundColor: c.base,
     borderRadius: 14,
     padding: 12,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
   },
   scaleRailHeaderRow: {
     flexDirection: 'row',
@@ -1109,77 +2183,132 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   scaleRailHeading: {
-    color: '#64748b',
-    fontSize: 10,
+    color: c.textMuted,
+    fontSize: 11,
     fontWeight: '800',
     letterSpacing: 1.2,
   },
-  scaleRailRadiusBadge: {
-    color: '#06b6d4',
-    fontSize: 10,
-    fontFamily: 'monospace',
-    fontWeight: '700',
-  },
   scaleChipsRow: {
     flexDirection: 'row',
-    gap: 6,
-    marginBottom: 8,
+    gap: 8,
+    marginTop: 4,
+    marginBottom: 10,
   },
   scaleChip: {
     flex: 1,
-    paddingVertical: 7,
-    paddingHorizontal: 4,
-    borderRadius: 8,
-    backgroundColor: '#0f172a',
+    minHeight: 64,
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    borderRadius: 10,
+    backgroundColor: c.surface,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  scaleChipActive: {
-    backgroundColor: 'rgba(14, 165, 233, 0.32)',
-    borderColor: '#22d3ee',
-  },
-  scaleChipLabel: {
-    flexDirection: 'row',
+    borderColor: c.borderStrong,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
-    maxWidth: '100%',
+  },
+  scaleChipActive: {
+    backgroundColor: 'rgba(34, 211, 238, 0.18)',
+    borderColor: c.accent,
   },
   scaleChipText: {
-    color: '#94a3b8',
-    fontSize: 10,
+    color: c.textSecondary,
+    fontSize: 12,
     fontWeight: '700',
     textAlign: 'center',
-    flexShrink: 1,
   },
   scaleChipTextActive: {
-    color: '#f8fafc',
+    color: c.text,
   },
   scaleChipSub: {
-    color: '#475569',
-    fontSize: 9,
-    fontFamily: 'monospace',
-    marginTop: 2,
+    color: c.textMuted,
+    fontSize: 11,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
   },
   scaleChipSubActive: {
-    color: '#e0f2fe',
-    fontWeight: '700',
+    color: c.accentSoft,
+    fontWeight: '800',
   },
   broadcastSubtext: {
-    color: '#38bdf8',
-    fontSize: 11,
-    fontStyle: 'italic',
+    color: c.textSecondary,
+    fontSize: 12,
+    lineHeight: 17,
   },
   locationBlock: {
     position: 'relative',
     zIndex: 4,
   },
+  startOverBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
+  },
+  startOverText: { color: c.textSecondary, fontSize: 12, fontWeight: '700' },
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 28,
+  },
+  confirmCard: {
+    alignSelf: 'stretch',
+    backgroundColor: c.surface,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: c.border,
+    padding: 18,
+    gap: 10,
+  },
+  confirmTitle: { color: c.text, fontSize: 17, fontWeight: '800' },
+  confirmBody: { color: c.textSecondary, fontSize: 13, lineHeight: 19 },
+  confirmButtons: { flexDirection: 'row', gap: 10, marginTop: 6 },
+  confirmBtn: { flex: 1, minHeight: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
+  confirmKeep: { borderWidth: 1, borderColor: c.borderStrong, backgroundColor: c.base },
+  confirmKeepText: { color: c.text, fontSize: 14, fontWeight: '700' },
+  confirmClear: { backgroundColor: c.danger },
+  confirmClearText: { color: c.white, fontSize: 14, fontWeight: '800' },
+  headerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  draftPill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    backgroundColor: c.surface,
+  },
+  draftPillText: { color: c.textMuted, fontSize: 9, fontWeight: '800', letterSpacing: 1 },
+  glowLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderRadius: 16,
+    backgroundColor: c.surface,
+    shadowColor: c.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  glowBorder: {
+    borderColor: c.accent,
+  },
+  collapsed: {
+    height: 0,
+  },
   fieldGlow: {
-    borderColor: '#22d3ee',
+    borderColor: c.accent,
     borderWidth: 1.5,
-    shadowColor: '#22d3ee',
+    shadowColor: c.accent,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.55,
     shadowRadius: 12,
@@ -1188,10 +2317,10 @@ const styles = StyleSheet.create({
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
     paddingHorizontal: 14,
     minHeight: 56,
     paddingVertical: 10,
@@ -1200,19 +2329,19 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationInput: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 17,
     fontWeight: '600',
     padding: 0,
   },
   locationDivider: {
     height: 1,
-    backgroundColor: '#334155',
+    backgroundColor: c.borderStrong,
     marginTop: 8,
     marginBottom: 6,
   },
   coordReadout: {
-    color: '#38bdf8',
+    color: c.sky,
     fontSize: 11,
     fontVariant: ['tabular-nums'],
   },
@@ -1224,7 +2353,7 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start',
   },
   mapPickBtnText: {
-    color: '#22d3ee',
+    color: c.accent,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -1234,28 +2363,90 @@ const styles = StyleSheet.create({
     right: 16,
     bottom: 16,
     zIndex: 6,
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     borderRadius: 14,
     borderWidth: 1.5,
-    borderColor: '#22d3ee',
+    borderColor: c.accent,
     paddingHorizontal: 14,
     paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    shadowColor: '#22d3ee',
+    shadowColor: c.accent,
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.45,
     shadowRadius: 10,
   },
+  centerPinLayer: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 5,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // The pin's tip sits exactly on the middle of the map (the icon is 46 tall; its tip is ~42 down).
+  centerPin: { marginTop: -42, shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 4, shadowOffset: { width: 0, height: 2 } },
+  centerPinDot: {
+    position: 'absolute',
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: c.accent,
+    borderWidth: 1.5,
+    borderColor: c.base,
+  },
+  locateBtn: {
+    position: 'absolute',
+    right: 16,
+    bottom: 150,
+    zIndex: 6,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.surface,
+    borderWidth: 1.5,
+    borderColor: c.accent,
+  },
+  mapPickPanel: {
+    position: 'absolute',
+    left: 16,
+    right: 16,
+    bottom: 16,
+    zIndex: 6,
+    gap: 10,
+    backgroundColor: c.surface,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: c.accent,
+    padding: 14,
+    shadowColor: c.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 10,
+  },
+  mapPickRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  mapPickNotice: { color: c.amber, fontSize: 12, fontWeight: '600' },
+  mapPickAccept: {
+    minHeight: 46,
+    borderRadius: 23,
+    backgroundColor: c.accent,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  mapPickAcceptText: { color: c.base, fontSize: 14, fontWeight: '900', letterSpacing: 1.2 },
   mapPickHint: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 14,
     fontWeight: '700',
     flex: 1,
   },
   mapPickCancel: {
-    color: '#22d3ee',
+    color: c.accent,
     fontSize: 14,
     fontWeight: '800',
     marginLeft: 12,
@@ -1273,22 +2464,230 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   perimeterToggleOn: {
-    backgroundColor: '#22d3ee',
+    backgroundColor: c.accent,
   },
   perimeterToggleOff: {
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.borderStrong,
   },
   perimeterThumb: {
     width: 18,
     height: 18,
     borderRadius: 9,
-    backgroundColor: '#94a3b8',
+    backgroundColor: c.textMuted,
+  },
+  /* Location privacy uses violet so it never reads as the cyan broadcast perimeter. */
+  privacyGlow: {
+    borderColor: c.violet,
+    borderWidth: 1.5,
+    shadowColor: c.violet,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  privacyHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  privacyToggleOn: {
+    backgroundColor: c.violet,
+  },
+  privacyThumbOn: {
+    alignSelf: 'flex-end',
+    backgroundColor: c.violetBase,
+  },
+  privacyChipActive: {
+    backgroundColor: 'rgba(167, 139, 250, 0.18)',
+    borderColor: c.violet,
+  },
+  privacyChipSubActive: {
+    color: c.violetSoft,
+    fontWeight: '800',
+  },
+  privacyBlob: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(148, 163, 184, 0.14)',
+  },
+  privacyBlobActive: {
+    backgroundColor: 'rgba(167, 139, 250, 0.35)',
+    shadowColor: c.violet,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+  },
+  privacyLoading: {
+    height: 64,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  privacyPreview: {
+    height: 170,
+    borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    marginBottom: 10,
+    backgroundColor: c.mapBase,
+  },
+  privacyLegend: {
+    position: 'absolute',
+    left: 8,
+    bottom: 8,
+    flexDirection: 'row',
+    gap: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    backgroundColor: c.photoChipStrong,
+  },
+  legendItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  legendDotPublic: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    borderWidth: 2,
+    borderColor: c.violet,
+    backgroundColor: c.violetBase,
+  },
+  legendDotExact: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    borderWidth: 1.5,
+    borderColor: c.pinRim,
+    backgroundColor: c.accentDeep,
+  },
+  legendText: {
+    color: c.textSecondary,
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  moveRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  moveBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.violet,
+    backgroundColor: 'rgba(167, 139, 250, 0.12)',
+  },
+  moveBtnText: {
+    color: c.violetText,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  resetBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 8,
+    paddingVertical: 7,
+  },
+  resetBtnText: {
+    color: c.textMuted,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  moveBar: {
+    borderColor: c.violet,
+    shadowColor: c.violet,
+  },
+  moveBarCopy: {
+    flex: 1,
+    gap: 2,
+  },
+  moveBarSub: {
+    color: c.textSecondary,
+    fontSize: 12,
+  },
+  moveBarDone: {
+    color: c.violetSoft,
+    fontSize: 14,
+    fontWeight: '800',
+    marginLeft: 12,
+  },
+  privacySourceNote: {
+    color: c.textMuted,
+    fontSize: 11,
+    fontStyle: 'italic',
+    marginBottom: 6,
+  },
+  approvalHeaderRow: {
+    marginBottom: 6,
+  },
+  capacityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  capacityCopy: {
+    flex: 1,
+    gap: 4,
+  },
+  capacityHint: {
+    color: c.textSecondary,
+    fontSize: 12,
+  },
+  stepper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: c.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    overflow: 'hidden',
+  },
+  stepperBtn: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  stepperBtnDisabled: {
+    opacity: 0.35,
+  },
+  stepperBtnText: {
+    color: c.accent,
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 22,
+  },
+  stepperInput: {
+    minWidth: 52,
+    height: 36,
+    paddingHorizontal: 4,
+    color: c.text,
+    fontSize: 15,
+    fontWeight: '700',
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
+    borderLeftWidth: 1,
+    borderRightWidth: 1,
+    borderColor: c.borderStrong,
   },
   perimeterThumbOn: {
     alignSelf: 'flex-end',
-    backgroundColor: '#082f49',
+    backgroundColor: c.onAccent,
   },
   targetIconBtn: {
     padding: 6,
@@ -1296,7 +2695,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   searchingText: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 11,
     marginTop: 6,
     marginLeft: 8,
@@ -1307,10 +2706,10 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     marginTop: 6,
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
     overflow: 'hidden',
     zIndex: 6,
     elevation: 6,
@@ -1319,15 +2718,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: c.border,
   },
   suggestionLabel: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 13,
     fontWeight: '600',
   },
   suggestionSubtitle: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 11,
     marginTop: 2,
   },
@@ -1340,7 +2739,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     paddingVertical: 10,
     borderRadius: 12,
-    backgroundColor: '#070b13',
+    backgroundColor: c.base,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 6,
@@ -1349,18 +2748,54 @@ const styles = StyleSheet.create({
   },
   pillToggleActive: {
     backgroundColor: 'rgba(34, 211, 238, 0.12)',
-    borderColor: '#22d3ee',
+    borderColor: c.accent,
   },
   pillToggleText: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 12,
     fontWeight: '700',
   },
   pillToggleTextActive: {
-    color: '#f8fafc',
+    color: c.text,
   },
   whenBlock: {
     marginTop: 8,
+  },
+  pickerBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.7)',
+    justifyContent: 'flex-end',
+  },
+  pickerSheet: {
+    backgroundColor: c.surface,
+    borderTopLeftRadius: 18,
+    borderTopRightRadius: 18,
+    borderWidth: 1,
+    borderColor: c.border,
+    paddingBottom: 24,
+    paddingHorizontal: 12,
+  },
+  pickerHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+  },
+  pickerTitle: {
+    color: c.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  pickerCancel: {
+    color: c.textMuted,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  pickerDone: {
+    color: c.accent,
+    fontSize: 15,
+    fontWeight: '800',
   },
   whenRow: {
     flexDirection: 'row',
@@ -1377,14 +2812,14 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#94a3b8',
+    backgroundColor: c.textMuted,
   },
   whenDotOpen: {
     width: 8,
     height: 8,
     borderRadius: 4,
     borderWidth: 1.5,
-    borderColor: '#94a3b8',
+    borderColor: c.textMuted,
   },
   whenBridge: {
     flexDirection: 'row',
@@ -1401,15 +2836,15 @@ const styles = StyleSheet.create({
     width: 2,
     height: 2,
     borderRadius: 1,
-    backgroundColor: '#64748b',
+    backgroundColor: c.textFaint,
   },
   whenRule: {
     flex: 1,
     height: 1,
-    backgroundColor: '#334155',
+    backgroundColor: c.borderStrong,
   },
   whenLabel: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 16,
     fontWeight: '500',
     width: 48,
@@ -1422,29 +2857,21 @@ const styles = StyleSheet.create({
   },
   whenChip: {
     position: 'relative',
-    backgroundColor: '#334155',
+    backgroundColor: c.borderStrong,
     borderRadius: 10,
     paddingHorizontal: 10,
     paddingVertical: 7,
     overflow: 'hidden',
   },
   whenChipText: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 14,
     fontWeight: '600',
-  },
-  whenNativeInput: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    left: 0,
-    opacity: 0,
   },
   ctaDock: {
     paddingTop: 8,
     paddingBottom: 12,
-    backgroundColor: '#090f1d',
+    backgroundColor: c.sheet,
     gap: 8,
   },
   inviteBlock: {
@@ -1455,15 +2882,15 @@ const styles = StyleSheet.create({
     minHeight: 46,
     borderRadius: 12,
     borderWidth: 1.5,
-    borderColor: '#22d3ee',
-    backgroundColor: '#0f172a',
+    borderColor: c.accent,
+    backgroundColor: c.surface,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
   },
   inviteBtnText: {
-    color: '#e2e8f0',
+    color: c.textBody,
     fontSize: 14,
     fontWeight: '800',
     letterSpacing: 0.4,
@@ -1479,31 +2906,31 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    backgroundColor: '#0f172a',
+    borderColor: c.border,
+    backgroundColor: c.surface,
     paddingHorizontal: 10,
     paddingVertical: 5,
   },
   inviteChipText: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 12,
     fontWeight: '700',
   },
   inviteChipRemove: {
-    color: '#f87171',
+    color: c.red,
     fontSize: 12,
     fontWeight: '800',
   },
   invitePanel: {
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    backgroundColor: '#070b13',
+    borderColor: c.border,
+    backgroundColor: c.base,
     padding: 12,
     gap: 8,
   },
   inviteHeading: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 10,
     fontWeight: '800',
     letterSpacing: 1.2,
@@ -1517,23 +2944,23 @@ const styles = StyleSheet.create({
     minHeight: 34,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     paddingHorizontal: 4,
   },
   inviteKindSelected: {
-    backgroundColor: '#22d3ee',
-    borderColor: '#67e8f9',
+    backgroundColor: c.accent,
+    borderColor: c.accentSoft,
   },
   inviteKindText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 11,
     fontWeight: '800',
   },
   inviteKindTextSelected: {
-    color: '#082f49',
+    color: c.onAccent,
   },
   inviteList: {
     gap: 6,
@@ -1542,23 +2969,23 @@ const styles = StyleSheet.create({
     minHeight: 38,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    backgroundColor: '#0f172a',
+    borderColor: c.border,
+    backgroundColor: c.surface,
     paddingHorizontal: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   inviteRowSelected: {
-    borderColor: '#22d3ee',
+    borderColor: c.accent,
   },
   inviteRowText: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 13,
     fontWeight: '700',
   },
   inviteRowMeta: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 11,
     fontWeight: '700',
   },
@@ -1569,11 +2996,11 @@ const styles = StyleSheet.create({
   },
   inviteInput: {
     flex: 1,
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#1e293b',
-    color: '#f8fafc',
+    borderColor: c.border,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 8,
     fontSize: 14,
@@ -1582,34 +3009,39 @@ const styles = StyleSheet.create({
     minHeight: 38,
     paddingHorizontal: 14,
     borderRadius: 10,
-    backgroundColor: '#22d3ee',
+    backgroundColor: c.accent,
     alignItems: 'center',
     justifyContent: 'center',
   },
   inviteAddText: {
-    color: '#082f49',
+    color: c.onAccent,
     fontSize: 13,
     fontWeight: '800',
   },
+  inviteHint: {
+    color: c.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
+  },
   inviteError: {
-    color: '#f59e0b',
+    color: c.amber,
     fontSize: 11,
     fontWeight: '600',
   },
   formError: {
-    color: '#f59e0b',
+    color: c.amber,
     fontSize: 11,
     fontWeight: '600',
     marginBottom: 8,
   },
   primaryDropBtn: {
-    backgroundColor: '#22d3ee',
+    backgroundColor: c.accent,
     borderRadius: 16,
     paddingVertical: 14,
     alignItems: 'center',
     flexDirection: 'row',
     justifyContent: 'center',
-    shadowColor: '#22d3ee',
+    shadowColor: c.accent,
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
@@ -1622,7 +3054,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   primaryDropText: {
-    color: '#070b13',
+    color: c.base,
     fontSize: 14,
     fontWeight: '900',
     letterSpacing: 1.2,

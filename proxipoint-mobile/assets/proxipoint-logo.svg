@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 120 120">
+  <defs><clipPath id="c"><path d="M60,103 C50,90 30,70 30,48 A30,30 0 1,1 90,48 C90,70 70,90 60,103 Z" transform="translate(60,60) scale(1) translate(-60,-60)"/></clipPath></defs>
+  <rect width="120" height="120" rx="27" fill="#67e8f9"/>
+  <path d="M60,103 C50,90 30,70 30,48 A30,30 0 1,1 90,48 C90,70 70,90 60,103 Z" transform="translate(60,60) scale(1) translate(-60,-60)" fill="#0a1120"/>
+  <g clip-path="url(#c)"><path d="M51,108 L51,48 A13,13 0 1,1 64,61 L52,61" transform="translate(60,60) scale(1) translate(-60,-60)" fill="none" stroke="#67e8f9" stroke-width="9" stroke-linejoin="round"/></g></svg>

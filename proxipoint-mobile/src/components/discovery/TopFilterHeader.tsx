@@ -8,10 +8,34 @@ import {
   Modal,
   TextInput,
   TouchableWithoutFeedback,
+  Image,
 } from 'react-native';
+import { CalendarDays } from 'lucide-react-native';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
-export const TopFilterHeader: React.FC = () => {
+interface TopFilterHeaderProps {
+  /** Tap on the avatar opens the Profile page. */
+  onOpenProfile?: () => void;
+  profileInitial?: string;
+  profilePhotoUri?: string | null;
+  /** "Live Now" filter: only Points happening right now. Works together with a hashtag. */
+  liveOnly?: boolean;
+  onToggleLiveOnly?: () => void;
+  /** Calendar button next to Nearby / RSVP'd. */
+  onOpenCalendar?: () => void;
+}
+
+export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
+  onOpenProfile,
+  profileInitial,
+  profilePhotoUri,
+  liveOnly = false,
+  onToggleLiveOnly,
+  onOpenCalendar,
+}) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
   const activeTab = useDiscoveryStore((s) => s.activeTab);
   const setActiveTab = useDiscoveryStore((s) => s.setActiveTab);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
@@ -43,11 +67,22 @@ export const TopFilterHeader: React.FC = () => {
       <View style={styles.topRow}>
         <TouchableOpacity
           style={styles.avatarButton}
-          onPress={() => setSettingsOpen(true)}
+          // Tap: your Profile page. Long-press: the developer connection settings below.
+          onPress={() => (onOpenProfile ? onOpenProfile() : setSettingsOpen(true))}
+          onLongPress={() => setSettingsOpen(true)}
+          delayLongPress={600}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Open your profile"
+          accessibilityHint="Long-press for connection settings"
+          testID="header-profile"
         >
           <View style={styles.avatarInner}>
-            <Text style={styles.avatarInitial}>R</Text>
+            {profilePhotoUri ? (
+              <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarInitial}>{profileInitial || callsign.charAt(0).toUpperCase() || 'R'}</Text>
+            )}
           </View>
           <View style={styles.onlineBadge} />
         </TouchableOpacity>
@@ -71,6 +106,19 @@ export const TopFilterHeader: React.FC = () => {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {onOpenCalendar ? (
+          <TouchableOpacity
+            style={styles.calendarBtn}
+            onPress={onOpenCalendar}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Open calendar"
+            testID="header-calendar"
+          >
+            <CalendarDays size={20} color={c.sky} strokeWidth={2.25} />
+          </TouchableOpacity>
+        ) : null}
       </View>
 
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
@@ -80,17 +128,39 @@ export const TopFilterHeader: React.FC = () => {
         contentContainerStyle={styles.tagScrollContainer}
       >
         {tags.map((tag) => {
-          const isActive = selectedTag === tag;
-          return (
+          const isAll = tag === 'All';
+          // "All" means no filters at all, so it isn't highlighted while Live Now is on.
+          const isActive = selectedTag === tag && !(isAll && liveOnly);
+          const pill = (
             <TouchableOpacity
               key={tag}
               style={[styles.tagPill, isActive && styles.tagPillActive]}
-              onPress={() => setSelectedTag(tag)}
+              onPress={() => {
+                setSelectedTag(tag);
+                if (isAll && liveOnly) onToggleLiveOnly?.();
+              }}
             >
               <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
                 {tag}
               </Text>
             </TouchableOpacity>
+          );
+          if (!isAll || !onToggleLiveOnly) return pill;
+          return (
+            <React.Fragment key={tag}>
+              {pill}
+              <TouchableOpacity
+                style={[styles.tagPill, styles.livePill, liveOnly && styles.livePillActive]}
+                onPress={onToggleLiveOnly}
+                accessibilityRole="button"
+                accessibilityState={{ selected: liveOnly }}
+                accessibilityLabel="Live now"
+                testID="filter-live-now"
+              >
+                <View style={[styles.liveDot, liveOnly && styles.liveDotActive]} />
+                <Text style={[styles.tagText, styles.liveText, liveOnly && styles.liveTextActive]}>Live Now</Text>
+              </TouchableOpacity>
+            </React.Fragment>
           );
         })}
 
@@ -127,7 +197,7 @@ export const TopFilterHeader: React.FC = () => {
                   <TextInput
                     style={styles.addTagInput}
                     placeholder="e.g. Pickleball, FarmersMarket"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={c.iconFaint}
                     value={newTagInput}
                     onChangeText={setNewTagInput}
                     onSubmitEditing={handleAddNewTag}
@@ -180,7 +250,7 @@ export const TopFilterHeader: React.FC = () => {
             <TouchableWithoutFeedback>
               <View style={styles.modalCard}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Node & Profile Settings</Text>
+                  <Text style={styles.modalTitle}>Connection Settings (dev)</Text>
                   <TouchableOpacity onPress={() => setSettingsOpen(false)}>
                     <Text style={styles.modalCloseText}>✕</Text>
                   </TouchableOpacity>
@@ -193,7 +263,7 @@ export const TopFilterHeader: React.FC = () => {
                     value={callsign}
                     onChangeText={setCallsign}
                     placeholder="e.g. Ranger-F0A5ACCF"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={c.iconFaint}
                   />
                 </View>
 
@@ -204,7 +274,7 @@ export const TopFilterHeader: React.FC = () => {
                     value={tenantId}
                     onChangeText={setTenantId}
                     autoCapitalize="none"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={c.iconFaint}
                   />
                 </View>
 
@@ -215,7 +285,7 @@ export const TopFilterHeader: React.FC = () => {
                     value={serverUrl}
                     onChangeText={setServerUrl}
                     autoCapitalize="none"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={c.iconFaint}
                   />
                 </View>
 
@@ -239,11 +309,12 @@ export const TopFilterHeader: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (c: ThemeColors) =>
+  StyleSheet.create({
   headerContainer: {
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: c.headerGlass,
     zIndex: 10,
   },
   topRow: {
@@ -256,9 +327,9 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderWidth: 1.5,
-    borderColor: '#06b6d4',
+    borderColor: c.accentDeep,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -267,12 +338,17 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarInitial: {
-    color: '#38bdf8',
+    color: c.sky,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -283,14 +359,24 @@ const styles = StyleSheet.create({
     width: 11,
     height: 11,
     borderRadius: 5.5,
-    backgroundColor: '#10b981',
+    backgroundColor: c.greenDeep,
     borderWidth: 2,
-    borderColor: '#0a1120',
+    borderColor: c.mapBase,
+  },
+  calendarBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.border,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.2)',
   },
   segmentedWrapper: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderRadius: 24,
     padding: 3,
     borderWidth: 1,
@@ -305,15 +391,15 @@ const styles = StyleSheet.create({
   segmentBtnActive: {
     backgroundColor: 'rgba(6, 182, 212, 0.15)',
     borderWidth: 1,
-    borderColor: '#06b6d4',
+    borderColor: c.accentDeep,
   },
   segmentText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#38bdf8',
+    color: c.sky,
     fontWeight: '700',
   },
   tagScrollContainer: {
@@ -326,35 +412,61 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 18,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.borderStrong,
   },
   tagPillActive: {
-    backgroundColor: '#06b6d4',
-    borderColor: '#22d3ee',
+    backgroundColor: c.accentDeep,
+    borderColor: c.accent,
+  },
+  livePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderColor: 'rgba(52, 211, 153, 0.45)',
+  },
+  livePillActive: {
+    backgroundColor: c.green,
+    borderColor: c.greenBright,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: c.green,
+  },
+  liveDotActive: {
+    backgroundColor: c.greenInk,
+  },
+  liveText: {
+    color: c.greenBright,
+  },
+  liveTextActive: {
+    color: c.greenInk,
+    fontWeight: '800',
   },
   tagText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },
   tagTextActive: {
-    color: '#0f172a',
+    color: c.surface,
     fontWeight: '700',
   },
   trailingEditPill: {
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 18,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderWidth: 1,
-    borderColor: '#06b6d4',
+    borderColor: c.accentDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
   trailingEditIcon: {
-    color: '#38bdf8',
+    color: c.sky,
     fontSize: 13,
     fontWeight: '700',
   },
@@ -368,11 +480,11 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.borderStrong,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -380,16 +492,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: c.border,
     paddingBottom: 10,
   },
   modalTitle: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 16,
     fontWeight: '700',
   },
   modalCloseText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 18,
     fontWeight: '700',
     padding: 4,
@@ -401,28 +513,28 @@ const styles = StyleSheet.create({
   },
   addTagInput: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: c.borderStrong,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 13,
   },
   addTagBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: c.accentDeep,
     paddingHorizontal: 16,
     justifyContent: 'center',
     borderRadius: 10,
   },
   addTagBtnText: {
-    color: '#0f172a',
+    color: c.surface,
     fontSize: 13,
     fontWeight: '700',
   },
   sectionSubtitle: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -437,21 +549,21 @@ const styles = StyleSheet.create({
   editorChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderRadius: 16,
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.borderStrong,
   },
   editorChipText: {
-    color: '#e2e8f0',
+    color: c.textBody,
     fontSize: 12,
     fontWeight: '600',
   },
   removeChipText: {
-    color: '#ef4444',
+    color: c.danger,
     fontSize: 12,
     fontWeight: '700',
     paddingHorizontal: 2,
@@ -460,18 +572,18 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   fieldLabel: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 11,
     fontWeight: '600',
     marginBottom: 6,
     textTransform: 'uppercase',
   },
   textInput: {
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: c.borderStrong,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
@@ -480,7 +592,7 @@ const styles = StyleSheet.create({
   statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#172554',
+    backgroundColor: c.chipBlue,
     padding: 10,
     borderRadius: 8,
     gap: 8,
@@ -490,22 +602,22 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10b981',
+    backgroundColor: c.greenDeep,
   },
   statusBoxText: {
-    color: '#38bdf8',
+    color: c.sky,
     fontSize: 11,
     fontWeight: '600',
   },
   saveBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: c.accentDeep,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 6,
   },
   saveBtnText: {
-    color: '#0f172a',
+    color: c.surface,
     fontSize: 14,
     fontWeight: '700',
   },
