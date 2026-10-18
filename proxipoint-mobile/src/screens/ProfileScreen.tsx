@@ -15,7 +15,6 @@ import { BIO_CHAR_LIMIT, BIO_MAX_LINES, limitBio, type MyProfile } from '../lib/
 import { useFollowing } from '../lib/hostProfiles';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../components/common/KeyboardAwareScrollView';
-import { useNavBarHeight } from '../components/discovery/BottomNavBar';
 
 /**
  * Fills the parent edge to edge. Written out by hand because StyleSheet.absoluteFillObject
@@ -28,7 +27,7 @@ interface ProfileScreenProps {
   drops: DroppedPoint[];
   /** Shown as a BACK button. Leave out when Profile is open as a tab. */
   onBack?: () => void;
-  /** Profile is the Profile tab: sits above the nav bar instead of covering it. */
+  /** Profile is the Profile tab: fills the space above the nav bar instead of covering the screen. */
   asTab?: boolean;
   onOpenSettings: () => void;
   onOpenMyDrops: () => void;
@@ -97,7 +96,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   const { colors: c } = useTheme();
   const [bioFocused, setBioFocused] = useState(false);
   const insets = useSafeAreaInsets();
-  const navBarHeight = useNavBarHeight();
+  // As a tab, the screen around it already keeps clear of the status bar.
+  const topInset = asTab ? 0 : insets.top;
   // Hosts you follow from their public profiles (until GET /me/following exists).
   const followedHosts = useFollowing();
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -134,8 +134,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   };
 
   return (
-    // As a tab: stops at the nav bar and stays under the Drop Point sheet (30) and nav bar (40).
-    <View style={[styles.overlay, asTab && { bottom: navBarHeight, zIndex: 20 }]} testID="profile-screen">
+    // As a tab it takes the space above the nav bar like the other tabs; otherwise it covers everything.
+    <View style={asTab ? styles.tab : styles.overlay} testID="profile-screen">
       <KeyboardAwareScrollView
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: asTab ? 24 : insets.bottom + 24 }}
@@ -143,12 +143,12 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         keyboardShouldPersistTaps="handled"
       >
         {/* Hero */}
-        <View style={[styles.hero, { paddingTop: insets.top + 8 }]}>
+        <View style={[styles.hero, { paddingTop: topInset + 8 }]}>
           <View style={ABS_FILL} pointerEvents="none">
             {profile.bannerUri ? (
               <>
                 {/* 16:9 across the top, fading into the page behind the avatar and stats. */}
-                <View style={[styles.bannerFrame, { height: insets.top + 240 }]}>
+                <View style={[styles.bannerFrame, { height: topInset + 240 }]}>
                   <Image source={{ uri: profile.bannerUri }} style={styles.bannerImage} resizeMode="cover" />
                   {/* Darkens the photo so the name and buttons stay readable. */}
                   <View style={styles.bannerShade} />
@@ -370,6 +370,7 @@ const createStyles = (c: ThemeColors) =>
     zIndex: 50, // above the nav bar (40)
     backgroundColor: c.base,
   },
+  tab: { flex: 1, backgroundColor: c.base },
   scroll: { flex: 1 },
   hero: {
     paddingHorizontal: 16,
