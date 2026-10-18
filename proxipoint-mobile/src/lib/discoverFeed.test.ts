@@ -5,8 +5,12 @@ import {
   formatCount,
   formatDistance,
   groupByDay,
+  inRange,
   recommendChannels,
+  searchChannels,
+  searchPoints,
   splitFeed,
+  suggestTags,
   type FeedNode,
 } from './discoverFeed';
 import type { Channel } from './channels';
@@ -98,4 +102,45 @@ test('formatting helpers', () => {
   assert.equal(formatCount(386), '386');
   assert.equal(formatCount(1240), '1.2k');
   assert.equal(formatCount(2000), '2k');
+});
+
+// ---- Search ----
+
+const CENTER = { latitude: 40.05, longitude: -105.05 };
+// ~1.1 km per 0.01° latitude
+const placed: FeedNode[] = [
+  { id: 'jazz-near', title: 'Late-Night Jazz Jam', venue: 'The Rusty Anchor', tags: ['#LiveMusic', '#Jazz'], status: 'Starts in 3h', startsAt: at(180), latitude: 40.051, longitude: -105.05 },
+  { id: 'music-live', title: 'Late Set', tags: ['#LiveMusic'], status: 'LIVE NOW', endsAt: at(60), latitude: 40.06, longitude: -105.05 },
+  { id: 'music-far', title: 'Big Show', tags: ['#LiveMusic'], status: 'Tomorrow', startsAt: at(1500), latitude: 40.2, longitude: -105.05 },
+  { id: 'tacos', title: 'Taco Tuesday Truck Rally', tags: ['#FoodTrucks'], status: 'Starts in 15m', startsAt: at(15), latitude: 40.052, longitude: -105.05 },
+];
+
+test('searchPoints matches anywhere in tags, titles and venues; live first, then closest', () => {
+  assert.deepEqual(searchPoints(placed, '#live', CENTER, null, NOW).map((n) => n.id), ['music-live', 'jazz-near', 'music-far']);
+  assert.deepEqual(searchPoints(placed, 'music', CENTER, null, NOW).map((n) => n.id), ['music-live', 'jazz-near', 'music-far']);
+  assert.deepEqual(searchPoints(placed, 'taco', CENTER, null, NOW).map((n) => n.id), ['tacos']);
+  assert.deepEqual(searchPoints(placed, 'jazz anchor', CENTER, null, NOW).map((n) => n.id), ['jazz-near']);
+  assert.deepEqual(searchPoints(placed, 'jazz tacos', CENTER, null, NOW), []);
+  assert.deepEqual(searchPoints(placed, '', CENTER, null, NOW), []);
+});
+
+test('searchPoints respects the range', () => {
+  assert.deepEqual(searchPoints(placed, 'livemusic', CENTER, 5000, NOW).map((n) => n.id), ['music-live', 'jazz-near']);
+  assert.equal(inRange(CENTER, { id: 'x' }, 1000), true); // no coordinates: kept
+});
+
+test('suggestTags: tags containing the last word, prefix matches first', () => {
+  assert.deepEqual(suggestTags(placed, 'li'), [{ tag: '#LiveMusic', count: 3 }]);
+  assert.deepEqual(suggestTags(placed, 'music'), [{ tag: '#LiveMusic', count: 3 }]);
+  assert.deepEqual(suggestTags(placed, 'j').map((s) => s.tag), ['#Jazz']);
+  assert.deepEqual(suggestTags(placed, 'f', ['#Fishing']), [
+    { tag: '#FoodTrucks', count: 1 },
+    { tag: '#Fishing', count: 0 },
+  ]);
+});
+
+test('searchChannels matches names and tags', () => {
+  const list = [channel('a', ['#Hiking']), { ...channel('b', ['#Pickleball']), name: 'Dink Crew' }];
+  assert.deepEqual(searchChannels(list, 'hik').map((c) => c.id), ['a']);
+  assert.deepEqual(searchChannels(list, 'dink').map((c) => c.id), ['b']);
 });

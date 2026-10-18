@@ -1,4 +1,5 @@
 import { isLiveNode } from './liveStatus';
+import { calculateDistanceMeters } from './locationFilter';
 import type { Channel } from './channels';
 
 /**
@@ -20,6 +21,8 @@ export interface FeedNode {
   distanceMeters?: number;
   isRsvpd?: boolean;
   attendeeCount?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 /** Points starting within this many minutes count as "nearby now" rather than "upcoming". */
@@ -160,4 +163,114 @@ export function groupByDay<T extends FeedNode>(nodes: T[], now = Date.now()): Ar
     else groups.push({ label, items: [node] });
   }
   return groups;
+}
+
+// ---- Search --------------------------------------------------------------------------------
+
+/** Range choices for Discover search, in meters (null = any distance). */
+export const SEARCH_RANGES: Array<{ label: string; meters: number | null }> = [
+  { label: '1 km', meters: 1000 },
+  { label: '5 km', meters: 5000 },
+  { label: '10 km', meters: 10000 },
+  { label: '25 km', meters: 25000 },
+  { label: 'Any', meters: null },
+];
+export const DEFAULT_RANGE_METERS = 10000;
+
+export interface SearchCenter {
+  latitude: number;
+  longitude: number;
+}
+
+/** Meters from the search center, or null when the Point has no coordinates. */
+export function distanceFrom(center: SearchCenter, node: FeedNode): number | null {
+  if (typeof node.latitude !== 'number' || typeof node.longitude !== 'number') return null;
+  return calculateDistanceMeters(center.latitude, center.longitude, node.latitude, node.longitude);
+}
+
+/** Inside the range (null range = anywhere). Points without coordinates count as inside. */
+export function inRange(center: SearchCenter, node: FeedNode, rangeMeters: number | null): boolean {
+  if (rangeMeters == null) return true;
+  const d = distanceFrom(center, node);
+  return d == null || d <= rangeMeters;
+}
+
+/** Search words: "#Live music" → ["live", "music"]. */
+function terms(query: string): string[] {
+  return query
+    .toLowerCase()
+    .split(/[\s,]+/)
+    .map((word) => word.replace(/^#+/, '').trim())
+    .filter(Boolean);
+}
+
+/**
+ * Points matching the search, closest to the center first.
+ * Every word has to appear in one of its #tags (so "music" finds #LiveMusic), its title or its venue.
+ */
+export function searchPoints<T extends FeedNode>(
+  nodes: Record<string, T> | T[] | null | undefined,
+  query: string,
+  center: SearchCenter,
+  rangeMeters: number | null,
+  now = Date.now(),
+  allow: (node: T) => boolean = () => true,
+): T[] {
+  const words = terms(query);
+  if (!words.length) return [];
+  const list = (Array.isArray(nodes) ? nodes : Object.values(nodes ?? {})).filter(
+    (node) => node && node.origin !== 'local' && !isEnded(node, now) && allow(node) && inRange(center, node, rangeMeters),
+  );
+  const matches = list.filter((node) => {
+    const tags = nodeTags(node);
+    const text = `${node.title ?? ''} ${node.venue ?? ''}`.toLowerCase();
+    return words.every((word) => tags.some((tag) => tag.includes(word)) || text.includes(word));
+  });
+  const d = (node: T) => distanceFrom(center, node) ?? Infinity;
+  return matches.sort((a, b) => Number(isLiveNode(b)) - Number(isLiveNode(a)) || d(a) - d(b));
+}
+
+/**
+ * #tag suggestions for the last word typed: tags containing it, ones that start with it first,
+ * then most-used.
+ * `extra` adds tags with no Points right now (e.g. the header chips) so they can still be picked.
+ */
+export function suggestTags(
+  nodes: Record<string, FeedNode> | FeedNode[] | null | undefined,
+  query: string,
+  extra: string[] = [],
+  max = 8,
+): Array<{ tag: string; count: number }> {
+  const words = terms(query);
+  const last = words[words.length - 1];
+  if (!last) return [];
+  const counts = new Map<string, { tag: string; count: number }>();
+  const add = (raw: string, n: number) => {
+    const k = key(raw);
+    if (!k.includes(last)) return;
+    const current = counts.get(k);
+    if (current) current.count += n;
+    else counts.set(k, { tag: `#${raw.replace(/^#+/, '').trim()}`, count: n });
+  };
+  for (const node of Array.isArray(nodes) ? nodes : Object.values(nodes ?? {})) {
+    if (!node) continue;
+    const raw = [...(node.tag ? node.tag.split(/[\s,]+/) : []), ...(Array.isArray(node.tags) ? node.tags : [])];
+    [...new Map(raw.filter(Boolean).map((tag) => [key(tag), tag])).values()].forEach((tag) => add(tag, 1));
+  }
+  extra.filter((tag) => tag && tag !== 'All').forEach((tag) => add(tag, 0));
+  const starts = (s: { tag: string }) => Number(key(s.tag).startsWith(last));
+  return [...counts.values()]
+    .sort((a, b) => starts(b) - starts(a) || b.count - a.count || a.tag.localeCompare(b.tag))
+    .slice(0, max);
+}
+
+/** Channels whose name or #tags match every search word. */
+export function searchChannels(channels: Channel[], query: string): Channel[] {
+  const words = terms(query);
+  if (!words.length) return [];
+  return channels.filter((channel) => {
+    const tags = channel.tags.map(key);
+    const name = channel.name.toLowerCase();
+    return words.every((word) => tags.some((tag) => tag.includes(word)) || name.includes(word));
+  });
 }

@@ -263,6 +263,18 @@ export const DiscoverScreen: React.FC = () => {
     setTab(next);
   };
 
+  // Explore Map filtered to one #tag (from Discover search or Channels alerts).
+  const showTagOnMap = (tag: string) => {
+    // Make sure the chip exists in the header, then filter by it.
+    addTag(tag);
+    const known = useDiscoveryStore.getState().tags.find(
+      (t: string) => t.replace(/^#+/, '').toLowerCase() === tag.replace(/^#+/, '').toLowerCase(),
+    );
+    setSelectedTag(known ?? tag);
+    setLiveOnly(false);
+    goTo('map');
+  };
+
   const handleDropped = (point: DroppedPoint) => {
     setMyDrops((current) => [point, ...current.filter((drop) => drop.id !== point.id)]);
     // Give the new pin its full details (times, all #tags) so the calendar and alerts see it.
@@ -309,6 +321,9 @@ export const DiscoverScreen: React.FC = () => {
             setChannelsSegment('manage');
           }}
           onOpenMap={() => goTo('map')}
+          // Same area picker as the map's city pill, so Discover and the map stay on one place.
+          onPickLocation={() => setCityPickerOpen(true)}
+          onShowTagOnMap={showTagOnMap}
         />
       ) : null}
 
@@ -413,16 +428,7 @@ export const DiscoverScreen: React.FC = () => {
           onOpenPoint={openHostPoint}
           onToggleRsvp={(id) => toggleRsvp(id)}
           onEditTags={() => goTo('profile')}
-          onOpenTag={(tag) => {
-            // Make sure the chip exists in the header, then filter Explore Map by it.
-            addTag(tag);
-            const known = useDiscoveryStore.getState().tags.find(
-              (t: string) => t.replace(/^#+/, '').toLowerCase() === tag.replace(/^#+/, '').toLowerCase(),
-            );
-            setSelectedTag(known ?? tag);
-            setLiveOnly(false);
-            goTo('map');
-          }}
+          onOpenTag={showTagOnMap}
         />
       ) : null}
 

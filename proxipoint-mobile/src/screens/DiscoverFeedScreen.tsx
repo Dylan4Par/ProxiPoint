@@ -1,17 +1,25 @@
-import React, { useMemo } from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Check, ChevronRight, Map as MapIcon, Users } from 'lucide-react-native';
+import React, { useMemo, useState } from 'react';
+import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Check, ChevronDown, ChevronRight, Hash, Map as MapIcon, MapPin, Search, Users, X } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { useBoosts } from '../lib/boost';
 import { setJoined, useChannels } from '../lib/channels';
 import {
+  DEFAULT_RANGE_METERS,
+  SEARCH_RANGES,
+  distanceFrom,
   formatCount,
   formatDistance,
   groupByDay,
+  inRange,
   recommendChannels,
+  searchChannels,
+  searchPoints,
   splitFeed,
+  suggestTags,
   timeLabel,
   type ChannelPick,
+  type FeedNode,
 } from '../lib/discoverFeed';
 import { isLiveNode } from '../lib/liveStatus';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
@@ -20,8 +28,10 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeConte
 
 interface DiscoverFeedScreenProps {
   interestTags: string[];
-  /** e.g. "Erie, CO" — the area the feed is about. */
+  /** e.g. "Erie, CO" — the area Discover (and Explore Map) is looking at. */
   placeLabel: string;
+  /** Pick a different area (the same city picker Explore Map uses). */
+  onPickLocation: () => void;
   /** Show the Point on Explore Map with its details open. */
   onOpenPoint: (id: string) => void;
   onToggleRsvp: (id: string) => void;
@@ -30,32 +40,49 @@ interface DiscoverFeedScreenProps {
   /** Channels tab, on the list of channels to join. */
   onBrowseChannels: () => void;
   onOpenMap: () => void;
+  /** Explore Map filtered to this #tag. */
+  onShowTagOnMap: (tag: string) => void;
 }
 
+const tagKey = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
+
 /**
- * Discover tab: a feed of channels to join, what's happening near you now, and what's coming up.
- * Built from the same Points as Explore Map (useDiscoveryStore), so the two always agree.
+ * Discover tab: a search bar (#tags or words, an area and a range), then a feed of channels to
+ * join, what's happening nearby now, and what's coming up. Built from the same Points as
+ * Explore Map (useDiscoveryStore), so the two always agree. The range applies to the feed too.
  */
 export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   interestTags,
   placeLabel,
+  onPickLocation,
   onOpenPoint,
   onToggleRsvp,
   onOpenChannel,
   onBrowseChannels,
   onOpenMap,
+  onShowTagOnMap,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, DiscoveryNode>;
+  const viewPlace = useDiscoveryStore((state) => state.viewPlace);
+  const headerTags = useDiscoveryStore((state) => state.tags) as string[];
   const channels = useChannels();
   const now = useBoosts(); // ticks every 30s, so "live" and "starts in" stay current
   const moderation = useModeration();
 
+  const [query, setQuery] = useState('');
+  const [rangeMeters, setRangeMeters] = useState<number | null>(DEFAULT_RANGE_METERS);
+  const center = { latitude: viewPlace.latitude, longitude: viewPlace.longitude };
+  const searching = query.trim().length > 0;
+  const rangeLabel = SEARCH_RANGES.find((r) => r.meters === rangeMeters)?.label ?? 'Any';
+  const allowed = (node: FeedNode) => isNodeAllowed(node) && inRange(center, node, rangeMeters);
+
+  // ---- Feed (no search) ----
   const { nearby, upcoming } = useMemo(
-    () => splitFeed(nodes, now, isNodeAllowed),
+    () => splitFeed(nodes, now, allowed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, now, moderation],
+    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters],
   );
   const upcomingDays = useMemo(() => groupByDay(upcoming, now), [upcoming, now]);
   const channelPicks = useMemo(
@@ -63,79 +90,247 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     [channels, nodes, interestTags, now],
   );
 
+  // ---- Search ----
+  const results = useMemo(
+    () => (searching ? searchPoints(nodes, query, center, rangeMeters, now, isNodeAllowed) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [searching, nodes, query, viewPlace.latitude, viewPlace.longitude, rangeMeters, now, moderation],
+  );
+  const suggestions = useMemo(
+    () => (searching ? suggestTags(nodes, query, headerTags) : []),
+    [searching, nodes, query, headerTags],
+  );
+  const channelResults = useMemo(() => (searching ? searchChannels(channels, query) : []), [searching, channels, query]);
+  // A one-word search that is exactly a #tag can be shown on the map with that tag's filter.
+  const words = query.trim().split(/\s+/);
+  const exactTag =
+    words.length === 1 ? suggestions.find((s) => tagKey(s.tag) === tagKey(words[0]))?.tag ?? null : null;
+
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} testID="discover-feed">
+    <ScrollView
+      style={styles.scroll}
+      contentContainerStyle={styles.content}
+      keyboardShouldPersistTaps="handled"
+      testID="discover-feed"
+    >
       <View style={styles.header}>
         <Text style={styles.title}>Discover</Text>
         <TouchableOpacity
           style={styles.mapBtn}
           onPress={onOpenMap}
           accessibilityRole="button"
-          accessibilityLabel={`Open Explore Map${placeLabel ? ` for ${placeLabel}` : ''}`}
+          accessibilityLabel="Open Explore Map"
           testID="discover-open-map"
         >
           <MapIcon size={14} color={c.accent} strokeWidth={2.5} />
-          <Text style={styles.mapBtnText} numberOfLines={1}>
-            {placeLabel || 'Map'}
-          </Text>
+          <Text style={styles.mapBtnText}>Map</Text>
         </TouchableOpacity>
       </View>
 
-      {/* ---- Channel recommendations ---- */}
-      {channelPicks.length ? (
+      {/* ---- Search bar ---- */}
+      <View style={styles.searchBox}>
+        <Search size={18} color={c.textMuted} strokeWidth={2.25} />
+        <TextInput
+          style={styles.searchInput}
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search #tags or events"
+          placeholderTextColor={c.textFaint}
+          autoCapitalize="none"
+          autoCorrect={false}
+          returnKeyType="search"
+          accessibilityLabel="Search Discover"
+          testID="discover-search"
+        />
+        {searching ? (
+          <TouchableOpacity onPress={() => setQuery('')} hitSlop={10} accessibilityRole="button" accessibilityLabel="Clear search">
+            <X size={18} color={c.textMuted} strokeWidth={2.25} />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {/* ---- Where and how far ---- */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.filterScroll}
+        contentContainerStyle={styles.filterRow}
+        keyboardShouldPersistTaps="handled"
+      >
+        <TouchableOpacity
+          style={styles.placeChip}
+          onPress={onPickLocation}
+          accessibilityRole="button"
+          accessibilityLabel={`Searching near ${placeLabel || 'your area'}. Change location`}
+          testID="discover-location"
+        >
+          <MapPin size={14} color={c.accent} strokeWidth={2.5} />
+          <Text style={styles.placeChipText} numberOfLines={1}>
+            {placeLabel || 'Your area'}
+          </Text>
+          <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
+        </TouchableOpacity>
+        {SEARCH_RANGES.map((range) => {
+          const active = range.meters === rangeMeters;
+          return (
+            <TouchableOpacity
+              key={range.label}
+              style={[styles.rangeChip, active && styles.rangeChipActive]}
+              onPress={() => setRangeMeters(range.meters)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: active }}
+              accessibilityLabel={range.meters == null ? 'Any distance' : `Within ${range.label}`}
+              testID={`discover-range-${range.label.replace(' ', '')}`}
+            >
+              <Text style={[styles.rangeText, active && styles.rangeTextActive]}>{range.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+
+      {searching ? (
         <>
-          <SectionHeader label="CHANNELS FOR YOU" action="See all" onAction={onBrowseChannels} />
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.channelRow}
-            style={styles.channelScroll}
-          >
-            {channelPicks.map((pick) => (
-              <ChannelCard key={pick.channel.id} pick={pick} onOpen={() => onOpenChannel(pick.channel.id)} />
-            ))}
-          </ScrollView>
-        </>
-      ) : null}
+          {/* #tag suggestions for what's typed */}
+          {suggestions.length && !exactTag ? (
+            <View style={styles.suggestRow}>
+              {suggestions.map((s) => (
+                <TouchableOpacity
+                  key={s.tag}
+                  style={styles.suggestChip}
+                  onPress={() => setQuery(s.tag)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Search ${s.tag}`}
+                >
+                  <Hash size={12} color={c.accent} strokeWidth={2.5} />
+                  <Text style={styles.suggestText}>{s.tag.replace(/^#/, '')}</Text>
+                  {s.count ? <Text style={styles.suggestCount}>{s.count}</Text> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
 
-      {/* ---- Nearby now ---- */}
-      <SectionHeader label="HAPPENING NEARBY" action="Map" onAction={onOpenMap} />
-      {nearby.length ? (
-        <View style={styles.list}>
-          {nearby.map((node) => (
-            <EventRow
-              key={node.id}
-              node={node as DiscoveryNode}
-              onOpen={() => onOpenPoint(node.id)}
-              onToggleRsvp={() => onToggleRsvp(node.id)}
-            />
-          ))}
-        </View>
-      ) : (
-        <Text style={styles.emptyText}>Nothing live or starting in the next two hours around here.</Text>
-      )}
-
-      {/* ---- Upcoming ---- */}
-      <SectionHeader label="UPCOMING" />
-      {upcomingDays.length ? (
-        upcomingDays.map((group) => (
-          <View key={group.label} style={styles.dayGroup}>
-            <Text style={styles.dayLabel}>{group.label}</Text>
+          <SectionHeader
+            label={`${results.length} ${results.length === 1 ? 'POINT' : 'POINTS'}${
+              rangeMeters == null ? '' : ` WITHIN ${rangeLabel.toUpperCase()}`
+            }`}
+            action={exactTag ? 'Show on map' : undefined}
+            onAction={exactTag ? () => onShowTagOnMap(exactTag) : undefined}
+          />
+          {results.length ? (
             <View style={styles.list}>
-              {group.items.map((node) => (
+              {results.map((node) => (
                 <EventRow
                   key={node.id}
-                  node={node as DiscoveryNode}
-                  showTime
+                  node={node}
+                  distanceMeters={distanceFrom(center, node)}
                   onOpen={() => onOpenPoint(node.id)}
                   onToggleRsvp={() => onToggleRsvp(node.id)}
                 />
               ))}
             </View>
-          </View>
-        ))
+          ) : (
+            <View style={styles.noResults}>
+              <Text style={styles.emptyText}>
+                No Points match “{query.trim()}”
+                {rangeMeters == null ? '' : ` within ${rangeLabel} of ${placeLabel || 'here'}`}.
+              </Text>
+              {rangeMeters != null ? (
+                <TouchableOpacity onPress={() => setRangeMeters(null)} accessibilityRole="button" style={styles.widenBtn}>
+                  <Text style={styles.widenText}>Search any distance</Text>
+                </TouchableOpacity>
+              ) : null}
+            </View>
+          )}
+
+          {channelResults.length ? (
+            <>
+              <SectionHeader label="CHANNELS" />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.channelRow}
+                style={styles.channelScroll}
+                keyboardShouldPersistTaps="handled"
+              >
+                {channelResults.map((channel) => (
+                  <ChannelCard
+                    key={channel.id}
+                    pick={{
+                      channel,
+                      matched: [],
+                      activeCount: 0,
+                      reason: channel.tags.slice(0, 2).join(' '),
+                      score: 0,
+                    }}
+                    onOpen={() => onOpenChannel(channel.id)}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+        </>
       ) : (
-        <Text style={styles.emptyText}>No upcoming Points yet. Check back soon, or drop one from the map.</Text>
+        <>
+          {/* ---- Channel recommendations ---- */}
+          {channelPicks.length ? (
+            <>
+              <SectionHeader label="CHANNELS FOR YOU" action="See all" onAction={onBrowseChannels} />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.channelRow}
+                style={styles.channelScroll}
+              >
+                {channelPicks.map((pick) => (
+                  <ChannelCard key={pick.channel.id} pick={pick} onOpen={() => onOpenChannel(pick.channel.id)} />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+
+          {/* ---- Nearby now ---- */}
+          <SectionHeader label="HAPPENING NEARBY" action="Map" onAction={onOpenMap} />
+          {nearby.length ? (
+            <View style={styles.list}>
+              {nearby.map((node) => (
+                <EventRow
+                  key={node.id}
+                  node={node as DiscoveryNode}
+                  onOpen={() => onOpenPoint(node.id)}
+                  onToggleRsvp={() => onToggleRsvp(node.id)}
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>
+              Nothing live or starting in the next two hours
+              {rangeMeters == null ? ' around here' : ` within ${rangeLabel}`}.
+            </Text>
+          )}
+
+          {/* ---- Upcoming ---- */}
+          <SectionHeader label="UPCOMING" />
+          {upcomingDays.length ? (
+            upcomingDays.map((group) => (
+              <View key={group.label} style={styles.dayGroup}>
+                <Text style={styles.dayLabel}>{group.label}</Text>
+                <View style={styles.list}>
+                  {group.items.map((node) => (
+                    <EventRow
+                      key={node.id}
+                      node={node as DiscoveryNode}
+                      showTime
+                      onOpen={() => onOpenPoint(node.id)}
+                      onToggleRsvp={() => onToggleRsvp(node.id)}
+                    />
+                  ))}
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.emptyText}>No upcoming Points in range yet. Try a wider range, or drop one from the map.</Text>
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -208,15 +403,17 @@ const EventRow: React.FC<{
   node: DiscoveryNode;
   /** Upcoming list: show the start time instead of the status text. */
   showTime?: boolean;
+  /** Distance to show instead of the distance from you (search: from the searched area). */
+  distanceMeters?: number | null;
   onOpen: () => void;
   onToggleRsvp: () => void;
-}> = ({ node, showTime = false, onOpen, onToggleRsvp }) => {
+}> = ({ node, showTime = false, distanceMeters, onOpen, onToggleRsvp }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const live = isLiveNode(node);
   const tag = node.tags?.[0] ?? node.tag;
   const where = node.locationPrivacy?.regionName ? `In ${node.locationPrivacy.regionName}` : node.venue;
-  const distance = formatDistance(node.distanceMeters);
+  const distance = formatDistance(distanceMeters ?? node.distanceMeters);
   const when = live ? 'LIVE NOW' : showTime && node.startsAt ? timeLabel(node.startsAt) : node.status;
 
   return (
@@ -294,6 +491,68 @@ const createStyles = (c: ThemeColors) =>
       backgroundColor: c.accentTint,
     },
     mapBtnText: { color: c.accent, fontSize: 12, fontWeight: '800' },
+    searchBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 12,
+      paddingHorizontal: 14,
+      minHeight: 46,
+      borderRadius: 23,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    searchInput: { flex: 1, color: c.text, fontSize: 15, paddingVertical: 10 },
+    filterScroll: { marginHorizontal: -16, marginTop: 10 },
+    filterRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
+    placeChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      maxWidth: 180,
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+      backgroundColor: c.accentTint,
+    },
+    placeChipText: { color: c.accent, fontSize: 13, fontWeight: '800', flexShrink: 1 },
+    rangeChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 16,
+      backgroundColor: c.border,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    rangeChipActive: { backgroundColor: c.accentDeep, borderColor: c.accent },
+    rangeText: { color: c.textMuted, fontSize: 13, fontWeight: '700' },
+    rangeTextActive: { color: c.white, fontWeight: '800' },
+    suggestRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 14 },
+    suggestChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 10,
+      paddingVertical: 6,
+      borderRadius: 14,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+    },
+    suggestText: { color: c.accent, fontSize: 13, fontWeight: '700' },
+    suggestCount: { color: c.textFaint, fontSize: 11, fontWeight: '700', marginLeft: 3 },
+    noResults: { gap: 10, alignItems: 'flex-start' },
+    widenBtn: {
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+    },
+    widenText: { color: c.accent, fontSize: 13, fontWeight: '800' },
     sectionHeader: {
       flexDirection: 'row',
       alignItems: 'center',
