@@ -24,7 +24,7 @@ export interface ReportTarget {
 }
 
 /**
- * Report a Point, recap, photo or someone's profile: pick a reason, add an optional note, optionally block the
+ * Report a Point, recap, photo, channel post, comment or someone's profile: pick a reason, add an optional note, optionally block the
  * person too. The content is hidden for you straight away.
  */
 export const ReportSheet: React.FC<{
@@ -66,7 +66,17 @@ export const ReportSheet: React.FC<{
   };
 
   const what =
-    target.type === 'recap' ? 'recap' : target.type === 'photo' ? 'photo' : target.type === 'profile' ? 'profile' : 'Point';
+    target.type === 'recap'
+      ? 'recap'
+      : target.type === 'photo'
+        ? 'photo'
+        : target.type === 'profile'
+          ? 'profile'
+          : target.type === 'post'
+            ? 'post'
+            : target.type === 'comment'
+              ? 'comment'
+              : 'Point';
 
   return (
     <Modal visible transparent animationType="slide" onRequestClose={onClose}>

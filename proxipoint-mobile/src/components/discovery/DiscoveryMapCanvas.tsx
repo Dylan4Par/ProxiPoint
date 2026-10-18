@@ -19,7 +19,7 @@ import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
-import { getChannel, usePosts, type ChannelPost } from '../../lib/channels';
+import { getChannel, useVisiblePosts, type ChannelPost } from '../../lib/channels';
 import { isPinLive } from '../../lib/postRanking';
 import { absorbIntoMarkers, clusterPins, nudgeOffMarkers } from '../../lib/postPins';
 import { PostPickSheet } from './PostPickSheet';
@@ -143,7 +143,7 @@ export const DiscoveryMapCanvas: React.FC<{
 
   // Channel posts pinned to a place, while their pin lasts. Same #tag chip as the Points
   // (matched against the post's channel tags); hidden on the RSVP'd view, which is about your plans.
-  const posts = usePosts();
+  const posts = useVisiblePosts();
   const tagKey = (tag: string) => tag.replace(/^#+/, '').toLowerCase();
   const postPins =
     activeTab === 'RSVPd'

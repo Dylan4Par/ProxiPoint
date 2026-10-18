@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { isAuthoredAllowed, useModeration } from './moderation';
 
 /**
  * Channels: groups people join, like subreddits for a local scene. Each channel has its own
@@ -56,9 +57,12 @@ export interface ChannelPost {
   /** Pinned to the map at this place, until pinnedUntil. The post itself stays in the feed. */
   place?: PostPlace | null;
   pinnedUntil?: string | null;
-  /** Photo URLs, up to 4 (uploaded first, then sent with the post). */
+  /** Photo URLs, up to POST_PHOTO_LIMIT (uploaded first, then sent with the post). */
   photos?: string[];
 }
+
+/** Most photos on one post. */
+export const POST_PHOTO_LIMIT = 4;
 
 export interface PostComment {
   id: string;
@@ -341,6 +345,7 @@ export function addPost(
   author: string,
   body: string,
   pin: { place: PostPlace; hours: number } | null = null,
+  photos: string[] = [],
 ): ChannelPost {
   const post: ChannelPost = {
     id: `p-${Date.now()}`,
@@ -352,6 +357,7 @@ export function addPost(
     voted: true,
     place: pin ? pin.place : null,
     pinnedUntil: pin ? new Date(Date.now() + pin.hours * 3600000).toISOString() : null,
+    photos: photos.slice(0, POST_PHOTO_LIMIT),
   };
   posts = [post, ...posts];
   changed();
@@ -400,4 +406,21 @@ export function usePosts(): ChannelPost[] {
 /** All comments; re-renders on new comments and votes. */
 export function useComments(): PostComment[] {
   return useStore(() => comments);
+}
+
+/**
+ * Posts you should see: without ones you reported or by people you blocked. Re-renders on new
+ * posts, votes, reports and blocks. Use this (not usePosts) anywhere posts are shown.
+ */
+export function useVisiblePosts(): ChannelPost[] {
+  const all = usePosts();
+  useModeration();
+  return all.filter(isAuthoredAllowed);
+}
+
+/** Comments you should see (same rules as useVisiblePosts). */
+export function useVisibleComments(): PostComment[] {
+  const all = useComments();
+  useModeration();
+  return all.filter(isAuthoredAllowed);
 }

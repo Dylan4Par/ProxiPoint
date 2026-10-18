@@ -1,20 +1,24 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowBigUp, Check, ChevronLeft, ChevronRight, CornerDownRight, MapPin, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react-native';
+import { ArrowBigUp, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, ImagePlus, MapPin, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react-native';
+import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
+import { ReportSheet, type ReportTarget } from '../components/safety/ReportSheet';
+import { pickRecapPhotos } from '../lib/profilePhotos';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { ActivityScreen } from './ActivityScreen';
 import { timeAgo } from '../lib/activity';
 import { useBoosts } from '../lib/boost';
 import {
   addComment,
+  POST_PHOTO_LIMIT,
   addPost,
   setJoined,
   toggleCommentVote,
   toggleVote,
   useChannels,
-  useComments,
-  usePosts,
+  useVisibleComments,
+  useVisiblePosts,
   type Channel,
   type ChannelPost,
   type PostComment,
@@ -69,6 +73,10 @@ interface ChannelsScreenProps {
   onOpenSearch: () => void;
 }
 
+/** Short label for the report sheet: the start of the text. */
+const snippet = (text: string) => (text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text);
+const sameHandle = (a: string, b: string) => a.replace(/^@+/, '').toLowerCase() === b.replace(/^@+/, '').toLowerCase();
+
 const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
   { id: 'feed', label: 'Feed' },
   { id: 'alerts', label: 'Alerts' },
@@ -87,7 +95,7 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const channels = useChannels();
-  const posts = usePosts();
+  const posts = useVisiblePosts();
   const open = channelId ? channels.find((channel) => channel.id === channelId) ?? null : null;
   const openPost = postId ? posts.find((post) => post.id === postId) ?? null : null;
 
@@ -101,6 +109,11 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
     });
     return () => sub.remove();
   }, [postId, channelId, onOpenChannel, onOpenPost]);
+
+  // The open post was reported (or its author blocked): close its page.
+  useEffect(() => {
+    if (postId && !openPost) onOpenPost(null);
+  }, [postId, openPost, onOpenPost]);
 
   if (openPost) {
     return (
@@ -179,11 +192,12 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   onOpenPost,
   onShowPostOnMap,
   myLocation,
+  myHandle,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
-  const posts = usePosts();
-  const comments = useComments();
+  const posts = useVisiblePosts();
+  const comments = useVisibleComments();
   const now = useBoosts();
   const [sort, setSort] = useState<PostSort>('hot');
   const commentCounts = useMemo(() => countComments(comments), [comments]);
@@ -247,6 +261,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
         <View style={styles.list}>
           {feed.map((post) => (
             <PostCard
+              myHandle={myHandle}
               key={post.id}
               post={post}
               now={now}
@@ -352,10 +367,10 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
-  const comments = useComments();
+  const comments = useVisibleComments();
   const commentCounts = useMemo(() => countComments(comments), [comments]);
   const [sort, setSort] = useState<PostSort>('hot');
-  const allPosts = usePosts();
+  const allPosts = useVisiblePosts();
   const now = useBoosts();
   const posts = sortPosts(
     allPosts.filter((post) => post.channelId === channel.id),
@@ -382,13 +397,35 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
     .map((node): PostPlace => ({ latitude: node.latitude, longitude: node.longitude, label: node.venue, pointId: node.id }));
   const nearMe: PostPlace = { ...snapToBlock(myLocation), label: 'Near you' };
   const placeKey = (place: PostPlace | null) => (place ? place.pointId ?? place.label : '');
+  // Photos: same picker as recaps (photo rules first, multi-select, shrunk for upload).
+  const [photos, setPhotos] = useState<string[]>([]);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState('');
+  const addPhotos = async () => {
+    if (photoBusy || photos.length >= POST_PHOTO_LIMIT) return;
+    setPhotoBusy(true);
+    setPhotoError('');
+    try {
+      const picked = await pickRecapPhotos(POST_PHOTO_LIMIT - photos.length);
+      setPhotos((current) => [...current, ...picked].slice(0, POST_PHOTO_LIMIT));
+    } catch {
+      setPhotoError('Couldn’t load those photos. Try different ones.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+  // A post needs text or at least one photo.
+  const canPost = Boolean(draft.trim() || photos.length);
 
   const post = () => {
-    if (!draft.trim()) return;
-    addPost(channel.id, myHandle, draft, pinOn && pinPlace ? { place: pinPlace, hours: pinHours } : null);
+    if (!canPost) return;
+    // Server side: upload the photos first, then POST the post with their URLs.
+    addPost(channel.id, myHandle, draft, pinOn && pinPlace ? { place: pinPlace, hours: pinHours } : null, photos);
     setDraft('');
     setPinOn(false);
     setPinPlace(null);
+    setPhotos([]);
+    setPhotoError('');
   };
 
   return (
@@ -474,6 +511,26 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
             accessibilityLabel={`Write a post in ${channel.name}`}
             testID="channel-composer"
           />
+          {photos.length ? (
+            <View style={styles.draftPhotos}>
+              {photos.map((uri) => (
+                <View key={uri} style={styles.draftPhoto}>
+                  <Image source={{ uri }} style={styles.photoImage} resizeMode="cover" />
+                  <TouchableOpacity
+                    style={styles.draftPhotoRemove}
+                    onPress={() => setPhotos((current) => current.filter((item) => item !== uri))}
+                    accessibilityRole="button"
+                    accessibilityLabel="Remove photo"
+                    hitSlop={8}
+                  >
+                    <X size={12} color="#ffffff" strokeWidth={3} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+            </View>
+          ) : null}
+          {photos.length ? <PhotoRulesNote /> : null}
+          {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
           {pinOn ? (
             <View style={styles.pinOptions}>
               <Text style={styles.pinOptionsLabel}>WHERE</Text>
@@ -517,6 +574,17 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
           ) : null}
           <View style={styles.composerActions}>
             <TouchableOpacity
+              style={[styles.photoBtn, photos.length >= POST_PHOTO_LIMIT && styles.postBtnDisabled]}
+              onPress={() => void addPhotos()}
+              disabled={photoBusy || photos.length >= POST_PHOTO_LIMIT}
+              accessibilityRole="button"
+              accessibilityLabel={`Add photos (${photos.length} of ${POST_PHOTO_LIMIT})`}
+              testID="channel-add-photos"
+            >
+              <ImagePlus size={16} color={c.accent} strokeWidth={2.25} />
+              {photos.length ? <Text style={styles.photoBtnText}>{photos.length}/{POST_PHOTO_LIMIT}</Text> : null}
+            </TouchableOpacity>
+            <TouchableOpacity
               style={[styles.pinToggle, pinOn && styles.pinToggleOn]}
               onPress={() => {
                 setPinOn((on) => !on);
@@ -533,9 +601,9 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.postBtn, !draft.trim() && styles.postBtnDisabled]}
+              style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
               onPress={post}
-              disabled={!draft.trim()}
+              disabled={!canPost}
               accessibilityRole="button"
               testID="channel-post"
             >
@@ -551,6 +619,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
         <View style={styles.list}>
           {posts.map((item) => (
             <PostCard
+              myHandle={myHandle}
               key={item.id}
               post={item}
               now={now}
@@ -608,9 +677,13 @@ const PostCard: React.FC<{
   /** Opens the post page with its comments. Left out on the post page itself. */
   onOpen?: () => void;
   onShowOnMap?: () => void;
-}> = ({ post, now, commentCount, distanceMeters = null, channel, onOpenChannel, onOpen, onShowOnMap }) => {
+  /** You: your own posts get no Report button. */
+  myHandle: string;
+}> = ({ post, now, commentCount, distanceMeters = null, channel, onOpenChannel, onOpen, onShowOnMap, myHandle }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
+  const mine = sameHandle(post.author, myHandle);
   const pinLeft = pinTimeLeft(post, now);
   const distance = formatDistance(distanceMeters ?? undefined);
   return (
@@ -628,7 +701,23 @@ const PostCard: React.FC<{
           {post.author} · {timeAgo(post.createdAt, now)}
           {distance ? ` · ${distance}` : ''}
         </Text>
+        {mine ? null : (
+          <TouchableOpacity
+            style={styles.reportBtn}
+            onPress={() =>
+              setReporting({ type: 'post', id: post.id, label: snippet(post.body), ownerHandle: post.author })
+            }
+            accessibilityRole="button"
+            accessibilityLabel="Report this post"
+            hitSlop={10}
+            testID={`post-report-${post.id}`}
+          >
+            <Flag size={14} color={c.textFaint} strokeWidth={2} />
+          </TouchableOpacity>
+        )}
       </View>
+      {/* Reported (or its author blocked): it disappears for you right away. */}
+      <ReportSheet target={reporting} onClose={() => setReporting(null)} />
       {onOpen ? (
         <TouchableOpacity onPress={onOpen} accessibilityRole="button" accessibilityHint="Opens the comments">
           <Text style={styles.postBody}>{post.body}</Text>
@@ -792,7 +881,7 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
-  const comments = useComments();
+  const comments = useVisibleComments();
   const now = useBoosts();
   const threads = useMemo(() => buildThreads(comments, post.id), [comments, post.id]);
   const count = threads.reduce((sum, thread) => sum + 1 + thread.replies.length, 0);
@@ -821,6 +910,7 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
         </TouchableOpacity>
 
         <PostCard
+          myHandle={myHandle}
           post={post}
           now={now}
           commentCount={count}
@@ -837,11 +927,11 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
           <View style={styles.thread}>
             {threads.map(({ comment, replies }) => (
               <View key={comment.id} style={styles.threadItem}>
-                <CommentRow comment={comment} now={now} onReply={() => setReplyTo(comment)} />
+                <CommentRow myHandle={myHandle} comment={comment} now={now} onReply={() => setReplyTo(comment)} />
                 {replies.length ? (
                   <View style={styles.replies}>
                     {replies.map((reply) => (
-                      <CommentRow key={reply.id} comment={reply} now={now} onReply={() => setReplyTo(comment)} />
+                      <CommentRow key={reply.id} myHandle={myHandle} comment={reply} now={now} onReply={() => setReplyTo(comment)} />
                     ))}
                   </View>
                 ) : null}
@@ -894,9 +984,16 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
   );
 };
 
-const CommentRow: React.FC<{ comment: PostComment; now: number; onReply: () => void }> = ({ comment, now, onReply }) => {
+const CommentRow: React.FC<{ comment: PostComment; now: number; onReply: () => void; myHandle: string }> = ({
+  comment,
+  now,
+  onReply,
+  myHandle,
+}) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
+  const [reporting, setReporting] = useState<ReportTarget | null>(null);
+  const mine = sameHandle(comment.author, myHandle);
   return (
     <View style={styles.comment} testID={`comment-${comment.id}`}>
       <Text style={styles.postMeta}>
@@ -919,7 +1016,22 @@ const CommentRow: React.FC<{ comment: PostComment; now: number; onReply: () => v
           <CornerDownRight size={14} color={c.textMuted} strokeWidth={2.25} />
           <Text style={styles.footerText}>Reply</Text>
         </TouchableOpacity>
+        {mine ? null : (
+          <TouchableOpacity
+            style={styles.commentAction}
+            onPress={() =>
+              setReporting({ type: 'comment', id: comment.id, label: snippet(comment.body), ownerHandle: comment.author })
+            }
+            accessibilityRole="button"
+            accessibilityLabel={`Report comment by ${comment.author}`}
+            hitSlop={6}
+            testID={`comment-report-${comment.id}`}
+          >
+            <Flag size={13} color={c.textFaint} strokeWidth={2} />
+          </TouchableOpacity>
+        )}
       </View>
+      <ReportSheet target={reporting} onClose={() => setReporting(null)} />
     </View>
   );
 };
@@ -1064,7 +1176,34 @@ const createStyles = (c: ThemeColors) =>
       gap: 8,
     },
     composerInput: { color: c.text, fontSize: 14, minHeight: 44, textAlignVertical: 'top', padding: 4 },
-    composerActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+    composerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    photoBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      minHeight: 34,
+      minWidth: 34,
+      paddingHorizontal: 9,
+      borderRadius: 17,
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+    },
+    photoBtnText: { color: c.accent, fontSize: 12, fontWeight: '800' },
+    draftPhotos: { flexDirection: 'row', gap: 6, paddingHorizontal: 4 },
+    draftPhoto: { width: 64, height: 64, borderRadius: 10, overflow: 'hidden', backgroundColor: c.surfaceDim },
+    draftPhotoRemove: {
+      position: 'absolute',
+      top: 4,
+      right: 4,
+      width: 20,
+      height: 20,
+      borderRadius: 10,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    },
+    photoError: { color: c.red, fontSize: 12, paddingHorizontal: 4 },
     pinToggle: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -1097,6 +1236,7 @@ const createStyles = (c: ThemeColors) =>
     pinNote: { color: c.textFaint, fontSize: 11, marginTop: 2 },
     postBtn: {
       alignSelf: 'flex-end',
+      marginLeft: 'auto',
       paddingHorizontal: 18,
       minHeight: 34,
       borderRadius: 17,
@@ -1121,6 +1261,7 @@ const createStyles = (c: ThemeColors) =>
     postMeta: { color: c.textFaint, fontSize: 12, flexShrink: 1 },
     postBody: { color: c.text, fontSize: 14, lineHeight: 20 },
     postFooter: { flexDirection: 'row', gap: 8 },
+    reportBtn: { marginLeft: 'auto', paddingLeft: 6 },
     photoTile: { overflow: 'hidden', borderRadius: 12, backgroundColor: c.surfaceDim },
     photoImage: { width: '100%', height: '100%' },
     photoWide: { width: '100%', aspectRatio: 4 / 3 },

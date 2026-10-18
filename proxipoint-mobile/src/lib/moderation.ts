@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react';
  * The server should also stop blocked people from inviting you or seeing your Points.
  */
 
-export type ReportTargetType = 'point' | 'recap' | 'photo' | 'profile';
+export type ReportTargetType = 'point' | 'recap' | 'photo' | 'profile' | 'post' | 'comment';
 
 export const REPORT_REASONS = [
   { id: 'nudity', label: 'Nudity or sexual content' },
@@ -109,6 +109,14 @@ export function hostOf(node: unknown): string | null {
     if (typeof value === 'string' && value.trim()) return value.trim();
   }
   return null;
+}
+
+/**
+ * False when you reported this post or comment, or blocked whoever wrote it.
+ * Used for channel posts, their comments, and post pins on the map.
+ */
+export function isAuthoredAllowed(item: { id: string; author: string }): boolean {
+  return !isContentHidden(item.id) && !isBlocked(item.author);
 }
 
 /** False when the node was reported by you or its host is blocked. */
