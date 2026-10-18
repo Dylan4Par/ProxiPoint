@@ -10,7 +10,7 @@ import {
   TouchableWithoutFeedback,
   Image,
 } from 'react-native';
-import { CalendarDays } from 'lucide-react-native';
+import { CalendarDays, Plus } from 'lucide-react-native';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -132,6 +132,17 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tagScrollContainer}
       >
+        {/* "+" first in the row: add or remove the hashtag chips. */}
+        <TouchableOpacity
+          style={styles.addTagPill}
+          activeOpacity={0.8}
+          onPress={() => setTagModalOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel="Add or remove hashtags"
+          testID="filter-manage-tags"
+        >
+          <Plus size={16} color={c.accent} strokeWidth={2.75} />
+        </TouchableOpacity>
         {tags.map((tag) => {
           const isAll = tag === 'All';
           // "All" means no filters at all, so it isn't highlighted while Live Now is on.
@@ -168,15 +179,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             </React.Fragment>
           );
         })}
-
-        {/* Trailing ✎ Pill inside the scroll list */}
-        <TouchableOpacity
-          style={styles.trailingEditPill}
-          activeOpacity={0.8}
-          onPress={() => setTagModalOpen(true)}
-        >
-          <Text style={styles.trailingEditIcon}>✎</Text>
-        </TouchableOpacity>
       </ScrollView>
 
       {/* Tag Management Modal */}
@@ -460,20 +462,16 @@ const createStyles = (c: ThemeColors) =>
     color: c.surface,
     fontWeight: '700',
   },
-  trailingEditPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 18,
+  /* Round "+" at the start of the chip row (same height as the chips). */
+  addTagPill: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: c.border,
     borderWidth: 1,
     borderColor: c.accentDeep,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  trailingEditIcon: {
-    color: c.sky,
-    fontSize: 13,
-    fontWeight: '700',
   },
   /* Modals */
   modalBackdrop: {
