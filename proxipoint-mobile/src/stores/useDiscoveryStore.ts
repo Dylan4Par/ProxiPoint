@@ -577,6 +577,9 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
       radii: [point.radiusMeters],
       radiusMeters: point.radiusMeters,
       locationPrivacy: point.locationPrivacy ?? null,
+      // Stand-in cover photo (seeded picsum.photos stock image, the same every launch; random,
+      // not on-topic). Real Points use the photo the host picked in the Drop Point sheet.
+      coverPhotoUri: `https://picsum.photos/seed/${point.id}/600/600`,
       startsAt: start.toISOString(),
       endsAt: end.toISOString(),
       x,

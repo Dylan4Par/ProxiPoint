@@ -62,7 +62,8 @@ const channel = (id: string, tags: string[], joined = false, memberCount = 100):
 
 test('channelNodes matches tags ignoring case and #', () => {
   const found = channelNodes(channel('music', ['livemusic', '#JAZZ']), nodes);
-  assert.deepEqual(found.map((n) => n.id).sort(), ['ended', 'live-far', 'live-near', 'mine']);  // A city channel (no #tags) takes every Point.
+  assert.deepEqual(found.map((n) => n.id).sort(), ['ended', 'live-far', 'live-near', 'mine']);
+  // A city channel (no #tags) takes every Point.
   assert.equal(channelNodes(channel('city', []), nodes).length, nodes.length);
 });
 
