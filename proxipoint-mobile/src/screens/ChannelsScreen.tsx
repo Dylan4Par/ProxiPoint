@@ -146,6 +146,16 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} testID="channels-feed">
       {/* Your channels, for jumping straight to one. */}
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
+        {/* "+" first in the row: find more channels to join. */}
+        <TouchableOpacity
+          style={styles.channelChipAdd}
+          onPress={() => onChangeSegment('manage')}
+          accessibilityRole="button"
+          accessibilityLabel="Find more channels"
+          testID="channels-find-more"
+        >
+          <Plus size={18} color={c.accent} strokeWidth={2.5} />
+        </TouchableOpacity>
         {joined.map((channel) => (
           <TouchableOpacity
             key={channel.id}
@@ -160,14 +170,6 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
             </Text>
           </TouchableOpacity>
         ))}
-        <TouchableOpacity
-          style={[styles.channelChip, styles.channelChipAdd]}
-          onPress={() => onChangeSegment('manage')}
-          accessibilityRole="button"
-          accessibilityLabel="Find more channels"
-        >
-          <Plus size={16} color={c.accent} strokeWidth={2.5} />
-        </TouchableOpacity>
       </ScrollView>
 
       {feed.length ? (
@@ -484,7 +486,7 @@ const createStyles = (c: ThemeColors) =>
     emptyText: { color: c.textFaint, fontSize: 13, lineHeight: 19 },
 
     chipScroll: { marginHorizontal: -16, marginBottom: 12 },
-    chipRow: { paddingHorizontal: 16, gap: 8 },
+    chipRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
     channelChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -498,7 +500,17 @@ const createStyles = (c: ThemeColors) =>
       borderWidth: 1,
       borderColor: c.border,
     },
-    channelChipAdd: { paddingHorizontal: 10, paddingVertical: 8 },
+    // Round "+" as tall as the channel chips (22px badge + 8px halo + 4px padding each side + border).
+    channelChipAdd: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+    },
     channelChipText: { color: c.textBody, fontSize: 12, fontWeight: '700', flexShrink: 1 },
 
     row: {
