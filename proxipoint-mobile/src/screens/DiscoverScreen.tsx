@@ -26,7 +26,8 @@ import { CalendarDays, ChevronLeft, X } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
 import { cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
-import { getPost } from '../lib/channels';
+import { getChannels, getPost, syncAutoChannels } from '../lib/channels';
+import { planAutoChannels } from '../lib/autoChannels';
 import { useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
 import { DEFAULT_PROFILE, DEFAULT_SETTINGS, type MyProfile, type MySettings } from '../lib/myProfile';
@@ -217,6 +218,12 @@ export const DiscoverScreen: React.FC = () => {
   useEffect(() => {
     checkTagAlerts(discoverNodes as never, profile.interestTags ?? []);
   }, [discoverNodes, boostClock, moderationVersion, profile.interestTags]);
+  // Auto channels: a general one for the city you're looking at, plus one per #tag that Points
+  // around it use but no channel covers yet, so Channels is never empty in a new area.
+  useEffect(() => {
+    const city = viewPlace.name || home.name;
+    if (city) syncAutoChannels(planAutoChannels(getChannels(), discoverNodes as never, city));
+  }, [discoverNodes, viewPlace.name, home.name]);
   useActivity(); // re-render for the unread badge
   const unread = activityUnread();
 

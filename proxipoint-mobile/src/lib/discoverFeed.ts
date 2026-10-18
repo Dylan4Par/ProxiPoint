@@ -75,8 +75,9 @@ export function splitFeed(
   return { nearby, upcoming };
 }
 
-/** Points that use any of the channel's #tags. */
+/** Points that use any of the channel's #tags. A channel with no #tags (a city channel) has them all. */
 export function channelNodes<T extends FeedNode>(channel: Pick<Channel, 'tags'>, nodes: T[]): T[] {
+  if (!channel.tags.length) return nodes;
   const wanted = new Set(channel.tags.map(key));
   return nodes.filter((node) => nodeTags(node).some((tag) => wanted.has(key(tag))));
 }

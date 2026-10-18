@@ -33,6 +33,10 @@ export interface Channel {
   tags: string[];
   memberCount: number;
   joined: boolean;
+  /** Started automatically for a city or #tag (see autoChannels.ts). */
+  auto?: boolean;
+  /** Who moderates it. Null on an auto channel nobody has claimed yet. */
+  owner?: string | null;
 }
 
 /** Where a post is pinned: a Point's venue, or a block-level spot. */
@@ -317,6 +321,38 @@ export function getChannel(id: string): Channel | null {
 
 export function getPost(id: string): ChannelPost | null {
   return posts.find((post) => post.id === id) ?? null;
+}
+
+/**
+ * Adds auto-started channels (from planAutoChannels) that aren't in the list yet. Existing ones
+ * keep their members, owner and join state.
+ * Server side later: the server creates these as Points come in; GET /channels returns them.
+ */
+export function syncAutoChannels(planned: Channel[]) {
+  const ids = new Set(channels.map((channel) => channel.id));
+  const fresh = planned.filter((channel) => !ids.has(channel.id));
+  if (!fresh.length) return;
+  channels = [...channels, ...fresh];
+  changed();
+}
+
+/**
+ * Claim an unclaimed auto channel: you become its moderator (and join it).
+ * Server side later: POST /channels/:id/claim — first come, with limits (account age, one claim
+ * at a time) and a review queue, so channels can't be grabbed in bulk.
+ */
+export function claimChannel(id: string, handle: string) {
+  channels = channels.map((channel) =>
+    channel.id === id && channel.auto && !channel.owner
+      ? {
+          ...channel,
+          owner: handle,
+          joined: true,
+          memberCount: channel.joined ? channel.memberCount : channel.memberCount + 1,
+        }
+      : channel,
+  );
+  changed();
 }
 
 export function setJoined(id: string, joined: boolean) {

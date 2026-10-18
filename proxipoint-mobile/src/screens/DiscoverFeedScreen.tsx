@@ -386,6 +386,7 @@ const ChannelResultRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ 
         </Text>
         <Text style={styles.resultMeta} numberOfLines={1}>
           {channel.handle} · {formatCount(channel.memberCount)} members
+          {channel.auto && !channel.owner ? ' · Unclaimed' : ''}
         </Text>
       </View>
       <TouchableOpacity

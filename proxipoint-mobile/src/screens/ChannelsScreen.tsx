@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowBigUp, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, ImagePlus, MapPin, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react-native';
+import { ArrowBigUp, BadgeCheck, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, ImagePlus, Sparkles, MapPin, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react-native';
 import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
 import { ReportSheet, type ReportTarget } from '../components/safety/ReportSheet';
 import { pickRecapPhotos } from '../lib/profilePhotos';
@@ -13,6 +13,7 @@ import {
   addComment,
   POST_PHOTO_LIMIT,
   addPost,
+  claimChannel,
   setJoined,
   toggleCommentVote,
   toggleVote,
@@ -72,6 +73,11 @@ interface ChannelsScreenProps {
   /** Search button: the Discover search, ready to type. */
   onOpenSearch: () => void;
 }
+
+/** Points listed on a channel page (a city channel can have many). */
+const MAX_CHANNEL_POINTS = 8;
+/** " · Unclaimed" after the member count for auto channels nobody runs yet. */
+const channelStatus = (channel: Channel) => (channel.auto && !channel.owner ? ' · Unclaimed' : '');
 
 /** Short label for the report sheet: the start of the text. */
 const snippet = (text: string) => (text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text);
@@ -329,7 +335,7 @@ const ChannelRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ channe
           {channel.name}
         </Text>
         <Text style={styles.rowMeta} numberOfLines={1}>
-          {channel.handle} · {formatCount(channel.memberCount)} members
+          {channel.handle} · {formatCount(channel.memberCount)} members{channelStatus(channel)}
         </Text>
       </View>
       <JoinButton channel={channel} />
@@ -451,7 +457,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
         <View style={styles.rowCopy}>
           <Text style={styles.pageTitle}>{channel.name}</Text>
           <Text style={styles.rowMeta}>
-            {channel.handle} · {formatCount(channel.memberCount)} members
+            {channel.handle} · {formatCount(channel.memberCount)} members{channelStatus(channel)}
           </Text>
         </View>
       </View>
@@ -463,12 +469,42 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
           </View>
         ))}
       </View>
+      {channel.auto && !channel.owner ? (
+        // Started automatically: nobody moderates it yet. Claiming makes you its moderator.
+        <View style={styles.claimBox} testID="channel-unclaimed">
+          <View style={styles.claimHeader}>
+            <Sparkles size={15} color={c.violet} strokeWidth={2.25} />
+            <Text style={styles.claimTitle}>Unclaimed channel</Text>
+          </View>
+          <Text style={styles.claimBody}>
+            This channel started on its own from what’s happening nearby. Claim it to set its rules and keep it tidy.
+          </Text>
+          <TouchableOpacity
+            style={styles.claimBtn}
+            onPress={() => claimChannel(channel.id, myHandle)}
+            accessibilityRole="button"
+            testID="channel-claim"
+          >
+            <Text style={styles.claimBtnText}>CLAIM CHANNEL</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {channel.owner ? (
+        <View style={styles.ownerRow}>
+          <BadgeCheck size={14} color={c.accent} strokeWidth={2.25} />
+          <Text style={styles.ownerText}>
+            {sameHandle(channel.owner, myHandle) ? 'You moderate this channel' : `Moderated by ${channel.owner}`}
+          </Text>
+        </View>
+      ) : null}
       <JoinButton channel={channel} large />
 
-      <Text style={[styles.sectionLabel, styles.sectionSpaced]}>POINTS IN THIS CHANNEL</Text>
+      <Text style={[styles.sectionLabel, styles.sectionSpaced]}>
+        {channel.tags.length ? 'POINTS IN THIS CHANNEL' : 'POINTS AROUND HERE'}
+      </Text>
       {points.length ? (
         <View style={styles.list}>
-          {points.map((node) => {
+          {points.slice(0, MAX_CHANNEL_POINTS).map((node) => {
             const live = isLiveNode(node);
             const distance = formatDistance(node.distanceMeters);
             return (
@@ -492,6 +528,9 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
               </TouchableOpacity>
             );
           })}
+          {points.length > MAX_CHANNEL_POINTS ? (
+            <Text style={styles.emptyText}>And {points.length - MAX_CHANNEL_POINTS} more on Explore Map.</Text>
+          ) : null}
         </View>
       ) : (
         <Text style={styles.emptyText}>Nothing scheduled with these #tags right now.</Text>
@@ -1262,6 +1301,30 @@ const createStyles = (c: ThemeColors) =>
     postBody: { color: c.text, fontSize: 14, lineHeight: 20 },
     postFooter: { flexDirection: 'row', gap: 8 },
     reportBtn: { marginLeft: 'auto', paddingLeft: 6 },
+    claimBox: {
+      marginTop: 14,
+      padding: 12,
+      gap: 8,
+      borderRadius: 14,
+      backgroundColor: c.violetTint,
+      borderWidth: 1,
+      borderColor: c.violetBase,
+    },
+    claimHeader: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    claimTitle: { color: c.violetText, fontSize: 14, fontWeight: '800' },
+    claimBody: { color: c.textSecondary, fontSize: 13, lineHeight: 19 },
+    claimBtn: {
+      alignSelf: 'flex-start',
+      paddingHorizontal: 16,
+      minHeight: 36,
+      borderRadius: 18,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.violet,
+    },
+    claimBtnText: { color: c.white, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+    ownerRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12 },
+    ownerText: { color: c.textSecondary, fontSize: 13, fontWeight: '600' },
     photoTile: { overflow: 'hidden', borderRadius: 12, backgroundColor: c.surfaceDim },
     photoImage: { width: '100%', height: '100%' },
     photoWide: { width: '100%', aspectRatio: 4 / 3 },
