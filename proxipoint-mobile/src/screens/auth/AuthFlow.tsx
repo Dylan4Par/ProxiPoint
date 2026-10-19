@@ -3,6 +3,8 @@ import { BackHandler, StyleSheet, Text, TextInput, TouchableOpacity, View } from
 import { Check, Lock, MapPin, MessagesSquare } from 'lucide-react-native';
 import { ProxiPointLogo } from '../../components/brand/ProxiPointLogo';
 import { AuthButton, AuthError, AuthField, AuthPage, AuthTitle } from '../../components/auth/AuthParts';
+import { LegalDocModal } from '../../components/auth/LegalDocModal';
+import { LEGAL_VERSION, MINIMUM_AGE, type LegalDocId } from '../../lib/legal';
 import {
   authErrorMessage,
   isValidEmail,
@@ -67,6 +69,8 @@ const VALUE_LINES = [
 const WelcomePage: React.FC<{ onSignUp: () => void; onSignIn: () => void }> = ({ onSignUp, onSignIn }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
+  // Set when the app signed someone out on its own (60 days away, or a year on this phone).
+  const notice = useAuthStore((s) => s.notice);
   return (
     <AuthPage
       testID="auth-welcome"
@@ -77,6 +81,11 @@ const WelcomePage: React.FC<{ onSignUp: () => void; onSignIn: () => void }> = ({
         </View>
       }
     >
+      {notice ? (
+        <View style={styles.notice} accessibilityLiveRegion="polite">
+          <Text style={styles.noticeText}>{notice}</Text>
+        </View>
+      ) : null}
       <View style={styles.hero}>
         <ProxiPointLogo size={88} />
         <Text style={styles.wordmark}>ProxiPoint</Text>
@@ -109,6 +118,9 @@ const SignUpPage: React.FC<{
   const setSession = useAuthStore((s) => s.setSession);
   const [password, setPassword] = useState('');
   const [emailTouched, setEmailTouched] = useState(false);
+  // "I'm 18 or older and agree to the Terms, Privacy Policy and Community Guidelines" (required).
+  const [agreed, setAgreed] = useState(false);
+  const [reading, setReading] = useState<LegalDocId | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const passwordRef = useRef<TextInput | null>(null);
@@ -117,14 +129,14 @@ const SignUpPage: React.FC<{
   const checks = passwordChecks(password, email);
   const passwordOk = isValidPassword(password, email);
   const strength = passwordOk ? passwordStrength(password) : null;
-  const canSubmit = emailOk && passwordOk && !busy;
+  const canSubmit = emailOk && passwordOk && agreed && !busy;
 
   const submit = async () => {
     if (!canSubmit) return;
     setBusy(true);
     setError(null);
     try {
-      await setSession(await signUp(email, password));
+      await setSession(await signUp(email, password, LEGAL_VERSION));
     } catch (e) {
       setError(messageFor(e));
       setBusy(false);
@@ -194,9 +206,34 @@ const SignUpPage: React.FC<{
           </View>
         }
       />
-      <Text style={styles.terms}>
-        By creating an account you agree to ProxiPoint’s Terms of Service and Privacy Policy.
-      </Text>
+      <TouchableOpacity
+        style={styles.agreeRow}
+        onPress={() => setAgreed((on) => !on)}
+        accessibilityRole="checkbox"
+        accessibilityState={{ checked: agreed }}
+        accessibilityLabel={`I'm ${MINIMUM_AGE} or older and agree to the Terms of Service, Privacy Policy and Community Guidelines`}
+        testID="sign-up-agree"
+      >
+        <View style={[styles.box, agreed && styles.boxOn]}>
+          {agreed ? <Check size={14} color={c.onAccent} strokeWidth={3.5} /> : null}
+        </View>
+        <Text style={styles.agreeText}>
+          I’m {MINIMUM_AGE} or older and agree to the{' '}
+          <Text style={styles.agreeLink} onPress={() => setReading('terms')}>
+            Terms of Service
+          </Text>
+          ,{' '}
+          <Text style={styles.agreeLink} onPress={() => setReading('privacy')}>
+            Privacy Policy
+          </Text>{' '}
+          and{' '}
+          <Text style={styles.agreeLink} onPress={() => setReading('guidelines')}>
+            Community Guidelines
+          </Text>
+          .
+        </Text>
+      </TouchableOpacity>
+      <LegalDocModal doc={reading} onChange={setReading} onClose={() => setReading(null)} />
       {usingLocalAuth ? <Text style={styles.devNote}>Dev mode: accounts are saved on this phone only.</Text> : null}
     </AuthPage>
   );
@@ -388,7 +425,29 @@ const createStyles = (c: ThemeColors) =>
     strength: { color: c.textMuted, fontSize: 13, marginTop: 2 },
     weak: { color: c.amber, fontWeight: '700' },
     good: { color: c.green, fontWeight: '700' },
-    terms: { color: c.textFaint, fontSize: 12, lineHeight: 17, marginTop: 4 },
+    agreeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 4, paddingVertical: 4 },
+    box: {
+      width: 22,
+      height: 22,
+      borderRadius: 6,
+      borderWidth: 1.5,
+      borderColor: c.borderStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginTop: 1,
+    },
+    boxOn: { backgroundColor: c.accent, borderColor: c.accent },
+    agreeText: { flex: 1, color: c.textSecondary, fontSize: 14, lineHeight: 21 },
+    agreeLink: { color: c.accent, fontWeight: '700', textDecorationLine: 'underline' },
+    notice: {
+      backgroundColor: c.surface,
+      borderLeftWidth: 3,
+      borderLeftColor: c.accent,
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 8,
+    },
+    noticeText: { color: c.textBody, fontSize: 14, lineHeight: 19 },
     devNote: { color: c.amber, fontSize: 12, marginTop: 10 },
     forgot: { alignSelf: 'flex-end', paddingVertical: 4 },
     link: { color: c.accent, fontSize: 14, fontWeight: '700' },

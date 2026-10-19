@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LEGAL_VERSION } from '../lib/legal';
 import {
   RESERVED_HANDLES,
   cleanHandle,
@@ -26,6 +27,9 @@ export interface AuthAccount {
   handle: string | null;
   displayName: string | null;
   onboarded: boolean;
+  /** Version of the Terms / Privacy / Guidelines agreed to (see lib/legal.ts), and when. */
+  termsVersion?: string | null;
+  termsAcceptedAt?: string | null;
 }
 
 export interface AuthSession {
@@ -128,10 +132,15 @@ const pause = () => new Promise((resolve) => setTimeout(resolve, 450));
 
 // ---- API ----------------------------------------------------------------------------------
 
-export async function signUp(emailRaw: string, password: string): Promise<AuthSession> {
+/**
+ * `acceptedTermsVersion` must be the current LEGAL_VERSION: the person ticked "I agree" to the
+ * Terms, Privacy Policy and Community Guidelines (and confirmed their age) on this screen.
+ */
+export async function signUp(emailRaw: string, password: string, acceptedTermsVersion: string): Promise<AuthSession> {
   const email = normalizeEmail(emailRaw);
+  if (acceptedTermsVersion !== LEGAL_VERSION) throw new AuthError('terms_required');
   if (!isValidPassword(password, email)) throw new AuthError('weak_password');
-  if (!usingLocalAuth) return call<AuthSession>('/v1/auth/signup', { email, password });
+  if (!usingLocalAuth) return call<AuthSession>('/v1/auth/signup', { email, password, acceptedTermsVersion });
   await pause();
   const accounts = await loadLocal();
   if (accounts[email]) throw new AuthError('email_taken');
@@ -141,6 +150,8 @@ export async function signUp(emailRaw: string, password: string): Promise<AuthSe
     handle: null,
     displayName: null,
     onboarded: false,
+    termsVersion: acceptedTermsVersion,
+    termsAcceptedAt: new Date().toISOString(),
     check: weakDigest(`${email}:${password}`),
   };
   await saveLocal({ ...accounts, [email]: account });

@@ -35,6 +35,8 @@ import { getBlockedHandles, unblockUser, useModeration } from '../lib/moderation
 import { useTheme, useThemedStyles, type ThemeColors, type ThemePreference } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../components/common/KeyboardAwareScrollView';
 import { CallSignMark } from '../components/brand/CallSignMark';
+import { LegalDocModal } from '../components/auth/LegalDocModal';
+import type { LegalDocId } from '../lib/legal';
 import { useAuthStore } from '../stores/useAuthStore';
 
 /**
@@ -109,6 +111,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   const accountEmail = useAuthStore((s) => s.session?.account.email ?? null);
+  const [reading, setReading] = useState<LegalDocId | null>(null);
   const signOut = useAuthStore((s) => s.signOut);
   const confirmSignOut = () =>
     Alert.alert('Sign out?', 'You can sign back in any time with your email and password.', [
@@ -279,9 +282,23 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <LogOut size={18} color={c.red} strokeWidth={2.2} />
             <Text style={styles.signOutText}>Sign out</Text>
           </TouchableOpacity>
+          <View style={styles.legalLinks}>
+            {(
+              [
+                ['terms', 'Terms'],
+                ['privacy', 'Privacy'],
+                ['guidelines', 'Community Guidelines'],
+              ] as Array<[LegalDocId, string]>
+            ).map(([id, label]) => (
+              <TouchableOpacity key={id} onPress={() => setReading(id)} accessibilityRole="link" hitSlop={6}>
+                <Text style={styles.legalLink}>{label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
           <CallSignMark />
         </View>
       </KeyboardAwareScrollView>
+      <LegalDocModal doc={reading} onChange={setReading} onClose={() => setReading(null)} />
     </View>
   );
 };
@@ -587,6 +604,8 @@ const createStyles = (c: ThemeColors) =>
     borderColor: c.border,
   },
   signOutText: { color: c.red, fontSize: 15, fontWeight: '700' },
+  legalLinks: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 16, marginTop: 4 },
+  legalLink: { color: c.textMuted, fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 18 },
   rowLabel: { flex: 1, color: c.text, fontSize: 16, fontWeight: '500' },
   chevronOpen: { transform: [{ rotate: '90deg' }] },

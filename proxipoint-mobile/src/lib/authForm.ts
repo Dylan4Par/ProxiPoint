@@ -179,6 +179,7 @@ export type AuthErrorCode =
   | 'email_taken'
   | 'handle_taken'
   | 'weak_password'
+  | 'terms_required'
   | 'rate_limited'
   | 'network'
   | 'unknown';
@@ -194,6 +195,8 @@ export function authErrorMessage(code: AuthErrorCode): string {
       return 'That handle is taken. Try another.';
     case 'weak_password':
       return 'Pick a stronger password.';
+    case 'terms_required':
+      return 'Please agree to the Terms, Privacy Policy and Community Guidelines to continue.';
     case 'rate_limited':
       return 'Too many tries. Wait a minute and try again.';
     case 'network':
