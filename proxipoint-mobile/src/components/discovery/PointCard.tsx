@@ -77,7 +77,7 @@ export const PointCard: React.FC<{
       testID={testID ?? `point-card-${node.id}`}
     >
       <View style={styles.top}>
-        <CategoryBadge tag={tag} title={node.title} photoUri={node.coverPhotoUri} size={60} />
+        <CategoryBadge tag={tag} title={node.title} photoUri={node.coverPhotoUri} size={46} />
         <View style={styles.copy}>
           <View style={styles.tagRow}>
             {tag ? (
@@ -94,13 +94,13 @@ export const PointCard: React.FC<{
                 accessibilityRole={onWhyBoosted ? 'button' : 'text'}
                 accessibilityLabel={onWhyBoosted ? 'Boosted. Why am I seeing this?' : 'Boosted'}
               >
-                <Zap size={12} color={pills.boosted.fg} fill={pills.boosted.fg} strokeWidth={2.5} />
+                <Zap size={10} color={pills.boosted.fg} fill={pills.boosted.fg} strokeWidth={2.5} />
                 <Text style={[styles.boostedText, { color: pills.boosted.fg }]}>BOOSTED</Text>
-                {onWhyBoosted ? <Info size={12} color={pills.boosted.fg} strokeWidth={2.5} /> : null}
+                {onWhyBoosted ? <Info size={11} color={pills.boosted.fg} strokeWidth={2.5} /> : null}
               </TouchableOpacity>
             ) : null}
           </View>
-          <Text style={styles.title} numberOfLines={2}>
+          <Text style={styles.title} numberOfLines={1}>
             {node.title}
           </Text>
           {where ? (
@@ -126,7 +126,7 @@ export const PointCard: React.FC<{
               <Text style={[styles.pillText, styles.pillTextPlain, { color: pills.distance.fg }]} numberOfLines={1}>
                 {distance}
               </Text>
-              {distanceMeters == null && node.eta ? <TravelIcon size={14} color={pills.distance.fg} strokeWidth={2.25} /> : null}
+              {distanceMeters == null && node.eta ? <TravelIcon size={13} color={pills.distance.fg} strokeWidth={2.25} /> : null}
             </View>
           ) : null}
         </View>
@@ -136,7 +136,7 @@ export const PointCard: React.FC<{
             <View style={styles.faces} accessibilityLabel={`${going} going`}>
               {pills.face.map((bg, i) => (
                 <View key={bg} style={[styles.face, { backgroundColor: bg }, i > 0 && styles.faceOverlap]}>
-                  <User size={14} color="#334155" strokeWidth={2.25} />
+                  <User size={12} color="#334155" strokeWidth={2.25} />
                 </View>
               ))}
               <View style={[styles.face, styles.faceOverlap, styles.count, { backgroundColor: pills.count.bg }]}>
@@ -154,7 +154,7 @@ export const PointCard: React.FC<{
             accessibilityState={{ selected: node.isRsvpd }}
             accessibilityLabel={node.isRsvpd ? `Going to ${node.title}. Cancel RSVP` : `RSVP to ${node.title}`}
           >
-            <Check size={16} color={node.isRsvpd ? c.onAccent : pills.rsvp.fg} strokeWidth={3} />
+            <Check size={14} color={node.isRsvpd ? c.onAccent : pills.rsvp.fg} strokeWidth={3} />
             <Text style={[styles.rsvpText, { color: node.isRsvpd ? c.onAccent : pills.rsvp.fg }]}>
               {node.isRsvpd ? 'Going' : 'RSVP'}
             </Text>
@@ -169,66 +169,66 @@ const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
     card: {
       backgroundColor: c.surface,
-      borderRadius: 20,
+      borderRadius: 16,
       borderWidth: 1,
       borderColor: c.border,
-      paddingHorizontal: 14,
-      paddingVertical: 14,
-      gap: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      gap: 8,
     },
     // Selected on the map: a soft green outline, like the design's middle card.
     cardSelected: { borderColor: c.green, borderWidth: 1.5 },
-    top: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-    copy: { flex: 1, minWidth: 0, gap: 2 },
-    tagRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' },
-    tag: { color: c.accent, fontSize: 14, fontWeight: '800', flexShrink: 1 },
+    top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    copy: { flex: 1, minWidth: 0, gap: 1 },
+    tagRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    tag: { color: c.accent, fontSize: 12, fontWeight: '800', flexShrink: 1 },
     boosted: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 12,
+      paddingHorizontal: 6,
+      paddingVertical: 1,
+      borderRadius: 10,
       borderWidth: 1,
     },
-    boostedText: { fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
-    title: { color: c.text, fontSize: 18, fontWeight: '800', lineHeight: 23 },
-    venue: { color: c.textMuted, fontSize: 14 },
+    boostedText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
+    title: { color: c.text, fontSize: 16, fontWeight: '800', lineHeight: 20 },
+    venue: { color: c.textMuted, fontSize: 12 },
     bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
-    pills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+    pills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 11,
-      paddingVertical: 6,
-      borderRadius: 16,
+      gap: 5,
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 14,
       maxWidth: '100%',
     },
-    dot: { width: 8, height: 8, borderRadius: 4 },
-    pillText: { fontSize: 13, fontWeight: '800', letterSpacing: 0.2, flexShrink: 1 },
+    dot: { width: 7, height: 7, borderRadius: 4 },
+    pillText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.2, flexShrink: 1 },
     pillTextPlain: { fontWeight: '600', letterSpacing: 0 },
-    actions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    actions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     faces: { flexDirection: 'row', alignItems: 'center' },
     face: {
-      width: 28,
-      height: 28,
-      borderRadius: 14,
+      width: 24,
+      height: 24,
+      borderRadius: 12,
       borderWidth: 2,
       borderColor: c.surface,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    faceOverlap: { marginLeft: -9 },
-    count: { width: 34, paddingHorizontal: 2 },
-    countText: { fontSize: 10, fontWeight: '800' },
+    faceOverlap: { marginLeft: -8 },
+    count: { width: 30, paddingHorizontal: 2 },
+    countText: { fontSize: 9, fontWeight: '800' },
     rsvp: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 5,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 18,
+      gap: 4,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 14,
     },
-    rsvpText: { fontSize: 14, fontWeight: '800' },
+    rsvpText: { fontSize: 13, fontWeight: '800' },
   });
