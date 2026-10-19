@@ -961,19 +961,22 @@ export const DiscoveryMapCanvas: React.FC<{
         </View>
       </TouchableOpacity>
 
-      {/* Search this area: once you've panned or zoomed out away from the area. */}
+      {/* Search this area: once you've panned or zoomed out away from the area. Centered along the
+          bottom of the map, clear of the zoom buttons. */}
       {onSearchArea && offerArea ? (
-        <TouchableOpacity
-          style={styles.searchAreaBtn}
-          activeOpacity={0.8}
-          onPress={searchThisArea}
-          accessibilityRole="button"
-          accessibilityLabel="Search this area"
-          testID="map-search-area"
-        >
-          <Search size={14} color={c.base} strokeWidth={2.75} />
-          <Text style={styles.searchAreaText}>Search this area</Text>
-        </TouchableOpacity>
+        <View style={styles.searchAreaRow} pointerEvents="box-none">
+          <TouchableOpacity
+            style={styles.searchAreaBtn}
+            activeOpacity={0.8}
+            onPress={searchThisArea}
+            accessibilityRole="button"
+            accessibilityLabel="Search this area"
+            testID="map-search-area"
+          >
+            <Search size={15} color={c.base} strokeWidth={2.75} />
+            <Text style={styles.searchAreaText}>Search this area</Text>
+          </TouchableOpacity>
+        </View>
       ) : null}
 
       {/* Drop Point: same size and look as the recenter button, just left of it. */}
@@ -1319,16 +1322,22 @@ const createStyles = (c: ThemeColors) =>
   },
   /* Sits left of the recenter button: its 14px inset + 38px width + an 8px gap. */
   dropBtn: { right: 60 },
-  searchAreaBtn: {
+  /* Full-width strip along the map's bottom edge (above the © Esri line) that centers the button. */
+  searchAreaRow: {
     position: 'absolute',
-    top: 60,
-    right: 14,
+    left: 0,
+    right: 0,
+    bottom: 22,
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  searchAreaBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 13,
-    minHeight: 32,
-    borderRadius: 16,
+    paddingHorizontal: 16,
+    minHeight: 36,
+    borderRadius: 18,
     backgroundColor: c.accent,
     zIndex: 20,
     elevation: 5,
