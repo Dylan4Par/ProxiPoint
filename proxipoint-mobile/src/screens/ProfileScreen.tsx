@@ -7,6 +7,9 @@ import { RecapComposer } from '../components/profile/RecapComposer';
 import { MyTagsTile } from '../components/profile/MyTagsTile';
 import { MyChannelsTile } from '../components/profile/MyChannelsTile';
 import { LocationTile } from '../components/profile/LocationTile';
+import { SignalChip, SignalTile } from '../components/profile/Signal';
+import { useVisibleComments, useVisiblePosts } from '../lib/channels';
+import { computeSignal, contributionsOf } from '../lib/signalScore';
 import type { CityPlace } from '../lib/places';
 import { type DroppedPoint } from '../lib/droppedPoint';
 import { pickCoverPhoto } from '../lib/coverPhoto';
@@ -56,6 +59,8 @@ interface ProfileScreenProps {
   onChangeTracking: (on: boolean) => void;
   /** Name of the app's default area, shown until a home city is picked. */
   defaultAreaLabel: string;
+  /** One of your posts (from Contributions): its page in the Channels tab. */
+  onOpenPost: (postId: string) => void;
 }
 
 /** Same tints as the category badges, scattered behind the avatar. */
@@ -101,6 +106,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onChangeBanner,
   recaps,
   onChangeRecaps,
+  onOpenPost,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -127,6 +133,14 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     }
   };
   const dots = useMemo(heroDots, []);
+  // Signal Score and Contributions, from your posts, comments, drops and recaps.
+  const posts = useVisiblePosts();
+  const comments = useVisibleComments();
+  const signal = useMemo(
+    () => computeSignal(profile.handle, { posts, comments, pointsHosted: drops.length, recaps }),
+    [profile.handle, posts, comments, drops.length, recaps],
+  );
+  const contributions = useMemo(() => contributionsOf(profile.handle, posts, comments), [profile.handle, posts, comments]);
   const [bannerBusy, setBannerBusy] = useState(false);
 
   const pickBanner = async () => {
@@ -263,6 +277,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             {profile.displayName}
           </Text>
           <Text style={styles.handle}>{profile.handle}</Text>
+          <SignalChip signal={signal} />
 
           <View style={styles.statsRow}>
             <Stat label="Following" value={profile.following + followedHosts.length} />
@@ -303,6 +318,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             accessibilityLabel="Bio"
             testID="profile-bio"
           />
+
+          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>SIGNAL</Text>
+          <SignalTile signal={signal} contributions={contributions} isMe onOpenPost={onOpenPost} />
 
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY #TAGS</Text>
           <MyTagsTile

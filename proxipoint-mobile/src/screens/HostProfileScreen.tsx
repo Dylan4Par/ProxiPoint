@@ -50,6 +50,9 @@ import {
 } from '../lib/hostProfiles';
 import { blockUser, isBlocked, isContentHidden, isNodeAllowed, unblockUser, useModeration } from '../lib/moderation';
 import { isLiveNode } from '../lib/liveStatus';
+import { useVisibleComments, useVisiblePosts } from '../lib/channels';
+import { computeSignal, contributionsOf } from '../lib/signalScore';
+import { SignalChip, SignalTile } from '../components/profile/Signal';
 import type { PointRecap, RecapPhoto } from '../lib/pointRecap';
 
 /**
@@ -64,6 +67,8 @@ interface HostProfileScreenProps {
   onBack: () => void;
   /** Open one of their Points on the Discover map. */
   onOpenPoint: (id: string) => void;
+  /** One of their posts or comments (from Contributions): the post in Channels. */
+  onOpenPost?: (postId: string) => void;
 }
 
 /** Same decorative dots as your own Profile page. */
@@ -115,7 +120,7 @@ function formatCount(value: number): string {
  * Public profile of a host, as anyone else sees it: name, bio, follower counts, the Points
  * they're hosting now or soon, and their recaps (which you can react to or report).
  */
-export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, onBack, onOpenPoint }) => {
+export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, onBack, onOpenPoint, onOpenPost }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const insets = useSafeAreaInsets();
@@ -209,6 +214,25 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
 
   const visibleRecaps = recaps.filter((item) => !isContentHidden(item.id));
 
+  // Signal Score and Contributions (only what you're allowed to see counts).
+  const channelPosts = useVisiblePosts();
+  const channelComments = useVisibleComments();
+  const signal = useMemo(
+    () =>
+      computeSignal(profile.handle, {
+        posts: channelPosts,
+        comments: channelComments,
+        pointsHosted: profile.pointsHosted,
+        recaps: visibleRecaps,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [profile.handle, profile.pointsHosted, channelPosts, channelComments, recaps],
+  );
+  const contributions = useMemo(
+    () => contributionsOf(profile.handle, channelPosts, channelComments),
+    [profile.handle, channelPosts, channelComments],
+  );
+
   // Every photo from their recaps, newest recap first (reported ones left out).
   const photos: HostPhoto[] = visibleRecaps.flatMap((item) =>
     item.photos
@@ -300,6 +324,7 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
           </View>
           <Text style={styles.handle}>{profile.handle}</Text>
           {profile.joined ? <Text style={styles.joined}>Hosting since {profile.joined}</Text> : null}
+          {blocked ? null : <SignalChip signal={signal} />}
 
           <View style={styles.statsRow}>
             <Stat label="Followers" value={formatCount(profile.followers + (followingNow ? 1 : 0))} />
@@ -384,6 +409,9 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
                   </View>
                 </>
               ) : null}
+
+              <Text style={[styles.sectionLabel, profile.bio ? styles.sectionSpaced : null]}>SIGNAL</Text>
+              <SignalTile signal={signal} contributions={contributions} onOpenPost={onOpenPost} />
 
               <View style={[styles.sectionHeader, styles.sectionSpaced]}>
                 <Text style={[styles.sectionLabel, styles.sectionLabelInline]}>

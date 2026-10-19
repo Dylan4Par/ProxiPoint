@@ -43,6 +43,8 @@ import { channelNodes, formatCount, formatDistance, splitFeed } from '../lib/dis
 import { isLiveNode } from '../lib/liveStatus';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
+import { StrongestSignalCard } from '../components/profile/Signal';
+import { strongestSignals } from '../lib/signalScore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
 export type ChannelsSegment = 'feed' | 'alerts' | 'manage';
@@ -412,6 +414,11 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   );
   const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, DiscoveryNode>;
   const moderation = useModeration();
+  // Strongest Signal: who's contributed most here lately (upvotes, posts, comments).
+  const strongest = useMemo(
+    () => strongestSignals(allPosts, comments, { channelId: channel.id, now, limit: 3 }),
+    [allPosts, comments, channel.id, now],
+  );
   const points = useMemo(() => {
     const { nearby, upcoming } = splitFeed(nodes, now, (node) => isNodeAllowed(node) && canSeePoint(node));
     return channelNodes(channel, [...nearby, ...upcoming]) as DiscoveryNode[];
@@ -533,6 +540,16 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
           ? 'Its pinned posts show on your Explore Map.'
           : 'Follow to see its pinned posts on your Explore Map.'}
       </Text>
+
+      {strongest.length ? (
+        <View style={styles.sectionSpaced}>
+          <StrongestSignalCard
+            ranks={strongest}
+            scopeLabel={`${channel.handle} · 30 days`}
+            onOpenProfile={onOpenProfile}
+          />
+        </View>
+      ) : null}
 
       <Text style={[styles.sectionLabel, styles.sectionSpaced]}>
         {channel.tags.length ? 'POINTS IN THIS CHANNEL' : 'POINTS AROUND HERE'}

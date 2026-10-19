@@ -122,6 +122,12 @@ export const DiscoverScreen: React.FC = () => {
     setDetailId(id);
   };
   const [overlay, setOverlay] = useState<'settings' | 'calendar' | null>(null);
+  // An @handle tapped anywhere: yours goes to the Profile tab, anyone else's opens over the screen.
+  const openProfile = (handle: string) => {
+    const me = profile.handle.replace(/^@+/, '').toLowerCase();
+    if (handle.replace(/^@+/, '').toLowerCase() === me) goTo('profile');
+    else setHostHandle(handle);
+  };
   const [settingsSection, setSettingsSection] = useState<'edit' | null>(null);
   // In memory for now; load and save through the backend (GET/PATCH /me) once sign-in exists.
   const [profile, setProfile] = useState<MyProfile>(DEFAULT_PROFILE);
@@ -353,6 +359,7 @@ export const DiscoverScreen: React.FC = () => {
           onPickLocation={() => setCityPickerOpen(true)}
           onShowTagOnMap={showTagOnMap}
           searchRequest={searchRequest}
+          onOpenProfile={openProfile}
         />
       ) : null}
 
@@ -480,11 +487,7 @@ export const DiscoverScreen: React.FC = () => {
           }}
           myLocation={selfCoordinates}
           // Opens over Channels, so Back comes straight back to the post.
-          onOpenProfile={(handle) => {
-            const me = profile.handle.replace(/^@+/, '').toLowerCase();
-            if (handle.replace(/^@+/, '').toLowerCase() === me) goTo('profile');
-            else setHostHandle(handle);
-          }}
+          onOpenProfile={openProfile}
           onOpenSearch={() => {
             goTo('discover');
             setSearchRequest({ key: Date.now() });
@@ -546,6 +549,10 @@ export const DiscoverScreen: React.FC = () => {
           onChangeBanner={(uri) => setProfile((current) => ({ ...current, bannerUri: uri }))}
           recaps={recaps}
           onChangeRecaps={setRecaps}
+          onOpenPost={(id) => {
+            goTo('channels');
+            setPostId(id);
+          }}
         />
       ) : null}
 
@@ -609,6 +616,12 @@ export const DiscoverScreen: React.FC = () => {
           handle={hostHandle}
           onBack={() => setHostHandle(null)}
           onOpenPoint={openHostPoint}
+          // From their Contributions: the post in Channels (closes the profile).
+          onOpenPost={(id) => {
+            setHostHandle(null);
+            goTo('channels');
+            setPostId(id);
+          }}
         />
       ) : null}
 
