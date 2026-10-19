@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { localSpots, placeBoosts, spotsLabel, spotsWindowEnd } from './discoverSlots';
+import { localSpots, placeBoosts, spotsLabel, spotsWindowEnd, upNext } from './discoverSlots';
 import { recommendChannels, type FeedNode } from './discoverFeed';
 import type { Channel } from './channels';
 
@@ -97,4 +97,22 @@ test('local spots follow a chosen window (e.g. Tomorrow)', () => {
   const spots = localSpots(nodes, { now: NOON, isBusiness: () => true, window: tomorrow });
   assert.deepEqual(spots.map((s) => s.node.id), ['tomorrow']);
   assert.equal(spots[0].live, false);
+});
+
+test('up next: your hosted or RSVP’d plan that is live or within 3 hours', () => {
+  const nodes = [
+    { id: 'later', isRsvpd: true, startsAt: at(NOON, 5), endsAt: at(NOON, 7) }, // too far off
+    { id: 'soon-going', isRsvpd: true, startsAt: at(NOON, 2), endsAt: at(NOON, 4) },
+    { id: 'soon-hosting', origin: 'local', startsAt: at(NOON, 2), endsAt: at(NOON, 3) },
+    { id: 'not-mine', startsAt: at(NOON, -1), endsAt: at(NOON, 2) },
+    { id: 'ended', isRsvpd: true, startsAt: at(NOON, -3), endsAt: at(NOON, -1) },
+  ];
+  const next = upNext(nodes, NOON);
+  assert.equal(next?.node.id, 'soon-hosting'); // same start: hosting wins
+  assert.equal(next?.role, 'hosting');
+  assert.equal(next?.more, 1);
+  // A live RSVP beats anything later.
+  const live = upNext([...nodes, { id: 'live-going', isRsvpd: true, startsAt: at(NOON, -1), endsAt: at(NOON, 1) }], NOON);
+  assert.deepEqual([live?.node.id, live?.live, live?.more, live?.moreHosting], ['live-going', true, 2, true]);
+  assert.equal(upNext([nodes[0], nodes[3]], NOON), null);
 });

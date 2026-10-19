@@ -146,3 +146,52 @@ export function localSpots<T extends SpotNode>(
     .slice(0, options.limit ?? 8)
     .map(({ node, boosted: isB, live }) => ({ node, boosted: isB, live }));
 }
+
+// ---- Up next: your own plans -------------------------------------------------------------------
+
+/** "Up next" shows when one of your plans is live or starts within this long. */
+export const UP_NEXT_WINDOW_MS = 3 * 3600000;
+
+export interface PlanNode extends SpotNode {
+  isRsvpd?: boolean;
+  attendeeCount?: number;
+}
+
+export type PlanRole = 'hosting' | 'going';
+
+/**
+ * Your next plan for Discover's "Up next" bar: a Point you're hosting (dropped from this phone)
+ * or one you RSVP'd to, that's live or starts within UP_NEXT_WINDOW_MS. Live first, then the
+ * soonest; hosting wins a tie. Null when nothing is that close (the bar hides).
+ * `more` counts your other plans in the same window.
+ */
+export function upNext<T extends PlanNode>(
+  nodes: T[],
+  now = Date.now(),
+): { node: T; role: PlanRole; live: boolean; more: number; moreHosting: boolean } | null {
+  const plans = nodes
+    .map((node) => {
+      const role: PlanRole | null = node.origin === 'local' ? 'hosting' : node.isRsvpd ? 'going' : null;
+      if (!role || !node.startsAt) return null;
+      const start = new Date(node.startsAt).getTime();
+      const end = node.endsAt ? new Date(node.endsAt).getTime() : start + 3600000;
+      if (end <= now || start > now + UP_NEXT_WINDOW_MS) return null;
+      return { node, role, live: start <= now, start };
+    })
+    .filter((plan): plan is { node: T; role: PlanRole; live: boolean; start: number } => plan != null)
+    .sort(
+      (a, b) =>
+        Number(b.live) - Number(a.live) ||
+        a.start - b.start ||
+        Number(b.role === 'hosting') - Number(a.role === 'hosting'),
+    );
+  const [first, ...rest] = plans;
+  if (!first) return null;
+  return {
+    node: first.node,
+    role: first.role,
+    live: first.live,
+    more: rest.length,
+    moreHosting: rest.some((plan) => plan.role === 'hosting'),
+  };
+}

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
+import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
-import { localSpots, matchesInterests, placeBoosts, spotsLabel } from '../lib/discoverSlots';
+import { localSpots, matchesInterests, placeBoosts, spotsLabel, upNext, type PlanRole } from '../lib/discoverSlots';
 import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
 import { formatRange } from '../lib/calendarRange';
 import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
@@ -66,6 +66,10 @@ interface DiscoverFeedScreenProps {
   onOpenPlace: (id: string) => void;
   /** When → Pick dates: the Calendar (its button sets the dates and comes back here). */
   onPickDates: () => void;
+  /** Up next → Manage: the Manage sheet for a Point you're hosting. */
+  onManagePoint: (id: string) => void;
+  /** Up next → "+N more": your plans (My Drops when you're hosting some, else RSVP'd on the map). */
+  onSeeAllPlans: (includesHosting: boolean) => void;
 }
 
 const tagKey = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
@@ -92,6 +96,8 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   onOpenPost,
   onOpenPlace,
   onPickDates,
+  onManagePoint,
+  onSeeAllPlans,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -150,6 +156,12 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, hiddenBoosts, timeWindow.start, timeWindow.end],
+  );
+  // Up next: your own plan that's live or starts within 3 hours (any distance, any When).
+  const next = useMemo(
+    () => upNext((Object.values(nodes || {}) as DiscoveryNode[]).filter((node) => isNodeAllowed(node)), now),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodes, now, moderation],
   );
   const whyBoosted = (node: DiscoveryNode) => showBoostInfo(node, matchesInterests(node, interestTags));
   const posts = useVisiblePosts();
@@ -428,6 +440,20 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         </>
       ) : (
         <>
+          {/* ---- Up next: your plan, only when it's close ---- */}
+          {next ? (
+            <UpNextBar
+              node={next.node}
+              role={next.role}
+              live={next.live}
+              more={next.more}
+              now={now}
+              onOpen={() => onOpenPoint(next.node.id)}
+              onManage={() => onManagePoint(next.node.id)}
+              onMore={() => onSeeAllPlans(next.moreHosting || next.role === 'hosting')}
+            />
+          ) : null}
+
           {/* ---- Local spots: businesses with something on today ---- */}
           {spots.length ? (
             <>
@@ -688,6 +714,83 @@ const ChannelCard: React.FC<{ pick: ChannelPick; onOpen: () => void }> = ({ pick
         </Text>
       </TouchableOpacity>
     </TouchableOpacity>
+  );
+};
+
+/** "in 1h 20m", "in 15m" */
+function startsIn(startsAt: string | undefined, now: number): string {
+  if (!startsAt) return 'soon';
+  const minutes = Math.max(1, Math.round((new Date(startsAt).getTime() - now) / 60000));
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `in ${h}h${m ? ` ${m}m` : ''}` : `in ${m}m`;
+}
+
+/**
+ * Your next plan, when it's live or within 3 hours: hosting (with Manage) or going (with
+ * Directions). Hidden the rest of the time, so Discover stays about discovering.
+ */
+const UpNextBar: React.FC<{
+  node: DiscoveryNode;
+  role: PlanRole;
+  live: boolean;
+  more: number;
+  now: number;
+  onOpen: () => void;
+  onManage: () => void;
+  onMore: () => void;
+}> = ({ node, role, live, more, now, onOpen, onManage, onMore }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const hosting = role === 'hosting';
+  const when = live ? 'Live now' : `Starts ${startsIn(node.startsAt, now)}`;
+  const detail = hosting ? `${node.attendeeCount ?? 0} going` : node.venue;
+  const directions = async () => {
+    const label = encodeURIComponent(node.venue || node.title);
+    const url =
+      Platform.OS === 'ios'
+        ? `maps://?q=${label}&ll=${node.latitude},${node.longitude}`
+        : `geo:${node.latitude},${node.longitude}?q=${node.latitude},${node.longitude}(${label})`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert('Couldn’t open your maps app.');
+    }
+  };
+  return (
+    <View style={[styles.upNext, live && styles.upNextLive]} testID="discover-up-next">
+      <TouchableOpacity style={styles.upNextMain} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${hosting ? 'Hosting' : 'Going'}: ${node.title}, ${when}`}>
+        <View style={[styles.upNextIcon, live && styles.upNextIconLive]}>
+          <CalendarCheck size={18} color={live ? c.green : c.accent} strokeWidth={2.25} />
+        </View>
+        <View style={styles.eventCopy}>
+          <Text style={[styles.upNextKicker, live && styles.upNextKickerLive]}>
+            UP NEXT · {hosting ? 'HOSTING' : 'GOING'}
+          </Text>
+          <Text style={styles.upNextTitle} numberOfLines={1}>
+            {node.title}
+          </Text>
+          <Text style={styles.eventMeta} numberOfLines={1}>
+            {[when, detail].filter(Boolean).join(' · ')}
+          </Text>
+        </View>
+      </TouchableOpacity>
+      <View style={styles.upNextActions}>
+        <TouchableOpacity
+          style={styles.upNextBtn}
+          onPress={hosting ? onManage : () => void directions()}
+          accessibilityRole="button"
+          testID="discover-up-next-action"
+        >
+          <Text style={styles.upNextBtnText}>{hosting ? 'Manage' : 'Directions'}</Text>
+        </TouchableOpacity>
+        {more ? (
+          <TouchableOpacity onPress={onMore} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${more} more of your plans`}>
+            <Text style={styles.upNextMore}>+{more} more</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+    </View>
   );
 };
 
@@ -1041,6 +1144,42 @@ const createStyles = (c: ThemeColors) =>
     },
     eventRowLive: { borderColor: c.accentBorder },
     eventRowBoosted: { borderColor: c.amberBorder },
+    upNext: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      marginTop: 14,
+      padding: 12,
+      borderRadius: 16,
+      borderWidth: 1.5,
+      borderColor: c.accent,
+      backgroundColor: c.accentTint,
+    },
+    upNextLive: { borderColor: c.green, backgroundColor: c.greenTint },
+    upNextMain: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+    upNextIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.surface,
+    },
+    upNextIconLive: { borderWidth: 1, borderColor: c.green },
+    upNextKicker: { color: c.accent, fontSize: 10.5, fontWeight: '900', letterSpacing: 1 },
+    upNextKickerLive: { color: c.green },
+    upNextTitle: { color: c.text, fontSize: 15, fontWeight: '800' },
+    upNextActions: { alignItems: 'flex-end', gap: 6 },
+    upNextBtn: {
+      paddingHorizontal: 12,
+      paddingVertical: 7,
+      borderRadius: 14,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    upNextBtnText: { color: c.text, fontSize: 12, fontWeight: '800' },
+    upNextMore: { color: c.accent, fontSize: 12, fontWeight: '800' },
     eventTagRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     boostedLabel: {
       flexDirection: 'row',
