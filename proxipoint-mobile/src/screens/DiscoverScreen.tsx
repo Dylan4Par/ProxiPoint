@@ -25,7 +25,7 @@ import { CalendarScreen } from './CalendarScreen';
 import { DiscoverFeedScreen } from './DiscoverFeedScreen';
 import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
 import { setTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
-import { activePostFilterCount, isDefaultPostFilter, useMapPostFilter } from '../lib/mapFilters';
+import { useMapPostFilter } from '../lib/mapFilters';
 import { areaName } from '../lib/mapArea';
 import { interestCell, setMyInterestMembership } from '../lib/nearbyInterest';
 import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
@@ -472,10 +472,10 @@ export const DiscoverScreen: React.FC = () => {
                   onPress={() => setCityPickerOpen(true)}
                   onReturn={returnHome}
                 />
-                {/* Dates (and post filters), like Discover's: opens the When sheet, which has the quick
+                {/* Dates, like Discover's: opens the When sheet, which has the quick
                     ranges and Pick dates (the Calendar). Next 3 days there puts it back. */}
                 <TouchableOpacity
-                  style={[styles.dateChip, (timeWindow.custom || !isDefaultPostFilter(postFilter)) && styles.dateChipOn]}
+                  style={[styles.dateChip, timeWindow.custom && styles.dateChipOn]}
                   onPress={() => setFiltersOpen(true)}
                   accessibilityRole="button"
                   accessibilityLabel={`Showing ${timeWindowLabel(timeWindow) ?? 'Calendar dates'}. Change dates`}
@@ -486,11 +486,6 @@ export const DiscoverScreen: React.FC = () => {
                     {timeWindowLabel(timeWindow) ??
                       formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
                   </Text>
-                  {activePostFilterCount(postFilter) ? (
-                    <View style={styles.filterBadge}>
-                      <Text style={styles.filterBadgeText}>+{activePostFilterCount(postFilter)}</Text>
-                    </View>
-                  ) : null}
                   <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
                 </TouchableOpacity>
               </>
@@ -526,6 +521,8 @@ export const DiscoverScreen: React.FC = () => {
             />
             <MapFilterSheet
               visible={filtersOpen}
+              title="When"
+              showPostFilters={false}
               window={timeWindow}
               postFilter={postFilter}
               onClose={() => setFiltersOpen(false)}
@@ -821,8 +818,6 @@ const createStyles = (c: ThemeColors) =>
     borderColor: c.border,
   },
   dateChipOn: { borderColor: c.accent, borderWidth: 1.5 },
-  filterBadge: { paddingHorizontal: 5, borderRadius: 8, backgroundColor: c.violet },
-  filterBadgeText: { color: c.white, fontSize: 10, fontWeight: '900' },
   placeholder: {
     flex: 1,
     alignItems: 'center',
