@@ -14,6 +14,7 @@ import {
   POST_PHOTO_LIMIT,
   addPost,
   claimChannel,
+  setFollowed,
   setJoined,
   toggleCommentVote,
   toggleVote,
@@ -364,6 +365,26 @@ const JoinButton: React.FC<{ channel: Channel; large?: boolean }> = ({ channel, 
   );
 };
 
+/** Follow: puts the channel's pinned posts on your map (violet, like the map's post bubbles). */
+const FollowButton: React.FC<{ channel: Channel }> = ({ channel }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const on = Boolean(channel.followed);
+  return (
+    <TouchableOpacity
+      style={[styles.followBtn, on && styles.followBtnOn]}
+      onPress={() => setFollowed(channel.id, !on)}
+      accessibilityRole="button"
+      accessibilityState={{ selected: on }}
+      accessibilityLabel={on ? `Unfollow ${channel.name}` : `Follow ${channel.name}`}
+      testID={`channel-follow-${channel.id}`}
+    >
+      {on ? <Check size={13} color={c.white} strokeWidth={3} /> : <MapPin size={13} color={c.violet} strokeWidth={2.5} />}
+      <Text style={[styles.followText, on && styles.followTextOn]}>{on ? 'FOLLOWING' : 'FOLLOW'}</Text>
+    </TouchableOpacity>
+  );
+};
+
 // ---- Channel page ----------------------------------------------------------------------------
 
 const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
@@ -502,7 +523,15 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
           </Text>
         </View>
       ) : null}
-      <JoinButton channel={channel} large />
+      <View style={styles.membershipRow}>
+        <JoinButton channel={channel} large />
+        <FollowButton channel={channel} />
+      </View>
+      <Text style={styles.followHint}>
+        {channel.followed
+          ? 'Its pinned posts show on your Explore Map.'
+          : 'Follow to see its pinned posts on your Explore Map.'}
+      </Text>
 
       <Text style={[styles.sectionLabel, styles.sectionSpaced]}>
         {channel.tags.length ? 'POINTS IN THIS CHANNEL' : 'POINTS AROUND HERE'}
@@ -1215,7 +1244,23 @@ const createStyles = (c: ThemeColors) =>
       borderRadius: 16,
       backgroundColor: c.accent,
     },
-    joinBtnLarge: { minHeight: 42, borderRadius: 21, marginTop: 14 },
+    joinBtnLarge: { flex: 1, minHeight: 42, borderRadius: 21 },
+    membershipRow: { flexDirection: 'row', gap: 8, marginTop: 14 },
+    followBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 5,
+      minHeight: 42,
+      borderRadius: 21,
+      borderWidth: 1.5,
+      borderColor: c.violet,
+    },
+    followBtnOn: { backgroundColor: c.violet },
+    followText: { color: c.violet, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
+    followTextOn: { color: c.white },
+    followHint: { color: c.textFaint, fontSize: 12, marginTop: 6 },
     joinBtnJoined: { backgroundColor: 'transparent', borderWidth: 1, borderColor: c.accentBorder },
     joinText: { color: c.onAccent, fontSize: 12, fontWeight: '900', letterSpacing: 1 },
     joinTextJoined: { color: c.accent },

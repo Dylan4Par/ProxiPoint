@@ -19,7 +19,7 @@ import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
-import { getChannel, useVisiblePosts, type ChannelPost } from '../../lib/channels';
+import { useChannels, useVisiblePosts, type ChannelPost } from '../../lib/channels';
 import { isPinLive } from '../../lib/postRanking';
 import { absorbIntoMarkers, clusterPins, nudgeOffMarkers } from '../../lib/postPins';
 import { PostPickSheet } from './PostPickSheet';
@@ -141,20 +141,23 @@ export const DiscoveryMapCanvas: React.FC<{
     .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab }))
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
 
-  // Channel posts pinned to a place, while their pin lasts. Same #tag chip as the Points
-  // (matched against the post's channel tags); hidden on the RSVP'd view, which is about your plans.
+  // Channel posts pinned to a place, while their pin lasts, from channels you FOLLOW (joining alone
+  // doesn't put a channel on your map). Same #tag chip as the Points (matched against the post's
+  // channel tags); hidden on the RSVP'd view, which is about your plans.
   const posts = useVisiblePosts();
+  const channelsById = new Map(useChannels().map((channel) => [channel.id, channel]));
   const tagKey = (tag: string) => tag.replace(/^#+/, '').toLowerCase();
   const postPins =
     activeTab === 'RSVPd'
       ? []
       : posts
           .filter((post) => isPinLive(post, boostClock))
+          .filter((post) => channelsById.get(post.channelId)?.followed === true)
           .filter(
             (post) =>
               !selectedTag ||
               selectedTag === 'All' ||
-              (getChannel(post.channelId)?.tags ?? []).some((tag) => tagKey(tag) === tagKey(selectedTag)),
+              (channelsById.get(post.channelId)?.tags ?? []).some((tag) => tagKey(tag) === tagKey(selectedTag)),
           )
           .map((post) => ({
             post,

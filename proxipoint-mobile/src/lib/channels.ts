@@ -11,10 +11,11 @@ import { isAuthoredAllowed, useModeration } from './moderation';
  *   GET    /channels?lat&lon&q          channels near you / search
  *   GET    /me/channels                 channels you've joined
  *   POST   /channels/:id/membership     join      DELETE /channels/:id/membership   leave
+ *   POST   /channels/:id/follow         follow    DELETE /channels/:id/follow       unfollow
  *   GET    /me/channels/feed?sort=hot|new|top|near&lat&lon
  *   GET    /channels/:id/posts?sort=…   one channel's posts
  *   POST   /channels/:id/posts          { body, place?: { lat, lon, label, pointId? }, pinHours? }
- *   GET    /posts/pinned?bbox=…         pins still live inside the map view
+ *   GET    /posts/pinned?bbox=…         live pins inside the map view, from channels you follow
  *   PUT    /posts/:id/vote              { value: 1 | 0 }
  *   GET    /posts/:id/comments          POST /posts/:id/comments { body, parentId? }
  *   PUT    /comments/:id/vote           { value: 1 | 0 }
@@ -33,6 +34,12 @@ export interface Channel {
   tags: string[];
   memberCount: number;
   joined: boolean;
+  /**
+   * Following puts the channel's pinned posts on your Explore Map. Separate from joining (which
+   * makes you a member who can post and puts the channel in your feed): you can follow without
+   * joining, and joining doesn't follow.
+   */
+  followed?: boolean;
   /** Started automatically for a city or #tag (see autoChannels.ts). */
   auto?: boolean;
   /** Who moderates it. Null on an auto channel nobody has claimed yet. */
@@ -114,6 +121,7 @@ let channels: Channel[] = [
     tags: ['#LiveMusic', '#Jazz', '#Soul', '#OpenMic'],
     memberCount: 1240,
     joined: true,
+    followed: true,
   },
   {
     id: 'dink-crew',
@@ -352,6 +360,12 @@ export function claimChannel(id: string, handle: string) {
         }
       : channel,
   );
+  changed();
+}
+
+/** Follow or unfollow: whether the channel's pinned posts show on your map. */
+export function setFollowed(id: string, followed: boolean) {
+  channels = channels.map((channel) => (channel.id === id ? { ...channel, followed } : channel));
   changed();
 }
 
