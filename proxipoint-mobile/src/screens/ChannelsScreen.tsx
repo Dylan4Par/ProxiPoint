@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowBigUp, BadgeCheck, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, ImagePlus, Lock, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
 import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
@@ -867,7 +867,22 @@ const ModerationPanel: React.FC<{ channel: Channel; onOpenProfile: (handle: stri
             <TouchableOpacity
               key={option.id}
               style={[styles.pinChip, styles.modChip, active && styles.pinChipActive]}
-              onPress={() => setAccess(channel.id, option.id)}
+              onPress={() => {
+                if (option.id === access) return;
+                // Opening up a private channel shows its history to everyone: confirm first.
+                if (access === 'private') {
+                  Alert.alert(
+                    `Make ${channel.name} ${option.label.toLowerCase()}?`,
+                    'Everything posted here so far becomes visible to anyone.',
+                    [
+                      { text: 'Cancel', style: 'cancel' },
+                      { text: `Make ${option.label.toLowerCase()}`, onPress: () => setAccess(channel.id, option.id) },
+                    ],
+                  );
+                  return;
+                }
+                setAccess(channel.id, option.id);
+              }}
               accessibilityRole="radio"
               accessibilityState={{ checked: active }}
               testID={`channel-set-access-${option.id}`}
