@@ -87,3 +87,14 @@ test('a town channel no longer outranks a real channel just by counting every Po
   assert.deepEqual(picks.map((p) => p.channel.id), ['trail', 'erie-local']);
   assert.equal(picks.at(1)?.reason, 'Your town’s channel');
 });
+
+test('local spots follow a chosen window (e.g. Tomorrow)', () => {
+  const nodes = [
+    { id: 'today', venue: 'The Rusty Anchor', host: '@rustyanchor', startsAt: at(NOON, 6), endsAt: at(NOON, 9) },
+    { id: 'tomorrow', venue: 'Creekside', host: '@creeksidemarket', startsAt: at(NOON, 28), endsAt: at(NOON, 31) },
+  ];
+  const tomorrow = { start: new Date(2026, 9, 20, 0, 0).getTime(), end: new Date(2026, 9, 20, 23, 59, 59, 999).getTime() };
+  const spots = localSpots(nodes, { now: NOON, isBusiness: () => true, window: tomorrow });
+  assert.deepEqual(spots.map((s) => s.node.id), ['tomorrow']);
+  assert.equal(spots[0].live, false);
+});

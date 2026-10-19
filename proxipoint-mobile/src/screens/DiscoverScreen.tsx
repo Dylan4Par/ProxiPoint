@@ -131,6 +131,8 @@ export const DiscoverScreen: React.FC = () => {
     setDetailId(id);
   };
   const [overlay, setOverlay] = useState<'settings' | 'calendar' | null>(null);
+  // Calendar opened from Discover's When chip: its button sets the dates and stays on Discover.
+  const [calendarFromDiscover, setCalendarFromDiscover] = useState(false);
   // An @handle tapped anywhere: yours goes to the Profile tab, anyone else's opens over the screen.
   const openProfile = (handle: string) => {
     const me = profile.handle.replace(/^@+/, '').toLowerCase();
@@ -387,6 +389,10 @@ export const DiscoverScreen: React.FC = () => {
           onOpenPlace={(id) => {
             goTo('channels');
             setPlaceId(id);
+          }}
+          onPickDates={() => {
+            setCalendarFromDiscover(true);
+            setOverlay('calendar');
           }}
         />
       ) : null}
@@ -703,12 +709,17 @@ export const DiscoverScreen: React.FC = () => {
 
       {overlay === 'calendar' ? (
         <CalendarScreen
-          onBack={() => setOverlay(null)}
+          onBack={() => {
+            setOverlay(null);
+            setCalendarFromDiscover(false);
+          }}
+          applyLabel={calendarFromDiscover ? 'SHOW THESE DATES' : undefined}
           onShowOnMap={(range) => {
-            setTimeWindow(range); // the map + cards show these dates until reset
+            setTimeWindow(range); // Discover, the map and the cards show these dates until reset
             setDetailId(null);
             setOverlay(null);
-            setTab('map');
+            if (calendarFromDiscover) setCalendarFromDiscover(false);
+            else setTab('map');
           }}
           onOpenPoint={(id) => {
             setOverlay(null);

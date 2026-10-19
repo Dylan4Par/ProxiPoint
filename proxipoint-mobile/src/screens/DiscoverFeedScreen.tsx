@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
+import { CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
 import { localSpots, matchesInterests, placeBoosts, spotsLabel } from '../lib/discoverSlots';
+import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
+import { formatRange } from '../lib/calendarRange';
+import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
+import { useMapPostFilter } from '../lib/mapFilters';
 import { isBusinessHost } from '../lib/hostProfiles';
 import { canSeePoint, toggleMembership, useChannels, useVisiblePosts, type Channel } from '../lib/channels';
 import { MEMBERSHIP_LABEL, accessOf, membershipAction } from '../lib/channelAccess';
@@ -60,6 +64,8 @@ interface DiscoverFeedScreenProps {
   onOpenPost: (id: string) => void;
   /** A place from search: its page (everything said about it). */
   onOpenPlace: (id: string) => void;
+  /** When → Pick dates: the Calendar (its button sets the dates and comes back here). */
+  onPickDates: () => void;
 }
 
 const tagKey = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
@@ -85,6 +91,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   onOpenProfile,
   onOpenPost,
   onOpenPlace,
+  onPickDates,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -109,13 +116,20 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const searching = query.trim().length > 0;
   const rangeLabel = SEARCH_RANGES.find((r) => r.meters === rangeMeters)?.label ?? 'Any';
   const visible = (node: FeedNode) => isNodeAllowed(node) && canSeePoint(node);
-  const allowed = (node: FeedNode) => visible(node) && inRange(center, node, rangeMeters);
+  // When: the same time window as Explore Map (next 3 days by default, a preset, or Calendar dates).
+  const timeWindow = useTimeWindow();
+  const postFilter = useMapPostFilter();
+  const [whenOpen, setWhenOpen] = useState(false);
+  const whenLabel = timeWindowLabel(timeWindow) ?? formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) });
+  // Only times that reach now count as "happening nearby" (Tomorrow or This weekend skip it).
+  const windowIncludesNow = timeWindow.start <= now + 60000;
+  const allowed = (node: FeedNode) => visible(node) && inRange(center, node, rangeMeters) && inTimeWindow(node, timeWindow);
 
   // ---- Feed (no search) ----
   const { nearby, upcoming } = useMemo(
     () => splitFeed(nodes, now, allowed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters],
+    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, timeWindow.start, timeWindow.end],
   );
   const upcomingDays = useMemo(() => groupByDay(upcoming, now), [upcoming, now]);
   // Businesses on Discover: Boosted Points in fixed, labeled slots (never re-ranking the rest), and
@@ -132,9 +146,10 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         isBusiness: isBusinessHost,
         isBoosted: (node) => isBoosted(node.id, now),
         hidden: hiddenBoosts,
+        window: timeWindow.custom ? timeWindow : null,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, hiddenBoosts],
+    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, hiddenBoosts, timeWindow.start, timeWindow.end],
   );
   const whyBoosted = (node: DiscoveryNode) => showBoostInfo(node, matchesInterests(node, interestTags));
   const posts = useVisiblePosts();
@@ -145,9 +160,12 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
 
   // ---- Search ----
   const results = useMemo(
-    () => (searching ? searchPoints(nodes, query, center, rangeMeters, now, visible) : []),
+    () =>
+      searching
+        ? searchPoints(nodes, query, center, rangeMeters, now, (node) => visible(node) && inTimeWindow(node, timeWindow))
+        : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searching, nodes, query, viewPlace.latitude, viewPlace.longitude, rangeMeters, now, moderation],
+    [searching, nodes, query, viewPlace.latitude, viewPlace.longitude, rangeMeters, now, moderation, timeWindow.start, timeWindow.end],
   );
   const suggestions = useMemo(
     () => (searching ? suggestTags(nodes, query, headerTags) : []),
@@ -239,6 +257,19 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         keyboardShouldPersistTaps="handled"
       >
         <TouchableOpacity
+          style={[styles.placeChip, !timeWindow.custom && styles.whenChipQuiet]}
+          onPress={() => setWhenOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={`Showing ${whenLabel}. Change when`}
+          testID="discover-when"
+        >
+          <CalendarDays size={14} color={c.accent} strokeWidth={2.5} />
+          <Text style={styles.placeChipText} numberOfLines={1}>
+            {whenLabel}
+          </Text>
+          <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
+        </TouchableOpacity>
+        <TouchableOpacity
           style={styles.placeChip}
           onPress={onPickLocation}
           accessibilityRole="button"
@@ -268,6 +299,19 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
           );
         })}
       </ScrollView>
+
+      <MapFilterSheet
+        visible={whenOpen}
+        title="When"
+        showPostFilters={false}
+        window={timeWindow}
+        postFilter={postFilter}
+        onClose={() => setWhenOpen(false)}
+        onPickDates={() => {
+          setWhenOpen(false);
+          onPickDates();
+        }}
+      />
 
       {searching ? (
         <>
@@ -387,7 +431,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
           {/* ---- Local spots: businesses with something on today ---- */}
           {spots.length ? (
             <>
-              <SectionHeader label={spotsLabel(now)} />
+              <SectionHeader label={timeWindow.custom ? `LOCAL SPOTS · ${whenLabel.toUpperCase()}` : spotsLabel(now)} />
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
@@ -409,7 +453,9 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             </>
           ) : null}
 
-          {/* ---- Nearby now ---- */}
+          {/* ---- Nearby now (only when the chosen time reaches now) ---- */}
+          {windowIncludesNow ? (
+          <>
           <SectionHeader label="HAPPENING NEARBY" action="Map" onAction={onOpenMap} />
           {nearby.length ? (
             <View style={styles.list}>
@@ -431,8 +477,11 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             </Text>
           )}
 
+          </>
+          ) : null}
+
           {/* ---- Upcoming ---- */}
-          <SectionHeader label="UPCOMING" />
+          <SectionHeader label={timeWindow.custom ? whenLabel.toUpperCase() : 'UPCOMING'} />
           {upcomingDays.length ? (
             upcomingDays.map((group) => (
               <View key={group.label} style={styles.dayGroup}>
@@ -451,7 +500,11 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
               </View>
             ))
           ) : (
-            <Text style={styles.emptyText}>No upcoming Points in range yet. Try a wider range, or drop one from the map.</Text>
+            <Text style={styles.emptyText}>
+              {timeWindow.custom
+                ? `Nothing scheduled for ${whenLabel.toLowerCase()} in range yet. Try other dates or a wider range.`
+                : 'No upcoming Points in range yet. Try a wider range, or drop one from the map.'}
+            </Text>
           )}
 
           {/* ---- Channel recommendations ---- */}
@@ -842,6 +895,7 @@ const createStyles = (c: ThemeColors) =>
       backgroundColor: c.accentTint,
     },
     placeChipText: { color: c.accent, fontSize: 13, fontWeight: '800', flexShrink: 1 },
+    whenChipQuiet: { backgroundColor: c.surface, borderColor: c.border },
     rangeChip: {
       paddingHorizontal: 12,
       paddingVertical: 7,

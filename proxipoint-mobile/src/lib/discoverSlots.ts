@@ -116,10 +116,13 @@ export function localSpots<T extends SpotNode>(
     isBoosted?: (node: T) => boolean;
     hidden?: Set<string>;
     limit?: number;
+    /** A chosen time window (Discover's When); default: now until the end of today / 2 am. */
+    window?: { start: number; end: number } | null;
   },
 ): Array<{ node: T; boosted: boolean; live: boolean }> {
   const now = options.now ?? Date.now();
-  const end = spotsWindowEnd(now);
+  const end = options.window ? options.window.end : spotsWindowEnd(now);
+  const from = options.window ? Math.max(now, options.window.start) : now;
   const boosted = (node: T) => Boolean(options.isBoosted?.(node)) && !(options.hidden?.has(node.id) ?? false);
   const byVenue = new Map<string, { node: T; boosted: boolean; live: boolean; start: number }>();
   for (const node of nodes) {
@@ -127,7 +130,7 @@ export function localSpots<T extends SpotNode>(
     if (!options.isBusiness(node.host) || !node.startsAt) continue;
     const start = new Date(node.startsAt).getTime();
     const finish = node.endsAt ? new Date(node.endsAt).getTime() : start + 3600000;
-    if (!(start <= end && finish > now)) continue;
+    if (!(start <= end && finish > from)) continue;
     const entry = { node, boosted: boosted(node), live: start <= now, start };
     const venue = norm(node.venue);
     const current = byVenue.get(venue);

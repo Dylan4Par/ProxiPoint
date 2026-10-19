@@ -26,11 +26,15 @@ export const MapFilterSheet: React.FC<{
   onClose: () => void;
   /** "Pick dates…": the Calendar (its Show on map sets the dates). */
   onPickDates: () => void;
-}> = ({ visible, window, postFilter, onClose, onPickDates }) => {
+  /** Sheet title. */
+  title?: string;
+  /** Post-bubble filters (Explore Map only). */
+  showPostFilters?: boolean;
+}> = ({ visible, window, postFilter, onClose, onPickDates, title = 'Map filters', showPostFilters = true }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const insets = useSafeAreaInsets();
-  const anyChanged = window.custom || !isDefaultPostFilter(postFilter);
+  const anyChanged = window.custom || (showPostFilters && !isDefaultPostFilter(postFilter));
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose} statusBarTranslucent>
@@ -38,12 +42,12 @@ export const MapFilterSheet: React.FC<{
       <View style={[styles.sheet, { paddingBottom: insets.bottom + 18 }]} testID="map-filter-sheet">
         <View style={styles.grabber} />
         <View style={styles.headerRow}>
-          <Text style={styles.title}>Map filters</Text>
+          <Text style={styles.title}>{title}</Text>
           {anyChanged ? (
             <TouchableOpacity
               onPress={() => {
                 setTimeWindow(null);
-                setMapPostFilter(DEFAULT_POST_FILTER);
+                if (showPostFilters) setMapPostFilter(DEFAULT_POST_FILTER);
               }}
               accessibilityRole="button"
               testID="map-filter-reset"
@@ -53,7 +57,7 @@ export const MapFilterSheet: React.FC<{
           ) : null}
         </View>
 
-        <Text style={styles.label}>WHEN · POINTS</Text>
+        <Text style={styles.label}>{showPostFilters ? 'WHEN · POINTS' : 'WHEN'}</Text>
         <View style={styles.chips}>
           {TIME_PRESETS.map((preset) => {
             const active = window.preset === preset.id;
@@ -81,6 +85,8 @@ export const MapFilterSheet: React.FC<{
           </TouchableOpacity>
         </View>
 
+        {showPostFilters ? (
+        <>
         <Text style={[styles.label, styles.spaced]}>POSTS ON THE MAP</Text>
         <View style={styles.chips}>
           {ALL_POST_KINDS.map((kind) => {
@@ -121,6 +127,10 @@ export const MapFilterSheet: React.FC<{
           })}
         </View>
         <Text style={styles.hint}>Bubbles come from channels you follow, while their pins last.</Text>
+        </>
+        ) : (
+          <Text style={[styles.hint, styles.spaced]}>Discover and Explore Map share this, so they always show the same times.</Text>
+        )}
 
         <TouchableOpacity style={styles.doneBtn} onPress={onClose} accessibilityRole="button" testID="map-filter-done">
           <Text style={styles.doneText}>DONE</Text>

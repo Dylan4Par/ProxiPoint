@@ -65,7 +65,9 @@ export const CalendarScreen: React.FC<{
   onOpenPoint: (id: string) => void;
   /** "Show on map": Discover shows these dates instead of the next 3 days. */
   onShowOnMap?: (range: DayRange) => void;
-}> = ({ onBack, onOpenPoint, onShowOnMap }) => {
+  /** Words on that button (opened from Discover: "Show these dates"). */
+  applyLabel?: string;
+}> = ({ onBack, onOpenPoint, onShowOnMap, applyLabel = 'SHOW THESE DATES ON THE MAP' }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const insets = useSafeAreaInsets();
@@ -284,7 +286,7 @@ export const CalendarScreen: React.FC<{
             testID="calendar-show-on-map"
           >
             <MapIcon size={16} color={c.accent} strokeWidth={2.25} />
-            <Text style={styles.showOnMapText}>SHOW THESE DATES ON THE MAP</Text>
+            <Text style={styles.showOnMapText}>{applyLabel}</Text>
           </TouchableOpacity>
         ) : null}
 
