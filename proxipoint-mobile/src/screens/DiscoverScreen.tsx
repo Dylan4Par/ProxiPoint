@@ -16,6 +16,7 @@ import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 import { ProfileScreen } from './ProfileScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { HostProfileScreen } from './HostProfileScreen';
+import { canPostIn } from '../lib/channelAccess';
 import { ActivityScreen } from './ActivityScreen';
 import { CalendarScreen } from './CalendarScreen';
 import { DiscoverFeedScreen } from './DiscoverFeedScreen';
@@ -310,7 +311,7 @@ export const DiscoverScreen: React.FC = () => {
     // Posted to a channel you're in: the channel gets a post about the new Point.
     // (Server side this happens with the Point's create call.)
     const channel = point.channelId ? getChannel(point.channelId) : null;
-    if (channel?.joined) {
+    if (channel?.joined && canPostIn(channel)) {
       addPost(channel.id, profile.handle, `New Point: ${point.title}\n${formatPointWhen(point)} · ${publicWhere(point)}`);
     }
     setDropOpen(false);

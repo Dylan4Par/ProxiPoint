@@ -1,5 +1,13 @@
 import { useEffect, useState } from 'react';
 import { isAuthoredAllowed, useModeration } from './moderation';
+import {
+  accessOf,
+  canViewChannel,
+  membershipAction,
+  uniqueHandle,
+  type ChannelAccess,
+  type NewChannelInput,
+} from './channelAccess';
 
 /**
  * Channels: groups people join, like subreddits for a local scene. Each channel has its own
@@ -19,6 +27,15 @@ import { isAuthoredAllowed, useModeration } from './moderation';
  *   PUT    /posts/:id/vote              { value: 1 | 0 }
  *   GET    /posts/:id/comments          POST /posts/:id/comments { body, parentId? }
  *   PUT    /comments/:id/vote           { value: 1 | 0 }
+ *   POST   /channels                    create { name, description, tags, access }
+ *   PATCH  /channels/:id                { access?, description?, tags? } (moderator)
+ *   POST   /channels/:id/requests       ask to join (private) or to post (restricted)
+ *   DELETE /channels/:id/requests/me    take the request back
+ *   GET    /channels/:id/requests       moderator: pending requests
+ *   POST   /channels/:id/requests/:handle/approve | /decline
+ *   DELETE /channels/:id/approved/:handle   moderator: take approval away
+ * Access (public / restricted / private) is in channelAccess.ts; the server enforces it on every
+ * read and write, so a private channel's posts never reach someone who isn't approved.
  * Ranking stays community-only: votes, comments, age and distance. Boosts never feed into it.
  * Pinned places are block-level (see snapToBlock in postRanking.ts), never an exact GPS fix.
  * Posts and comments need the same report/block handling as recaps (see moderation.ts).
@@ -44,6 +61,24 @@ export interface Channel {
   auto?: boolean;
   /** Who moderates it. Null on an auto channel nobody has claimed yet. */
   owner?: string | null;
+  /** Public (default), restricted or private. See channelAccess.ts. */
+  access?: ChannelAccess;
+  /** You moderate it (you created or claimed it). */
+  moderator?: boolean;
+  /** You're approved: can post in a restricted channel, and are a member of a private one. */
+  approved?: boolean;
+  /** You've asked to join (private) or to post (restricted) and are waiting. */
+  requested?: boolean;
+  /** Moderator only: people waiting for approval, oldest first. */
+  requests?: ChannelRequest[];
+  /** Moderator only: who's approved (besides the moderator). */
+  approvedUsers?: string[];
+}
+
+export interface ChannelRequest {
+  handle: string;
+  at: string;
+  note?: string;
 }
 
 /** Where a post is pinned: a Point's venue, or a block-level spot. */
@@ -186,6 +221,28 @@ let channels: Channel[] = [
     memberCount: 457,
     joined: false,
   },
+  {
+    id: 'erie-notices',
+    name: 'Erie Town Notices',
+    handle: 'c/erienotices',
+    description: 'Road closures, town meetings and official heads-ups. Approved posters only; everyone can comment.',
+    tags: ['#TownHall', '#Community'],
+    memberCount: 3120,
+    joined: false,
+    access: 'restricted',
+    owner: '@erie.local',
+  },
+  {
+    id: 'owls-crew',
+    name: 'Midnight Owls Crew',
+    handle: 'c/owlscrew',
+    description: 'Band and crew only: set lists, load-in times and gear swaps.',
+    tags: ['#Jazz'],
+    memberCount: 14,
+    joined: false,
+    access: 'private',
+    owner: '@rustyanchor',
+  },
 ];
 
 let posts: ChannelPost[] = [
@@ -285,6 +342,25 @@ let posts: ChannelPost[] = [
     place: sampleSpot(120, -60, 'Near Briggs St'),
     pinnedUntil: hoursFromNow(5),
   },
+  {
+    id: 'p10',
+    channelId: 'erie-notices',
+    author: '@erie.local',
+    body: 'Town board meets Tuesday at 6:30 in the library community room. Agenda: the Briggs St festival and new crosswalks.',
+    createdAt: minutesAgo(200),
+    upvotes: 57,
+    voted: false,
+  },
+  {
+    // In a private channel: only its approved members ever see this.
+    id: 'p11',
+    channelId: 'owls-crew',
+    author: '@rustyanchor',
+    body: 'Load-in at 7:45 tonight through the alley door. Second set list is in the shared folder.',
+    createdAt: minutesAgo(90),
+    upvotes: 6,
+    voted: false,
+  },
 ];
 
 let comments: PostComment[] = [
@@ -355,6 +431,8 @@ export function claimChannel(id: string, handle: string) {
       ? {
           ...channel,
           owner: handle,
+          moderator: true,
+          approved: true,
           joined: true,
           memberCount: channel.joined ? channel.memberCount : channel.memberCount + 1,
         }
@@ -382,9 +460,115 @@ export function setFollowed(id: string, followed: boolean) {
 export function setJoined(id: string, joined: boolean) {
   channels = channels.map((channel) =>
     channel.id === id && channel.joined !== joined
-      ? { ...channel, joined, memberCount: Math.max(0, channel.memberCount + (joined ? 1 : -1)) }
+      ? {
+          ...channel,
+          joined,
+          memberCount: Math.max(0, channel.memberCount + (joined ? 1 : -1)),
+          // Leaving a private channel ends your approval: you'd have to ask again.
+          approved: !joined && accessOf(channel) === 'private' ? false : channel.approved,
+        }
       : channel,
   );
+  changed();
+}
+
+/** Ask to join (private) or to post (restricted), or take the request back. */
+export function setRequested(id: string, requested: boolean) {
+  channels = channels.map((channel) => (channel.id === id ? { ...channel, requested } : channel));
+  changed();
+}
+
+/**
+ * The Join button: join or leave; on a private channel, ask to join or take the request back.
+ * Moderators can't leave their own channel this way.
+ */
+export function toggleMembership(id: string) {
+  const channel = getChannel(id);
+  if (!channel) return;
+  switch (membershipAction(channel)) {
+    case 'join':
+      return setJoined(id, true);
+    case 'leave':
+      return setJoined(id, false);
+    case 'request':
+      return setRequested(id, true);
+    case 'requested':
+      return setRequested(id, false);
+    default:
+  }
+}
+
+/**
+ * Start a new channel. You moderate it, you're its first member, and it's on your map.
+ * Server side: POST /channels; the server picks the final c/handle.
+ */
+export function createChannel(input: NewChannelInput, ownerHandle: string): Channel {
+  const name = input.name.trim().replace(/\s+/g, ' ');
+  const handle = uniqueHandle(name, channels.map((channel) => channel.handle));
+  const channel: Channel = {
+    id: `ch-${handle.slice(2)}-${Date.now().toString(36)}`,
+    name,
+    handle,
+    description: input.description.trim(),
+    tags: input.tags,
+    memberCount: 1,
+    joined: true,
+    followed: true,
+    access: input.access,
+    owner: ownerHandle,
+    moderator: true,
+    approved: true,
+    approvedUsers: [],
+    // Dev builds only: one sample request, so the approval flow can be tried before the backend
+    // sends real ones.
+    requests:
+      input.access !== 'public' && (globalThis as { __DEV__?: boolean }).__DEV__
+        ? [{ handle: '@sam.plays.bass', at: new Date().toISOString(), note: 'Sample request (dev build only)' }]
+        : [],
+  };
+  channels = [channel, ...channels];
+  changed();
+  return channel;
+}
+
+/** Moderator: change who can view and post. */
+export function setAccess(id: string, access: ChannelAccess) {
+  channels = channels.map((channel) => (channel.id === id && channel.moderator ? { ...channel, access } : channel));
+  changed();
+}
+
+const handleKey = (handle: string) => handle.replace(/^@+/, '').toLowerCase();
+
+/** Moderator: approve a request. On a private channel that makes them a member. */
+export function approveRequest(id: string, handle: string) {
+  channels = channels.map((channel) => {
+    if (channel.id !== id || !channel.moderator) return channel;
+    const requests = (channel.requests ?? []).filter((request) => handleKey(request.handle) !== handleKey(handle));
+    const approvedUsers = [...(channel.approvedUsers ?? []).filter((h) => handleKey(h) !== handleKey(handle)), handle];
+    const joins = accessOf(channel) === 'private' ? 1 : 0;
+    return { ...channel, requests, approvedUsers, memberCount: channel.memberCount + joins };
+  });
+  changed();
+}
+
+export function declineRequest(id: string, handle: string) {
+  channels = channels.map((channel) =>
+    channel.id === id && channel.moderator
+      ? { ...channel, requests: (channel.requests ?? []).filter((request) => handleKey(request.handle) !== handleKey(handle)) }
+      : channel,
+  );
+  changed();
+}
+
+/** Moderator: take someone's approval away (they leave a private channel). */
+export function removeApproved(id: string, handle: string) {
+  channels = channels.map((channel) => {
+    if (channel.id !== id || !channel.moderator) return channel;
+    const before = channel.approvedUsers ?? [];
+    const approvedUsers = before.filter((h) => handleKey(h) !== handleKey(handle));
+    const left = accessOf(channel) === 'private' && approvedUsers.length < before.length ? 1 : 0;
+    return { ...channel, approvedUsers, memberCount: Math.max(1, channel.memberCount - left) };
+  });
   changed();
 }
 
@@ -468,19 +652,30 @@ export function useComments(): PostComment[] {
   return useStore(() => comments);
 }
 
+/** A post in a channel you're allowed to view (private channels: approved members only). */
+export function isPostViewable(post: Pick<ChannelPost, 'channelId'>): boolean {
+  return canViewChannel(getChannel(post.channelId));
+}
+
 /**
- * Posts you should see: without ones you reported or by people you blocked. Re-renders on new
- * posts, votes, reports and blocks. Use this (not usePosts) anywhere posts are shown.
+ * Posts you should see: without ones you reported, by people you blocked, or in private channels
+ * you're not approved for. Re-renders on new posts, votes, reports, blocks and access changes.
+ * Use this (not usePosts) anywhere posts are shown.
  */
 export function useVisiblePosts(): ChannelPost[] {
   const all = usePosts();
   useModeration();
-  return all.filter(isAuthoredAllowed);
+  useChannels(); // access and approval changes
+  return all.filter((post) => isAuthoredAllowed(post) && isPostViewable(post));
 }
 
-/** Comments you should see (same rules as useVisiblePosts). */
+/** Comments you should see (same rules as useVisiblePosts, by the post they're on). */
 export function useVisibleComments(): PostComment[] {
   const all = useComments();
   useModeration();
-  return all.filter(isAuthoredAllowed);
+  useChannels();
+  return all.filter((comment) => {
+    const post = getPost(comment.postId);
+    return isAuthoredAllowed(comment) && (!post || isPostViewable(post));
+  });
 }

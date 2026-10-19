@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowBigUp, BadgeCheck, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, ImagePlus, Sparkles, MapPin, MessageCircle, Plus, Search, Send, Users, X } from 'lucide-react-native';
+import { ArrowBigUp, BadgeCheck, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, ImagePlus, Lock, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
 import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
 import { ReportSheet, type ReportTarget } from '../components/safety/ReportSheet';
 import { pickRecapPhotos } from '../lib/profilePhotos';
@@ -14,9 +14,14 @@ import {
   POST_PHOTO_LIMIT,
   addPost,
   canSeePoint,
+  approveRequest,
   claimChannel,
+  declineRequest,
+  removeApproved,
+  setAccess,
   setFollowed,
-  setJoined,
+  setRequested,
+  toggleMembership,
   toggleCommentVote,
   toggleVote,
   useChannels,
@@ -45,6 +50,16 @@ import { isNodeAllowed, useModeration } from '../lib/moderation';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
 import { StrongestSignalCard } from '../components/profile/Signal';
 import { strongestSignals } from '../lib/signalScore';
+import {
+  CHANNEL_ACCESS,
+  MEMBERSHIP_LABEL,
+  accessOf,
+  canCommentIn,
+  canPostIn,
+  canViewChannel,
+  membershipAction,
+} from '../lib/channelAccess';
+import { ACCESS_ICON, CreateChannelSheet } from '../components/channels/CreateChannelSheet';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
 export type ChannelsSegment = 'feed' | 'alerts' | 'manage';
@@ -82,8 +97,12 @@ interface ChannelsScreenProps {
 
 /** Points listed on a channel page (a city channel can have many). */
 const MAX_CHANNEL_POINTS = 8;
-/** " · Unclaimed" after the member count for auto channels nobody runs yet. */
-const channelStatus = (channel: Channel) => (channel.auto && !channel.owner ? ' · Unclaimed' : '');
+/** " · Unclaimed" / " · Private" after the member count. */
+const channelStatus = (channel: Channel) => {
+  if (channel.auto && !channel.owner) return ' · Unclaimed';
+  const access = accessOf(channel);
+  return access === 'public' ? '' : ` · ${access === 'private' ? 'Private' : 'Restricted'}`;
+};
 
 /** Short label for the report sheet: the start of the text. */
 const snippet = (text: string) => (text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text);
@@ -190,7 +209,9 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
           onOpenTag={props.onOpenTag}
         />
       ) : null}
-      {segment === 'manage' ? <ManageView channels={channels} onOpenChannel={onOpenChannel} /> : null}
+      {segment === 'manage' ? (
+        <ManageView channels={channels} onOpenChannel={onOpenChannel} myHandle={props.myHandle} />
+      ) : null}
     </View>
   );
 };
@@ -297,13 +318,37 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
 
 // ---- Manage ----------------------------------------------------------------------------------
 
-const ManageView: React.FC<{ channels: Channel[]; onOpenChannel: (id: string) => void }> = ({ channels, onOpenChannel }) => {
+const ManageView: React.FC<{ channels: Channel[]; onOpenChannel: (id: string) => void; myHandle: string }> = ({
+  channels,
+  onOpenChannel,
+  myHandle,
+}) => {
   const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const [creating, setCreating] = useState(false);
   const joined = channels.filter((channel) => channel.joined);
   const others = channels.filter((channel) => !channel.joined).sort((a, b) => b.memberCount - a.memberCount);
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} testID="channels-manage">
-      <Text style={styles.sectionLabel}>JOINED ({joined.length})</Text>
+      <TouchableOpacity
+        style={styles.createChannelBtn}
+        onPress={() => setCreating(true)}
+        accessibilityRole="button"
+        testID="channels-create"
+      >
+        <Plus size={16} color={c.violet} strokeWidth={2.5} />
+        <Text style={styles.createChannelText}>Create a channel</Text>
+      </TouchableOpacity>
+      <CreateChannelSheet
+        visible={creating}
+        myHandle={myHandle}
+        onClose={() => setCreating(false)}
+        onCreated={(id) => {
+          setCreating(false);
+          onOpenChannel(id);
+        }}
+      />
+      <Text style={[styles.sectionLabel, styles.sectionSpaced]}>JOINED ({joined.length})</Text>
       {joined.length ? (
         <View style={styles.list}>
           {joined.map((channel) => (
@@ -351,19 +396,31 @@ const ChannelRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ channe
   );
 };
 
+/** Join / leave; on a private channel, request to join (tap again to take it back). */
 const JoinButton: React.FC<{ channel: Channel; large?: boolean }> = ({ channel, large = false }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
+  const action = membershipAction(channel);
+  const settled = action === 'leave' || action === 'moderator' || action === 'requested';
+  const a11y = {
+    moderator: `You moderate ${channel.name}`,
+    leave: `Leave ${channel.name}`,
+    join: `Join ${channel.name}`,
+    request: `Request to join ${channel.name}`,
+    requested: `Join request sent. Tap to cancel`,
+  }[action];
   return (
     <TouchableOpacity
-      style={[styles.joinBtn, large && styles.joinBtnLarge, channel.joined && styles.joinBtnJoined]}
-      onPress={() => setJoined(channel.id, !channel.joined)}
+      style={[styles.joinBtn, large && styles.joinBtnLarge, settled && styles.joinBtnJoined]}
+      onPress={() => toggleMembership(channel.id)}
+      disabled={action === 'moderator'}
       accessibilityRole="button"
-      accessibilityLabel={channel.joined ? `Leave ${channel.name}` : `Join ${channel.name}`}
+      accessibilityLabel={a11y}
       testID={`channel-join-${channel.id}`}
     >
-      {channel.joined ? <Check size={13} color={c.accent} strokeWidth={3} /> : null}
-      <Text style={[styles.joinText, channel.joined && styles.joinTextJoined]}>{channel.joined ? 'JOINED' : 'JOIN'}</Text>
+      {action === 'leave' || action === 'moderator' ? <Check size={13} color={c.accent} strokeWidth={3} /> : null}
+      {action === 'request' ? <Lock size={12} color={c.base} strokeWidth={2.75} /> : null}
+      <Text style={[styles.joinText, settled && styles.joinTextJoined]}>{MEMBERSHIP_LABEL[action]}</Text>
     </TouchableOpacity>
   );
 };
@@ -424,6 +481,10 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
     return channelNodes(channel, [...nearby, ...upcoming]) as DiscoveryNode[];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel, nodes, now, moderation]);
+  const viewable = canViewChannel(channel);
+  const canPost = canPostIn(channel);
+  const access = accessOf(channel);
+  const AccessIcon = ACCESS_ICON[access];
   const [draft, setDraft] = useState('');
   // Pin to the map: off, or a place (a Point's venue, or the block you're on) for a few hours.
   const [pinOn, setPinOn] = useState(false);
@@ -455,10 +516,10 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
     }
   };
   // A post needs text or at least one photo.
-  const canPost = Boolean(draft.trim() || photos.length);
+  const canSend = Boolean(draft.trim() || photos.length);
 
   const post = () => {
-    if (!canPost) return;
+    if (!canSend || !canPost) return;
     // Server side: upload the photos first, then POST the post with their URLs.
     addPost(channel.id, myHandle, draft, pinOn && pinPlace ? { place: pinPlace, hours: pinHours } : null, photos);
     setDraft('');
@@ -491,11 +552,15 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
         <View style={styles.rowCopy}>
           <Text style={styles.pageTitle}>{channel.name}</Text>
           <Text style={styles.rowMeta}>
-            {channel.handle} · {formatCount(channel.memberCount)} members{channelStatus(channel)}
+            {channel.handle} · {formatCount(channel.memberCount)} members{channel.auto && !channel.owner ? ' · Unclaimed' : ''}
           </Text>
+          <View style={styles.accessPill} testID="channel-access">
+            <AccessIcon size={11} color={c.violetText} strokeWidth={2.5} />
+            <Text style={styles.accessPillText}>{CHANNEL_ACCESS.find((option) => option.id === access)?.label}</Text>
+          </View>
         </View>
       </View>
-      <Text style={styles.description}>{channel.description}</Text>
+      {channel.description ? <Text style={styles.description}>{channel.description}</Text> : null}
       <View style={styles.tagRow}>
         {channel.tags.map((tag) => (
           <View key={tag} style={styles.tagPill}>
@@ -533,13 +598,32 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
       ) : null}
       <View style={styles.membershipRow}>
         <JoinButton channel={channel} large />
-        <FollowButton channel={channel} />
+        {viewable ? <FollowButton channel={channel} /> : null}
       </View>
-      <Text style={styles.followHint}>
-        {channel.followed
-          ? 'Its pinned posts show on your Explore Map.'
-          : 'Follow to see its pinned posts on your Explore Map.'}
-      </Text>
+      {viewable ? (
+        <Text style={styles.followHint}>
+          {channel.followed
+            ? 'Its pinned posts show on your Explore Map.'
+            : 'Follow to see its pinned posts on your Explore Map.'}
+        </Text>
+      ) : null}
+      {channel.moderator ? <ModerationPanel channel={channel} onOpenProfile={onOpenProfile} /> : null}
+
+      {!viewable ? (
+        // Private and you're not approved: name and description only.
+        <View style={styles.gateBox} testID="channel-private-gate">
+          <View style={styles.claimHeader}>
+            <Lock size={15} color={c.violet} strokeWidth={2.25} />
+            <Text style={styles.claimTitle}>Private channel</Text>
+          </View>
+          <Text style={styles.claimBody}>
+            {channel.requested
+              ? 'Your request to join is waiting for the moderator. You’ll see its posts once you’re approved.'
+              : 'Only approved members can see its posts, comments and Points. Request to join and the moderator will decide.'}
+          </Text>
+        </View>
+      ) : (
+      <>
 
       {strongest.length ? (
         <View style={styles.sectionSpaced}>
@@ -589,7 +673,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
       )}
 
       <Text style={[styles.sectionLabel, styles.sectionSpaced]}>POSTS</Text>
-      {channel.joined ? (
+      {canPost ? (
         <View style={styles.composer}>
           <TextInput
             style={styles.composerInput}
@@ -692,9 +776,9 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.postBtn, !canPost && styles.postBtnDisabled]}
+              style={[styles.postBtn, !canSend && styles.postBtnDisabled]}
               onPress={post}
-              disabled={!canPost}
+              disabled={!canSend}
               accessibilityRole="button"
               testID="channel-post"
             >
@@ -703,7 +787,29 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
           </View>
         </View>
       ) : (
-        <Text style={styles.emptyText}>Join to post in this channel.</Text>
+        // Restricted and you're not approved: read and comment, ask to post.
+        <View style={styles.gateBox} testID="channel-restricted-gate">
+          <View style={styles.claimHeader}>
+            <ShieldCheck size={15} color={c.violet} strokeWidth={2.25} />
+            <Text style={styles.claimTitle}>Approved posters only</Text>
+          </View>
+          <Text style={styles.claimBody}>
+            {channel.requested
+              ? 'Your request to post is waiting for the moderator. You can still comment on posts.'
+              : 'Anyone can read and comment here, but the moderator approves who can post.'}
+          </Text>
+          <TouchableOpacity
+            style={[styles.claimBtn, channel.requested && styles.gateBtnPending]}
+            onPress={() => setRequested(channel.id, !channel.requested)}
+            accessibilityRole="button"
+            accessibilityLabel={channel.requested ? 'Cancel request to post' : 'Request to post'}
+            testID="channel-request-post"
+          >
+            <Text style={[styles.claimBtnText, channel.requested && styles.gateBtnPendingText]}>
+              {channel.requested ? 'REQUESTED · CANCEL' : 'REQUEST TO POST'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       )}
       <SortRow sort={sort} onChange={setSort} />
       {posts.length ? (
@@ -726,7 +832,118 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
       ) : (
         <Text style={styles.emptyText}>No posts yet. Start the conversation.</Text>
       )}
+      </>
+      )}
     </ScrollView>
+  );
+};
+
+// ---- Moderation ------------------------------------------------------------------------------
+
+/**
+ * Moderator tools on your own channel: who can view and post, requests waiting for approval,
+ * and who's approved. Server side: PATCH /channels/:id, GET /channels/:id/requests, and the
+ * approve / decline / remove routes in channels.ts.
+ */
+const ModerationPanel: React.FC<{ channel: Channel; onOpenProfile: (handle: string) => void }> = ({ channel, onOpenProfile }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const access = accessOf(channel);
+  const requests = channel.requests ?? [];
+  const approved = channel.approvedUsers ?? [];
+  return (
+    <View style={styles.modBox} testID="channel-moderation">
+      <View style={styles.claimHeader}>
+        <ShieldCheck size={15} color={c.violet} strokeWidth={2.25} />
+        <Text style={styles.claimTitle}>Moderation</Text>
+      </View>
+
+      <Text style={styles.modLabel}>WHO CAN VIEW AND POST</Text>
+      <View style={styles.pinChipRow}>
+        {CHANNEL_ACCESS.map((option) => {
+          const active = option.id === access;
+          const Icon = ACCESS_ICON[option.id];
+          return (
+            <TouchableOpacity
+              key={option.id}
+              style={[styles.pinChip, styles.modChip, active && styles.pinChipActive]}
+              onPress={() => setAccess(channel.id, option.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: active }}
+              testID={`channel-set-access-${option.id}`}
+            >
+              <Icon size={12} color={active ? c.white : c.violet} strokeWidth={2.5} />
+              <Text style={[styles.pinChipText, active && styles.pinChipTextActive]}>{option.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={styles.modHint}>{CHANNEL_ACCESS.find((option) => option.id === access)?.summary}</Text>
+
+      {access !== 'public' || requests.length ? (
+        <>
+          <Text style={styles.modLabel}>
+            REQUESTS{requests.length ? ` · ${requests.length}` : ''}
+          </Text>
+          {requests.length ? (
+            requests.map((request) => (
+              <View key={request.handle} style={styles.modRow}>
+                <TouchableOpacity style={styles.rowCopy} onPress={() => onOpenProfile(request.handle)} accessibilityRole="link">
+                  <Text style={styles.modHandle}>{request.handle}</Text>
+                  <Text style={styles.modMeta} numberOfLines={1}>
+                    {[access === 'private' ? 'Wants to join' : 'Wants to post', timeAgo(request.at), request.note]
+                      .filter(Boolean)
+                      .join(' · ')}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modApprove}
+                  onPress={() => approveRequest(channel.id, request.handle)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Approve ${request.handle}`}
+                  testID={`channel-approve-${request.handle}`}
+                >
+                  <Check size={15} color={c.white} strokeWidth={3} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.modDecline}
+                  onPress={() => declineRequest(channel.id, request.handle)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Decline ${request.handle}`}
+                >
+                  <X size={15} color={c.textMuted} strokeWidth={2.5} />
+                </TouchableOpacity>
+              </View>
+            ))
+          ) : (
+            <Text style={styles.modHint}>No requests waiting.</Text>
+          )}
+
+          <Text style={styles.modLabel}>
+            {access === 'private' ? 'APPROVED MEMBERS' : 'APPROVED POSTERS'}
+            {approved.length ? ` · ${approved.length}` : ''}
+          </Text>
+          {approved.length ? (
+            <View style={styles.pinChipRow}>
+              {approved.map((handle) => (
+                <TouchableOpacity
+                  key={handle}
+                  style={[styles.pinChip, styles.modChip]}
+                  onPress={() => removeApproved(channel.id, handle)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Remove approval for ${handle}`}
+                >
+                  <Text style={styles.pinChipText}>{handle}</Text>
+                  <X size={12} color={c.violet} strokeWidth={2.5} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.modHint}>Just you so far.</Text>
+          )}
+        </>
+      ) : null}
+    </View>
   );
 };
 
@@ -1050,7 +1267,8 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
         )}
       </ScrollView>
 
-      {/* Comment box, pinned under the thread. */}
+      {/* Comment box, pinned under the thread (only where you're allowed to comment). */}
+      {canCommentIn(channel) ? (
       <View style={styles.commentBar}>
         {replyTo ? (
           <View style={styles.replyingRow}>
@@ -1087,6 +1305,7 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
           </TouchableOpacity>
         </View>
       </View>
+      ) : null}
     </View>
   );
 };
@@ -1394,6 +1613,73 @@ const createStyles = (c: ThemeColors) =>
     postBody: { color: c.text, fontSize: 14, lineHeight: 20 },
     postFooter: { flexDirection: 'row', gap: 8 },
     reportBtn: { marginLeft: 'auto', paddingLeft: 6 },
+    accessPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 4,
+      marginTop: 4,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+      backgroundColor: c.violetTint,
+    },
+    accessPillText: { color: c.violetText, fontSize: 11, fontWeight: '800' },
+    gateBox: {
+      marginTop: 12,
+      padding: 14,
+      gap: 8,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.violet,
+      backgroundColor: c.violetTint,
+    },
+    gateBtnPending: { backgroundColor: 'transparent', borderWidth: 1, borderColor: c.violet },
+    gateBtnPendingText: { color: c.violetText },
+    modBox: {
+      marginTop: 14,
+      padding: 14,
+      gap: 8,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    modLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginTop: 6 },
+    modHint: { color: c.textFaint, fontSize: 12, lineHeight: 17 },
+    modChip: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+    modRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+    modHandle: { color: c.text, fontSize: 14, fontWeight: '700' },
+    modMeta: { color: c.textMuted, fontSize: 12 },
+    modApprove: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.violet,
+    },
+    modDecline: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    createChannelBtn: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      minHeight: 44,
+      borderRadius: 22,
+      borderWidth: 1,
+      borderColor: c.violet,
+      backgroundColor: c.violetTint,
+    },
+    createChannelText: { color: c.violetText, fontSize: 14, fontWeight: '800' },
     claimBox: {
       marginTop: 14,
       padding: 12,

@@ -118,7 +118,8 @@ export function recommendChannels(
     (node) => node && node.origin !== 'local' && !isEnded(node, now),
   );
   return channels
-    .filter((channel) => !channel.joined)
+    // Private channels are found by searching, not recommended.
+    .filter((channel) => !channel.joined && channel.access !== 'private')
     .map((channel) => {
       const matched = channel.tags.filter((tag) => followed.has(key(tag)));
       const activeCount = channelNodes(channel, live).length;

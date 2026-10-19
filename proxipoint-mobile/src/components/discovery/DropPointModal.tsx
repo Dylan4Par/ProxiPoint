@@ -58,6 +58,7 @@ import {
   toBeaconCreatePayload,
 } from '../../lib/beaconDraft';
 import { useChannels, type Channel } from '../../lib/channels';
+import { canPostIn } from '../../lib/channelAccess';
 import { BeaconApiError, postBeacon } from '../../services/beaconApi';
 import { cleanVenueLabel, shareMessage, shareUrl, type DroppedPoint } from '../../lib/droppedPoint';
 import {
@@ -934,14 +935,15 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     VISIBILITY_OPTIONS.find((option) => option.id === 'public')!;
 
   // Channel choices: channels you've joined first, then (not for Channel visibility, which needs
-  // membership) channels whose #tags match what's typed. The picked one always stays listed.
+  // membership) channels whose #tags match what's typed. Only channels you can post in (restricted
+  // ones need approval). The picked one always stays listed.
   const tagKeys = new Set(parseBeaconTags(tags).map((tag) => tag.replace(/^#+/, '').toLowerCase()));
-  const joinedChannels = allChannels.filter((channel) => channel.joined);
+  const joinedChannels = allChannels.filter((channel) => channel.joined && canPostIn(channel));
   const tagMatches =
     visibility === 'channel'
       ? []
       : allChannels.filter(
-          (channel) => !channel.joined && channel.tags.some((tag) => tagKeys.has(tag.replace(/^#+/, '').toLowerCase())),
+          (channel) => !channel.joined && canPostIn(channel) && channel.tags.some((tag) => tagKeys.has(tag.replace(/^#+/, '').toLowerCase())),
         );
   const pickedChannel = channelId ? allChannels.find((channel) => channel.id === channelId) ?? null : null;
   const channelOptions: Channel[] = [...joinedChannels, ...tagMatches].slice(0, 8);

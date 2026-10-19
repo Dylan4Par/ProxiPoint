@@ -3,8 +3,9 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Check, ChevronDown, ChevronRight, Hash, Map as MapIcon, MapPin, Search, Users, X } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { useBoosts } from '../lib/boost';
-import { canSeePoint, setJoined, useChannels, useVisibleComments, useVisiblePosts, type Channel } from '../lib/channels';
+import { canSeePoint, toggleMembership, useChannels, useVisibleComments, useVisiblePosts, type Channel } from '../lib/channels';
 import { strongestSignals } from '../lib/signalScore';
+import { MEMBERSHIP_LABEL, accessOf, membershipAction } from '../lib/channelAccess';
 import { StrongestSignalCard } from '../components/profile/Signal';
 import {
   DEFAULT_RANGE_METERS,
@@ -405,16 +406,20 @@ const ChannelResultRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ 
         <Text style={styles.resultMeta} numberOfLines={1}>
           {channel.handle} · {formatCount(channel.memberCount)} members
           {channel.auto && !channel.owner ? ' · Unclaimed' : ''}
+          {accessOf(channel) === 'private' ? ' · Private' : accessOf(channel) === 'restricted' ? ' · Restricted' : ''}
         </Text>
       </View>
       <TouchableOpacity
-        style={[styles.joinBtnSmall, channel.joined && styles.joinBtnJoined]}
-        onPress={() => setJoined(channel.id, !channel.joined)}
+        style={[styles.joinBtnSmall, membershipAction(channel) !== 'join' && membershipAction(channel) !== 'request' && styles.joinBtnJoined]}
+        onPress={() => toggleMembership(channel.id)}
+        disabled={membershipAction(channel) === 'moderator'}
         accessibilityRole="button"
-        accessibilityLabel={channel.joined ? `Leave ${channel.name}` : `Join ${channel.name}`}
+        accessibilityLabel={`${MEMBERSHIP_LABEL[membershipAction(channel)]} ${channel.name}`}
       >
         {channel.joined ? <Check size={13} color={c.accent} strokeWidth={3} /> : null}
-        <Text style={[styles.joinText, channel.joined && styles.joinTextJoined]}>{channel.joined ? 'JOINED' : 'JOIN'}</Text>
+        <Text style={[styles.joinText, membershipAction(channel) !== 'join' && membershipAction(channel) !== 'request' && styles.joinTextJoined]}>
+          {MEMBERSHIP_LABEL[membershipAction(channel)]}
+        </Text>
       </TouchableOpacity>
     </TouchableOpacity>
   );
@@ -449,7 +454,7 @@ const ChannelCard: React.FC<{ pick: ChannelPick; onOpen: () => void }> = ({ pick
       </Text>
       <TouchableOpacity
         style={[styles.joinBtn, channel.joined && styles.joinBtnJoined]}
-        onPress={() => setJoined(channel.id, !channel.joined)}
+        onPress={() => toggleMembership(channel.id)}
         accessibilityRole="button"
         accessibilityLabel={channel.joined ? `Leave ${channel.name}` : `Join ${channel.name}`}
         testID={`discover-join-${channel.id}`}
