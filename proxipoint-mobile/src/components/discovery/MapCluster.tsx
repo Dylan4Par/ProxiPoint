@@ -143,7 +143,6 @@ export const ClusterBubble: React.FC<{
             numberOfLines={1}
             style={[
               styles.labelText,
-              live && !boosted && styles.labelTextLive,
               {
                 opacity: roll,
                 transform: [{ translateY: roll.interpolate({ inputRange: [0, 1], outputRange: [9, 0] }) }],
@@ -303,10 +302,10 @@ const createStyles = (c: ThemeColors) =>
     },
     labelBoosted: { borderColor: GOLD, borderWidth: 1.5 },
     labelLive: { borderColor: 'rgba(52, 211, 153, 0.55)' },
-    labelText: { color: c.text, fontSize: 10.5, fontWeight: '800' },
+    // Cyan like the single pins' labels; live / boosted show in the border.
+    labelText: { color: c.accent, fontSize: 10.5, fontWeight: '800' },
     // Quiet "#" so the eye goes to the word.
     labelHash: { fontSize: 8.5, fontWeight: '600', opacity: 0.55 },
-    labelTextLive: { color: c.greenBright },
 
     backdrop: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(2, 6, 23, 0.55)' },
     sheet: {

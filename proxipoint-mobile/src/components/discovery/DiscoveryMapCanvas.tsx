@@ -900,7 +900,8 @@ export const DiscoveryMapCanvas: React.FC<{
                   ]}
                 >
                   <Text
-                    style={[styles.tagLabelText, live && styles.tagLabelTextLive, isSelected && styles.tagLabelTextSelected]}
+                    // Always cyan; live / selected / boosted show in the label's border instead.
+                    style={styles.tagLabelText}
                     numberOfLines={1}
                   >
                     {/* Quiet "#" so the eye goes to the word */}
@@ -1163,16 +1164,13 @@ const createStyles = (c: ThemeColors) =>
     borderColor: c.accent,
     backgroundColor: c.accentFill,
   },
+  // Same cyan, size and weight as the group bubbles' labels (MapCluster).
   tagLabelText: {
-    color: c.accentSoft,
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  tagHash: { fontSize: 7.5, fontWeight: '600', opacity: 0.55 },
-  tagLabelTextSelected: {
-    color: c.text,
+    color: c.accent,
+    fontSize: 10.5,
     fontWeight: '800',
   },
+  tagHash: { fontSize: 8.5, fontWeight: '600', opacity: 0.55 },
   liveRing: {
     position: 'absolute',
     top: 6,
@@ -1213,8 +1211,7 @@ const createStyles = (c: ThemeColors) =>
   pinTipLive: { borderTopColor: c.greenDeep },
   pinTipLiveSelected: { borderTopColor: c.greenBright },
   tagLabelLive: { borderColor: 'rgba(52, 211, 153, 0.55)' },
-  tagLabelLiveSelected: { borderColor: c.green, backgroundColor: c.greenInk },
-  tagLabelTextLive: { color: c.greenBright },
+  tagLabelLiveSelected: { borderColor: c.green },
   pinWrapper: {
     alignItems: 'center',
     justifyContent: 'center',
