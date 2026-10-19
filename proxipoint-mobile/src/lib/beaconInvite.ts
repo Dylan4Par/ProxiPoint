@@ -1,4 +1,4 @@
-export type InviteKind = 'facebook' | 'proxipoint' | 'phone';
+export type InviteKind = 'facebook' | 'proxipoint' | 'phone' | 'email';
 
 export interface BeaconInvite {
   kind: InviteKind;
@@ -70,6 +70,23 @@ export function addPhoneInvite(invites: BeaconInvite[], raw: string): InviteResu
   }
   return {
     invites: [...invites, { kind: 'phone', id, label: trimmed }],
+    error: '',
+  };
+}
+
+/** Simple shape check: something@domain.tld, no spaces. The server sends the email. */
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+export function addEmailInvite(invites: BeaconInvite[], raw: string): InviteResult {
+  const email = raw.trim().toLowerCase();
+  if (!EMAIL_PATTERN.test(email) || email.length > 254) {
+    return { invites, error: 'Enter an email address, such as sam@example.com.' };
+  }
+  if (sameInvite(invites, 'email', email)) {
+    return { invites, error: 'That email is already invited.' };
+  }
+  return {
+    invites: [...invites, { kind: 'email', id: email, label: email }],
     error: '',
   };
 }

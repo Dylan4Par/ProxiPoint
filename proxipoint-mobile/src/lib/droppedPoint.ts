@@ -104,6 +104,18 @@ export function inviteTextMessage(point: DroppedPoint): string {
   ].join('\n');
 }
 
+/**
+ * A mailto: link to email every email invitee at once (Bcc, so they don't see each other),
+ * with the invite text filled in. Null when there's nobody to email.
+ */
+export function inviteEmailUrl(point: DroppedPoint): string | null {
+  const emails = point.invites.filter((invite) => invite.kind === 'email').map((invite) => invite.id);
+  if (!emails.length) return null;
+  const subject = encodeURIComponent(`You're invited: ${point.title}`);
+  const body = encodeURIComponent(inviteTextMessage(point));
+  return `mailto:?bcc=${emails.map(encodeURIComponent).join(',')}&subject=${subject}&body=${body}`;
+}
+
 /** Digits (and a leading +) from a phone invite, for the SMS app. */
 export function phoneNumberFromInvite(invite: BeaconInvite): string | null {
   const fromId = String(invite.id ?? '').replace(/[^\d+]/g, '');

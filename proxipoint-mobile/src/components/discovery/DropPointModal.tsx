@@ -40,6 +40,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import {
+  addEmailInvite,
   addPhoneInvite,
   addProxiPointInvite,
   removeInvite,
@@ -297,11 +298,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [revealing, setRevealing] = useState(false);
   const [invites, setInvites] = useState<BeaconInvite[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteKind, setInviteKind] = useState<InviteKind | 'link'>('proxipoint');
+  const [inviteKind, setInviteKind] = useState<InviteKind>('proxipoint');
   // "Link" tab: open the share sheet with the Point's link as soon as it's dropped.
   const [shareAfterDrop, setShareAfterDrop] = useState(false);
   const [handleInput, setHandleInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [mapPicking, setMapPicking] = useState(false);
   // Select on map: the spot under the fixed center pin, and where to move the map.
@@ -446,6 +448,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setShareAfterDrop(false);
     setHandleInput('');
     setPhoneInput('');
+    setEmailInput('');
     setInviteError('');
     setMapPicking(false);
     setPerimeterOn(false);
@@ -1905,7 +1908,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     [
                       ['proxipoint', 'Users'],
                       ['phone', 'Phone'],
-                      ['link', 'Link'],
+                      ['email', 'Email'],
                     ] as const
                   ).map(([kind, label]) => {
                     const selected = inviteKind === kind;
@@ -1919,7 +1922,6 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                         onPress={() => {
                             setInviteKind(kind);
                             setInviteError('');
-                            if (kind === 'link') setShareAfterDrop(true);
                         }}
                       >
                         <Text style={[styles.inviteKindText, selected && styles.inviteKindTextSelected]}>{label}</Text>
@@ -1937,32 +1939,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   </Text>
                 ) : null}
 
-                {inviteKind === 'link' ? (
-                  <View style={styles.linkPanel} testID="invite-link">
-                    <Text style={styles.inviteHint}>
-                      {visibility === 'private'
-                        ? 'Anyone you send the link to can open this Point and RSVP, even though it’s Private.'
-                        : 'Send a link to this Point by text, email or any app. It opens the Point, even for people without ProxiPoint yet.'}
-                    </Text>
-                    <View style={styles.linkRow}>
-                      <Link2 size={16} color={c.accent} strokeWidth={2.25} />
-                      <Text style={styles.linkRowText}>Share the link after I drop it</Text>
-                      <Switch
-                        value={shareAfterDrop}
-                        onValueChange={setShareAfterDrop}
-                        trackColor={{ false: c.borderStrong, true: c.accentTrack }}
-                        thumbColor={shareAfterDrop ? c.accent : c.textMuted}
-                        accessibilityLabel="Share the link after dropping"
-                        testID="invite-link-toggle"
-                      />
-                    </View>
-                    <Text style={styles.linkNote}>
-                      {shareAfterDrop
-                        ? 'Your share sheet opens as soon as the Point is dropped. You can share it again later from My Drops.'
-                        : 'You can still share it later from My Drops.'}
-                    </Text>
-                  </View>
+                {inviteKind === 'email' ? (
+                  <Text style={styles.inviteHint}>
+                    They’ll get an email with a link to this Point, even if they don’t have the app yet.
+                  </Text>
                 ) : null}
+
 
                 {inviteKind === 'proxipoint' ? (
                   <View style={styles.inviteEntry}>
@@ -2031,7 +2013,59 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   </View>
                 ) : null}
 
+                {inviteKind === 'email' ? (
+                  <View style={styles.inviteEntry}>
+                    <TextInput
+                      testID="invite-email-input"
+                      value={emailInput}
+                      onChangeText={setEmailInput}
+                      onSubmitEditing={() => {
+                        const next = addEmailInvite(invites, emailInput);
+                        setInvites(next.invites);
+                        setInviteError(next.error);
+                        if (!next.error) setEmailInput('');
+                      }}
+                      placeholder="sam@example.com"
+                      placeholderTextColor={c.textFaint}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                      autoComplete="email"
+                      style={styles.inviteInput}
+                    />
+                    <TouchableOpacity
+                      accessibilityRole="button"
+                      style={styles.inviteAddBtn}
+                      onPress={() => {
+                        const next = addEmailInvite(invites, emailInput);
+                        setInvites(next.invites);
+                        setInviteError(next.error);
+                        if (!next.error) setEmailInput('');
+                      }}
+                    >
+                      <Text style={styles.inviteAddText}>Add</Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : null}
+
                 {inviteError ? <Text style={styles.inviteError} testID="invite-error">{inviteError}</Text> : null}
+
+                {/* Share the Point's link from any app once it's dropped (not a tab of its own). */}
+                <View style={styles.linkRow} testID="invite-link">
+                  <Link2 size={16} color={c.accent} strokeWidth={2.25} />
+                  <Text style={styles.linkRowText}>Share the link after I drop it</Text>
+                  <Switch
+                    value={shareAfterDrop}
+                    onValueChange={setShareAfterDrop}
+                    trackColor={{ false: c.borderStrong, true: c.accentTrack }}
+                    thumbColor={shareAfterDrop ? c.accent : c.textMuted}
+                    accessibilityLabel="Share the link after dropping"
+                    testID="invite-link-toggle"
+                  />
+                </View>
+                {shareAfterDrop && visibility === 'private' ? (
+                  <Text style={styles.linkNote}>Anyone you send the link to can open this Point and RSVP, even though it’s Private.</Text>
+                ) : null}
               </View>
             ) : null}
           </View>
@@ -3192,7 +3226,6 @@ const createStyles = (c: ThemeColors) =>
     fontSize: 12,
     lineHeight: 17,
   },
-  linkPanel: { gap: 10 },
   linkRow: {
     flexDirection: 'row',
     alignItems: 'center',

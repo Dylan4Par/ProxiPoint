@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -23,6 +24,7 @@ import {
   EyeOff,
   Globe,
   Lock,
+  Mail,
   MapPin,
   MessageSquare,
   Pencil,
@@ -34,11 +36,12 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react-native';
-import { addPhoneInvite, addProxiPointInvite, removeInvite } from '../../lib/beaconInvite';
+import { addEmailInvite, addPhoneInvite, addProxiPointInvite, removeInvite } from '../../lib/beaconInvite';
 import {
   calendarEventFor,
   cleanVenueLabel,
   formatPointWhen,
+  inviteEmailUrl,
   inviteTextMessage,
   phoneNumberFromInvite,
   pointStatus,
@@ -96,9 +99,10 @@ export const ManagePointSheet: React.FC<ManagePointSheetProps> = ({ point, justD
       ? Math.max(StatusBar.currentHeight ?? 0, insets.top, 56)
       : Math.max(insets.top, 24);
 
-  const [inviteKind, setInviteKind] = useState<'proxipoint' | 'phone'>('proxipoint');
+  const [inviteKind, setInviteKind] = useState<'proxipoint' | 'phone' | 'email'>('proxipoint');
   const [handleInput, setHandleInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
+  const [emailInput, setEmailInput] = useState('');
   const [inviteError, setInviteError] = useState('');
   const [notice, setNotice] = useState<{ text: string; tone: 'ok' | 'warn' } | null>(null);
   const [busy, setBusy] = useState<'sms' | 'share' | 'calendar' | null>(null);
@@ -165,6 +169,22 @@ export const ManagePointSheet: React.FC<ManagePointSheetProps> = ({ point, justD
   const addPhone = () => {
     if (!phoneInput.trim()) return;
     if (updateInvites(addPhoneInvite(point.invites, phoneInput))) setPhoneInput('');
+  };
+
+  const addEmail = () => {
+    if (!emailInput.trim()) return;
+    if (updateInvites(addEmailInvite(point.invites, emailInput))) setEmailInput('');
+  };
+
+  const emailCount = point.invites.filter((invite) => invite.kind === 'email').length;
+  const emailInvitees = async () => {
+    const url = inviteEmailUrl(point);
+    if (!url) return;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      setNotice({ text: 'There’s no email app on this phone.', tone: 'warn' });
+    }
   };
 
   const textInvitees = async () => {
@@ -373,6 +393,7 @@ export const ManagePointSheet: React.FC<ManagePointSheetProps> = ({ point, justD
               [
                 ['proxipoint', 'Users'],
                 ['phone', 'Phone'],
+                ['email', 'Email'],
               ] as const
             ).map(([kind, label]) => {
               const selected = inviteKind === kind;
@@ -397,7 +418,9 @@ export const ManagePointSheet: React.FC<ManagePointSheetProps> = ({ point, justD
           <Text style={styles.hint}>
             {inviteKind === 'proxipoint'
               ? 'Invite people already on ProxiPoint by their @handle.'
-              : 'Add numbers, then text everyone a link to this Point.'}
+              : inviteKind === 'phone'
+                ? 'Add numbers, then text everyone a link to this Point.'
+                : 'Add email addresses, then email everyone a link to this Point.'}
           </Text>
 
           {inviteKind === 'proxipoint' ? (
@@ -416,6 +439,25 @@ export const ManagePointSheet: React.FC<ManagePointSheetProps> = ({ point, justD
                 testID="manage-handle-input"
               />
               <TouchableOpacity style={styles.addBtn} onPress={addHandle} accessibilityRole="button">
+                <Text style={styles.addText}>Add</Text>
+              </TouchableOpacity>
+            </View>
+          ) : inviteKind === 'email' ? (
+            <View style={styles.entryRow}>
+              <TextInput
+                value={emailInput}
+                onChangeText={setEmailInput}
+                onSubmitEditing={addEmail}
+                placeholder="sam@example.com"
+                placeholderTextColor={c.textFaint}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                style={styles.input}
+                testID="manage-email-input"
+              />
+              <TouchableOpacity style={styles.addBtn} onPress={addEmail} accessibilityRole="button">
                 <Text style={styles.addText}>Add</Text>
               </TouchableOpacity>
             </View>
@@ -465,6 +507,15 @@ export const ManagePointSheet: React.FC<ManagePointSheetProps> = ({ point, justD
               onPress={textInvitees}
               loading={busy === 'sms'}
               testID="manage-text-invitees"
+            />
+          ) : null}
+          {emailCount > 0 ? (
+            <ActionRow
+              Icon={Mail}
+              title={`Email ${emailCount} ${emailCount === 1 ? 'invitee' : 'invitees'}`}
+              subtitle="Opens your email app with the link filled in"
+              onPress={emailInvitees}
+              testID="manage-email-invitees"
             />
           ) : null}
           </>

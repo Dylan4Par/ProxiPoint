@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   LINKED_FACEBOOK_ACCOUNTS,
+  addEmailInvite,
   addPhoneInvite,
   addProxiPointInvite,
   inviteSummary,
@@ -53,4 +54,13 @@ test('the invite summary names one guest and counts the rest', () => {
     ]),
     'Invited 2',
   );
+});
+
+test('an email invite is checked, lower-cased and not added twice', () => {
+  const added = addEmailInvite([], '  Sam@Example.com ');
+  assert.deepEqual(added.invites, [{ kind: 'email', id: 'sam@example.com', label: 'sam@example.com' }]);
+  assert.equal(addEmailInvite(added.invites, 'SAM@example.com').error, 'That email is already invited.');
+  for (const bad of ['sam', 'sam@', 'sam@example', 'sam @example.com', '@example.com']) {
+    assert.ok(addEmailInvite([], bad).error, bad);
+  }
 });
