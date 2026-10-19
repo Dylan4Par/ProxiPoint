@@ -3,10 +3,8 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Check, ChevronDown, ChevronRight, Hash, Map as MapIcon, MapPin, Search, Users, X } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { useBoosts } from '../lib/boost';
-import { canSeePoint, toggleMembership, useChannels, useVisibleComments, useVisiblePosts, type Channel } from '../lib/channels';
-import { strongestSignals } from '../lib/signalScore';
+import { canSeePoint, toggleMembership, useChannels, useVisiblePosts, type Channel } from '../lib/channels';
 import { MEMBERSHIP_LABEL, accessOf, membershipAction } from '../lib/channelAccess';
-import { StrongestSignalCard } from '../components/profile/Signal';
 import { PLACE_ICON, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
 import { searchLocalPlaces, type LocalPlace } from '../lib/localPlaces';
 import { kindInfo, searchPosts } from '../lib/postKinds';
@@ -118,10 +116,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters],
   );
   const upcomingDays = useMemo(() => groupByDay(upcoming, now), [upcoming, now]);
-  // Strongest Signal around here: top contributors across local channels, last 30 days.
   const posts = useVisiblePosts();
-  const comments = useVisibleComments();
-  const strongest = useMemo(() => strongestSignals(posts, comments, { now, limit: 3 }), [posts, comments, now]);
   const channelPicks = useMemo(
     () => recommendChannels(channels, nodes, interestTags, now),
     [channels, nodes, interestTags, now],
@@ -382,14 +377,6 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
                   <ChannelCard key={pick.channel.id} pick={pick} onOpen={() => onOpenChannel(pick.channel.id)} />
                 ))}
               </ScrollView>
-            </>
-          ) : null}
-
-          {/* ---- Strongest Signal ---- */}
-          {strongest.length ? (
-            <>
-              <SectionHeader label="STRONGEST SIGNAL NEARBY" />
-              <StrongestSignalCard ranks={strongest} scopeLabel="Local channels · 30 days" onOpenProfile={onOpenProfile} />
             </>
           ) : null}
 
