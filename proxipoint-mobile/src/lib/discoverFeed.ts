@@ -1,6 +1,7 @@
 import { isLiveNode } from './liveStatus';
 import { calculateDistanceMeters } from './locationFilter';
 import type { Channel } from './channels';
+import { formatDistanceIn, getUnits, type DistanceUnits } from './units';
 
 /**
  * The Discover feed: channels worth joining, what's happening near you now, and what's coming up.
@@ -144,11 +145,9 @@ export function recommendChannels(
     .slice(0, max);
 }
 
-/** "316m" or "1.4 km" */
-export function formatDistance(meters: number | undefined): string | null {
-  if (typeof meters !== 'number' || !Number.isFinite(meters)) return null;
-  if (meters < 1000) return `${Math.round(meters)}m`;
-  return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
+/** "316m" / "1.4 km", or "330 ft" / "0.2 mi", in the units chosen in Settings. */
+export function formatDistance(meters: number | undefined | null, units: DistanceUnits = getUnits()): string | null {
+  return formatDistanceIn(meters, units);
 }
 
 /** "1.2k" for big counts. */

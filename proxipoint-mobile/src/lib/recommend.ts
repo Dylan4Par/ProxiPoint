@@ -2,6 +2,7 @@ import { isBoosted } from './boost';
 import { nodeTags } from './discoverFilters';
 import { isLiveNode } from './liveStatus';
 import { isNodeAllowed } from './moderation';
+import { formatDistanceIn, getUnits } from './units';
 
 /**
  * Activity's Priority pick and Tag tracker, worked out from what's on Discover and your #tags.
@@ -91,7 +92,7 @@ export function rankForYou(
       matched.length > 1 ? `Matches ${matched.length} of your #tags` : `Matches ${matched[0]}`,
       boosted ? 'Boosted' : null,
       live ? 'Live now' : node.status && until != null && until <= 180 ? node.status : null,
-      distance != null && distance <= 1000 ? `${distance}m away` : null,
+      distance != null && distance <= 1000 ? `${formatDistanceIn(distance, getUnits())} away` : null,
       node.isRsvpd ? 'You’re going' : null,
     ].filter((reason): reason is string => Boolean(reason));
 
@@ -138,7 +139,7 @@ export function deckPicks(
       matched.length > 1 ? `Matches ${matched.length} of your #tags` : matched[0] ? `Matches ${matched[0]}` : null,
       mode === 'popular' && going ? `${going} going` : null,
       live ? 'Live now' : node.status && until != null && until <= 180 ? node.status : null,
-      distance != null && distance <= 1000 ? `${distance}m away` : null,
+      distance != null && distance <= 1000 ? `${formatDistanceIn(distance, getUnits())} away` : null,
       node.isRsvpd ? 'You’re going' : null,
     ].filter((reason): reason is string => Boolean(reason));
 

@@ -5,6 +5,7 @@ import { markAllActivityRead, timeAgo, useActivity, type ActivityItem } from '..
 import { activeBoost, useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
 import { deckPicks, tagTracker, type RecNode } from '../lib/recommend';
+import { useUnits } from '../lib/units';
 import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 import { RecommendationDeck } from '../components/activity/RecommendationDeck';
 import { TagTrackerTile } from '../components/activity/TagTrackerTile';
@@ -34,7 +35,8 @@ export const ActivityScreen: React.FC<{
   const now = useBoosts(); // ticks every 30s so "5m" ages move
   const moderation = useModeration();
   const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, RecNode>;
-  const deck = useMemo(() => deckPicks(nodes, interestTags, now), [nodes, interestTags, now, moderation]);
+  const units = useUnits(); // "316m away" or "0.2 mi away" on the cards
+  const deck = useMemo(() => deckPicks(nodes, interestTags, now), [nodes, interestTags, now, moderation, units]);
 
   // Recent: alerts for boosts that are still running stay on top; everything else keeps its order.
   const sortedItems = useMemo(() => {

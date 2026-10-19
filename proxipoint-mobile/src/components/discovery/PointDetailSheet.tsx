@@ -41,6 +41,8 @@ import { isLiveNode } from '../../lib/liveStatus';
 import { hereCountNow, hereLabel } from '../../lib/nearbyInterest';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
+import { formatDistance } from '../../lib/discoverFeed';
+import { useUnits } from '../../lib/units';
 
 const NAV_BAR_HEIGHT = 72;
 /** The sheet starts this far down the screen, so the map (and the beacon pulse) stays in view. */
@@ -167,6 +169,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   onTopChange,
   onOpenHost,
 }) => {
+  useUnits(); // re-render when Settings switches km / miles
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const navBarHeight = useNavBarHeight();
@@ -357,7 +360,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
           {view.distanceMeters != null ? (
             <View style={styles.distanceChip}>
               <View style={styles.greenDot} />
-              <Text style={styles.distanceText}>{Math.round(view.distanceMeters)}m away</Text>
+              <Text style={styles.distanceText}>{formatDistance(view.distanceMeters)} away</Text>
             </View>
           ) : null}
           {view.eta ? (

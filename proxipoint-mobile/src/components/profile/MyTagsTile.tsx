@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Bell, Globe, Lock, Plus, Users, X } from 'lucide-react-native';
 import { INTEREST_TAG_LIMIT } from '../../lib/myProfile';
+import { INTEREST_RADIUS_METERS } from '../../lib/nearbyInterest';
+import { formatRadiusIn, useUnits } from '../../lib/units';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -28,6 +30,7 @@ export const MyTagsTile: React.FC<{
   nearbyCounts?: Record<string, string | null>;
 }> = ({ tags, isPublic, onChange, countMeIn = false, onChangeCountMeIn, nearbyCounts = {} }) => {
   const styles = useThemedStyles(createStyles);
+  const units = useUnits();
   const { colors: c } = useTheme();
   const [input, setInput] = useState('');
   const [error, setError] = useState('');
@@ -171,7 +174,7 @@ export const MyTagsTile: React.FC<{
           <View style={styles.visibilityCopy}>
             <Text style={styles.visibilityLabel}>Count me in nearby numbers</Text>
             <Text style={styles.hint}>
-              Adds you to counts like “20+ people into #Hiking within 5 km”. No name, no dot on the map: just
+              Adds you to counts like “20+ people into #Hiking within {formatRadiusIn(INTEREST_RADIUS_METERS, units)}”. No name, no dot on the map: just
               your home area, never your live location. Numbers under 10 are never shown.
             </Text>
           </View>

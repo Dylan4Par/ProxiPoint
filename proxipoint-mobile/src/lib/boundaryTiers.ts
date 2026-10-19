@@ -1,4 +1,5 @@
 import type { BoundaryTier, BoundaryTierLevel } from '../types/beacon';
+import { formatRadiusIn, getUnits } from './units';
 
 export const BOUNDARY_RADII: Record<BoundaryTierLevel, number> = {
   micro: 300,
@@ -23,12 +24,9 @@ export interface GeoAnchor {
 const NEIGHBORHOOD_TYPES = new Set(['neighborhood', 'district']);
 const METRO_TYPES = new Set(['locality', 'city', 'metro']);
 
+/** "1.5 km" / "300 m", or "1 mi" / "1,000 ft", in the units chosen in Settings. */
 export function formatRadiusDisplay(meters: number): string {
-  if (meters >= 1000) {
-    const km = meters / 1000;
-    return `${Number.isInteger(km) ? km : km.toFixed(1)}km`;
-  }
-  return `${meters}m`;
+  return formatRadiusIn(meters, getUnits());
 }
 
 export function inferPlaceType(placeName = '', placeType?: string): string {
@@ -93,9 +91,9 @@ export function resolveBoundaryTiers(params: ResolveTierParams = {}): BoundaryTi
   };
 
   const descriptions: Record<BoundaryTierLevel, string> = {
-    micro: 'Immediate venue and block perimeter (300m)',
-    neighborhood: 'Adjacent district and pedestrian corridor (1.5km)',
-    metro: 'Municipal and regional commute reach (8km)',
+    micro: `Immediate venue and block perimeter (${formatRadiusDisplay(BOUNDARY_RADII.micro)})`,
+    neighborhood: `Adjacent district and pedestrian corridor (${formatRadiusDisplay(BOUNDARY_RADII.neighborhood)})`,
+    metro: `Municipal and regional commute reach (${formatRadiusDisplay(BOUNDARY_RADII.metro)})`,
   };
 
   return (['micro', 'neighborhood', 'metro'] as const).map((id) => ({

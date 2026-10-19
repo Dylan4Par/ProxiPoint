@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { calculateDistanceMeters } from './locationFilter';
+import { formatRadiusIn, getUnits } from './units';
 
 /**
  * "Nearby people without location sharing": how many people near a place are into a #tag,
@@ -64,12 +65,11 @@ export function roundedCount(count: number): string | null {
   return `${(Math.floor(count / step) * step).toLocaleString('en-US')}+`;
 }
 
-/** "20+ people into #Pickleball within 5 km", or null when too few to show. */
+/** "20+ people into #Pickleball within 5 km" (or "3 mi"), or null when too few to show. */
 export function interestLine(count: number, tag: string, radiusMeters = INTEREST_RADIUS_METERS): string | null {
   const shown = roundedCount(count);
   if (!shown) return null;
-  const km = Math.round(radiusMeters / 1000);
-  return `${shown} people into #${tag.replace(/^#+/, '')} within ${km} km`;
+  return `${shown} people into #${tag.replace(/^#+/, '')} within ${formatRadiusIn(radiusMeters, getUnits())}`;
 }
 
 /** The busiest of several #tags (a channel's), with its count. */

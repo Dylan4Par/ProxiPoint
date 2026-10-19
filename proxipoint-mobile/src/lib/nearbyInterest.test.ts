@@ -12,6 +12,10 @@ import {
   topInterest,
   type InterestMember,
 } from './nearbyInterest';
+import { setUnits } from './units';
+
+// These tests read metric labels; the app's default follows the phone's region.
+setUnits('metric');
 
 const ERIE = { latitude: 40.0617, longitude: -105.0383 };
 

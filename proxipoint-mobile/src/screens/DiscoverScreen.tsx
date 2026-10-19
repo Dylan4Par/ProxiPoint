@@ -14,6 +14,8 @@ import { PhotoPolicyHost } from '../components/safety/PhotoPolicyHost';
 import { CircleCropHost } from '../components/common/CircleCropHost';
 import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 import { useAuthStore } from '../stores/useAuthStore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { getUnits, setUnits } from '../lib/units';
 import { ProfileScreen } from './ProfileScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { HostProfileScreen } from './HostProfileScreen';
@@ -41,6 +43,9 @@ import { DEFAULT_PROFILE, DEFAULT_SETTINGS, type MyProfile, type MySettings } fr
 import type { PointRecap } from '../lib/pointRecap';
 import type { DroppedPoint } from '../lib/droppedPoint';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
+
+/** Where the Distance units setting is saved on the phone. */
+const UNITS_KEY = 'pp.settings.units.v1';
 
 type ScreenTab = NavTab;
 
@@ -249,8 +254,27 @@ export const DiscoverScreen: React.FC = () => {
   };
   const [settings, setSettings] = useState<MySettings>(() => {
     const seed = useAuthStore.getState().seed;
-    return seed ? { ...DEFAULT_SETTINGS, notifications: seed.notifications } : DEFAULT_SETTINGS;
+    const base = { ...DEFAULT_SETTINGS, units: getUnits() };
+    return seed ? { ...base, notifications: seed.notifications } : base;
   });
+  // Distance units apply app-wide (every distance reads lib/units) and are saved on the phone.
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.getItem(UNITS_KEY)
+      .then((saved) => {
+        if (!cancelled && (saved === 'metric' || saved === 'imperial')) {
+          setSettings((current) => (current.units === saved ? current : { ...current, units: saved }));
+        }
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    setUnits(settings.units);
+    AsyncStorage.setItem(UNITS_KEY, settings.units).catch(() => undefined);
+  }, [settings.units]);
   // Point recaps posted from the Profile page (in memory until the backend has them).
   const [recaps, setRecaps] = useState<PointRecap[]>([]);
 

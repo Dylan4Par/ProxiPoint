@@ -11,12 +11,21 @@ import {
   resolveBoundaryTiers,
   zoomForRadius,
 } from './boundaryTiers';
+import { setUnits } from './units';
+
+// These tests read metric labels; the app's default follows the phone's region.
+setUnits('metric');
 
 test('formats meters and kilometers cleanly', () => {
-  assert.equal(formatRadiusDisplay(300), '300m');
-  assert.equal(formatRadiusDisplay(1500), '1.5km');
-  assert.equal(formatRadiusDisplay(8000), '8km');
-  assert.equal(formatRadiusDisplay(1000), '1km');
+  assert.equal(formatRadiusDisplay(300), '300 m');
+  assert.equal(formatRadiusDisplay(1500), '1.5 km');
+  assert.equal(formatRadiusDisplay(8000), '8 km');
+  assert.equal(formatRadiusDisplay(1000), '1 km');
+  setUnits('imperial');
+  assert.equal(formatRadiusDisplay(300), '1,000 ft');
+  assert.equal(formatRadiusDisplay(1500), '0.9 mi');
+  assert.equal(formatRadiusDisplay(8000), '5 mi');
+  setUnits('metric');
 });
 
 test('resolves the three standardized boundary tiers', () => {
@@ -26,13 +35,13 @@ test('resolves the three standardized boundary tiers', () => {
   assert.equal(tiers[0]?.radiusMeters, BOUNDARY_RADII.micro);
   assert.equal(tiers[0]?.radiusMeters, 300);
   assert.equal(tiers[0]?.label, 'Pearl Street Mall');
-  assert.equal(tiers[0]?.displayRadius, '300m');
+  assert.equal(tiers[0]?.displayRadius, '300 m');
   assert.equal(tiers[1]?.id, 'neighborhood');
   assert.equal(tiers[1]?.radiusMeters, 1500);
-  assert.equal(tiers[1]?.displayRadius, '1.5km');
+  assert.equal(tiers[1]?.displayRadius, '1.5 km');
   assert.equal(tiers[2]?.id, 'metro');
   assert.equal(tiers[2]?.radiusMeters, 8000);
-  assert.equal(tiers[2]?.displayRadius, '8km');
+  assert.equal(tiers[2]?.displayRadius, '8 km');
 });
 
 test('truncates overly long venue labels for compact chip display', () => {

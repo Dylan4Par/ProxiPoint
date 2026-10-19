@@ -45,6 +45,7 @@ import {
   type PostSort,
 } from '../lib/postRanking';
 import { channelNodes, formatCount, formatDistance, splitFeed } from '../lib/discoverFeed';
+import { useUnits } from '../lib/units';
 import { isLiveNode } from '../lib/liveStatus';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
@@ -153,6 +154,7 @@ const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
 export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
   const { segment, onChangeSegment, channelId, onOpenChannel, unreadAlerts, postId, onOpenPost, placeId, onOpenPlace } = props;
   const styles = useThemedStyles(createStyles);
+  useUnits(); // re-render when Settings switches km / miles
   const { colors: c } = useTheme();
   const channels = useChannels();
   const posts = useVisiblePosts();

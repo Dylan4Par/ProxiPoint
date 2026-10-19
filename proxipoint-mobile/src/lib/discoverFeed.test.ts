@@ -15,6 +15,10 @@ import {
   type FeedNode,
 } from './discoverFeed';
 import type { Channel } from './channels';
+import { setUnits } from './units';
+
+// These tests read metric labels; the app's default follows the phone's region.
+setUnits('metric');
 
 const NOW = new Date('2026-10-18T18:00:00').getTime();
 const at = (minutes: number) => new Date(NOW + minutes * 60000).toISOString();

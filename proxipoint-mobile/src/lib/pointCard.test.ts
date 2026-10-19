@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { distanceLabel, goingLabel, pointTiming, startsInLabel } from './pointCard';
+import { setUnits } from './units';
+
+// These tests read metric labels; the app's default follows the phone's region.
+setUnits('metric');
 
 const NOW = Date.UTC(2026, 9, 19, 18, 0);
 const inMinutes = (m: number) => new Date(NOW + m * 60000).toISOString();

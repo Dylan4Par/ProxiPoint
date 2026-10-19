@@ -3,6 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Car, Check, Info, PersonStanding, User, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
 import { distanceLabel, goingLabel, pointTiming, type TimingKind } from '../../lib/pointCard';
+import { useUnits } from '../../lib/units';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -58,6 +59,7 @@ export const PointCard: React.FC<{
   const styles = useThemedStyles(createStyles);
   const { colors: c, mode } = useTheme();
   const pills = PILLS[mode === 'light' ? 'light' : 'dark'];
+  useUnits(); // re-render when Settings switches km / miles
   const tag = node.tags?.[0] ?? node.tag;
   const where = node.locationPrivacy?.regionName ? `In ${node.locationPrivacy.regionName}` : node.venue;
   const timing = pointTiming(node, now);

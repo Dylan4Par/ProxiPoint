@@ -3,6 +3,7 @@ import { Alert, Image, Linking, Platform, ScrollView, useWindowDimensions, Style
 import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { PointCard } from '../components/discovery/PointCard';
+import { defaultRangeMeters, searchRanges, useUnits } from '../lib/units';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
 import { localSpots, matchesInterests, placeBoosts, spotsLabel, upNextPlans, type PlanRole } from '../lib/discoverSlots';
 import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
@@ -19,8 +20,6 @@ import { countInterested, interestLine, useInterestMembers } from '../lib/nearby
 import { timeAgo } from '../lib/activity';
 import type { ChannelPost } from '../lib/channels';
 import {
-  DEFAULT_RANGE_METERS,
-  SEARCH_RANGES,
   distanceFrom,
   formatCount,
   formatDistance,
@@ -115,10 +114,20 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     const timer = setTimeout(() => searchInput.current?.focus(), 250); // after the tab has laid out
     return () => clearTimeout(timer);
   }, [searchRequest?.key]);
-  const [rangeMeters, setRangeMeters] = useState<number | null>(DEFAULT_RANGE_METERS);
+  // Distance units from Settings: range chips are km or miles, and switching keeps the closest range.
+  const units = useUnits();
+  const ranges = useMemo(() => searchRanges(units), [units]);
+  const [rangeMeters, setRangeMeters] = useState<number | null>(() => defaultRangeMeters(units));
+  useEffect(() => {
+    setRangeMeters((current) => {
+      if (current == null || ranges.some((r) => r.meters === current)) return current;
+      const options = ranges.filter((r): r is { label: string; meters: number } => r.meters != null);
+      return options.reduce((best, r) => (Math.abs(r.meters - current) < Math.abs(best.meters - current) ? r : best)).meters;
+    });
+  }, [ranges]);
   const center = { latitude: viewPlace.latitude, longitude: viewPlace.longitude };
   const searching = query.trim().length > 0;
-  const rangeLabel = SEARCH_RANGES.find((r) => r.meters === rangeMeters)?.label ?? 'Any';
+  const rangeLabel = ranges.find((r) => r.meters === rangeMeters)?.label ?? 'Any';
   const visible = (node: FeedNode) => isNodeAllowed(node) && canSeePoint(node);
   // When: the same time window as Explore Map (next 3 days by default, a preset, or Calendar dates).
   const timeWindow = useTimeWindow();
@@ -292,7 +301,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
           </Text>
           <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
         </TouchableOpacity>
-        {SEARCH_RANGES.map((range) => {
+        {ranges.map((range) => {
           const active = range.meters === rangeMeters;
           return (
             <TouchableOpacity

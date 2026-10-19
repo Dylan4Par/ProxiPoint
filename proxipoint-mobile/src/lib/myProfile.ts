@@ -1,3 +1,5 @@
+import { defaultUnits } from './units';
+
 /**
  * The signed-in user's profile, as the Profile and Settings screens need it.
  * Kept in memory for now (DiscoverScreen holds it); load and save it through the backend
@@ -94,7 +96,7 @@ export interface MySettings {
 
 export const DEFAULT_SETTINGS: MySettings = {
   notifications: true,
-  units: 'metric',
+  units: defaultUnits(),
   hideExactLocationByDefault: false,
   findableByHandle: true,
   contactEmail: '',
