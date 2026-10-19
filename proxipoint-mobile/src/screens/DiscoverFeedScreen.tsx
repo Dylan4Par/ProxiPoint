@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Alert, Image, Linking, Platform, ScrollView, useWindowDimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
-import { localSpots, matchesInterests, placeBoosts, spotsLabel, upNext, type PlanRole } from '../lib/discoverSlots';
+import { localSpots, matchesInterests, placeBoosts, spotsLabel, upNextPlans, type PlanRole } from '../lib/discoverSlots';
 import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
 import { formatRange } from '../lib/calendarRange';
 import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
@@ -68,8 +68,6 @@ interface DiscoverFeedScreenProps {
   onPickDates: () => void;
   /** Up next → Manage: the Manage sheet for a Point you're hosting. */
   onManagePoint: (id: string) => void;
-  /** Up next → "+N more": your plans (My Drops when you're hosting some, else RSVP'd on the map). */
-  onSeeAllPlans: (includesHosting: boolean) => void;
 }
 
 const tagKey = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
@@ -97,7 +95,6 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   onOpenPlace,
   onPickDates,
   onManagePoint,
-  onSeeAllPlans,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -157,9 +154,9 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, hiddenBoosts, timeWindow.start, timeWindow.end],
   );
-  // Up next: your own plan that's live or starts within 3 hours (any distance, any When).
-  const next = useMemo(
-    () => upNext((Object.values(nodes || {}) as DiscoveryNode[]).filter((node) => isNodeAllowed(node)), now),
+  // Up next: your own plans that are live or start within 3 hours (any distance, any When).
+  const plans = useMemo(
+    () => upNextPlans((Object.values(nodes || {}) as DiscoveryNode[]).filter((node) => isNodeAllowed(node)), now),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodes, now, moderation],
   );
@@ -441,17 +438,8 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       ) : (
         <>
           {/* ---- Up next: your plan, only when it's close ---- */}
-          {next ? (
-            <UpNextBar
-              node={next.node}
-              role={next.role}
-              live={next.live}
-              more={next.more}
-              now={now}
-              onOpen={() => onOpenPoint(next.node.id)}
-              onManage={() => onManagePoint(next.node.id)}
-              onMore={() => onSeeAllPlans(next.moreHosting || next.role === 'hosting')}
-            />
+          {plans.length ? (
+            <UpNextCards plans={plans} now={now} onOpenPoint={onOpenPoint} onManagePoint={onManagePoint} />
           ) : null}
 
           {/* ---- Local spots: businesses with something on today ---- */}
@@ -734,12 +722,12 @@ const UpNextBar: React.FC<{
   node: DiscoveryNode;
   role: PlanRole;
   live: boolean;
-  more: number;
   now: number;
   onOpen: () => void;
   onManage: () => void;
-  onMore: () => void;
-}> = ({ node, role, live, more, now, onOpen, onManage, onMore }) => {
+  /** Card width when several are side by side (the next one peeks in). */
+  width?: number;
+}> = ({ node, role, live, now, onOpen, onManage, width }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const hosting = role === 'hosting';
@@ -758,7 +746,7 @@ const UpNextBar: React.FC<{
     }
   };
   return (
-    <View style={[styles.upNext, live && styles.upNextLive]} testID="discover-up-next">
+    <View style={[styles.upNext, live && styles.upNextLive, width ? { width, marginTop: 0 } : null]} testID="discover-up-next">
       <TouchableOpacity style={styles.upNextMain} onPress={onOpen} accessibilityRole="button" accessibilityLabel={`${hosting ? 'Hosting' : 'Going'}: ${node.title}, ${when}`}>
         <View style={[styles.upNextIcon, live && styles.upNextIconLive]}>
           <CalendarCheck size={18} color={live ? c.green : c.accent} strokeWidth={2.25} />
@@ -784,11 +772,59 @@ const UpNextBar: React.FC<{
         >
           <Text style={styles.upNextBtnText}>{hosting ? 'Manage' : 'Directions'}</Text>
         </TouchableOpacity>
-        {more ? (
-          <TouchableOpacity onPress={onMore} hitSlop={8} accessibilityRole="button" accessibilityLabel={`${more} more of your plans`}>
-            <Text style={styles.upNextMore}>+{more} more</Text>
-          </TouchableOpacity>
-        ) : null}
+      </View>
+    </View>
+  );
+};
+
+/**
+ * Your plans that are close, as cards you swipe through: one card each, the next one peeking in
+ * from the right, and dots for where you are. A single plan is one full-width card.
+ */
+const UpNextCards: React.FC<{
+  plans: Array<{ node: DiscoveryNode; role: PlanRole; live: boolean }>;
+  now: number;
+  onOpenPoint: (id: string) => void;
+  onManagePoint: (id: string) => void;
+}> = ({ plans, now, onOpenPoint, onManagePoint }) => {
+  const styles = useThemedStyles(createStyles);
+  const { width } = useWindowDimensions();
+  const [page, setPage] = useState(0);
+  const card = (plan: (typeof plans)[number], cardWidth?: number) => (
+    <UpNextBar
+      key={plan.node.id}
+      node={plan.node}
+      role={plan.role}
+      live={plan.live}
+      now={now}
+      width={cardWidth}
+      onOpen={() => onOpenPoint(plan.node.id)}
+      onManage={() => onManagePoint(plan.node.id)}
+    />
+  );
+  if (plans.length === 1) return card(plans[0]);
+  // Content is 16 in from each side; leave 28 so the next card shows behind this one.
+  const gap = 10;
+  const cardWidth = width - 32 - 28;
+  return (
+    <View style={styles.upNextStack} testID="discover-up-next-cards">
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        snapToInterval={cardWidth + gap}
+        decelerationRate="fast"
+        disableIntervalMomentum
+        contentContainerStyle={{ gap, paddingRight: 28 }}
+        onScroll={(event) => setPage(Math.round(event.nativeEvent.contentOffset.x / (cardWidth + gap)))}
+        scrollEventThrottle={32}
+        accessibilityLabel={`Your next ${plans.length} plans. Swipe for more`}
+      >
+        {plans.map((plan) => card(plan, cardWidth))}
+      </ScrollView>
+      <View style={styles.upNextDots} accessibilityElementsHidden>
+        {plans.map((plan, i) => (
+          <View key={plan.node.id} style={[styles.upNextDot, i === Math.min(page, plans.length - 1) && styles.upNextDotOn]} />
+        ))}
       </View>
     </View>
   );
@@ -1179,7 +1215,10 @@ const createStyles = (c: ThemeColors) =>
       borderColor: c.border,
     },
     upNextBtnText: { color: c.text, fontSize: 12, fontWeight: '800' },
-    upNextMore: { color: c.accent, fontSize: 12, fontWeight: '800' },
+    upNextStack: { marginTop: 14 },
+    upNextDots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 8 },
+    upNextDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.borderStrong },
+    upNextDotOn: { width: 16, backgroundColor: c.accent },
     eventTagRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     boostedLabel: {
       flexDirection: 'row',

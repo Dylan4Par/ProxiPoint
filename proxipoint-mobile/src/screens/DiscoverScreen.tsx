@@ -93,7 +93,6 @@ export const DiscoverScreen: React.FC = () => {
   const syncMyPoint = useDiscoveryStore((state) => state.syncMyPoint);
   const viewPlace = useDiscoveryStore((state) => state.viewPlace);
   const setViewPlace = useDiscoveryStore((state) => state.setViewPlace);
-  const setActiveTab = useDiscoveryStore((state) => state.setActiveTab);
   const setSelfCoordinates = useDiscoveryStore((state) => state.setSelfCoordinates);
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const addTag = useDiscoveryStore((state) => state.addTag);
@@ -395,19 +394,10 @@ export const DiscoverScreen: React.FC = () => {
             setCalendarFromDiscover(true);
             setOverlay('calendar');
           }}
-          // Up next: Manage opens over Discover; "+N more" goes to your Drops, or your RSVP'd Points.
+          // Up next: Manage opens over Discover.
           onManagePoint={(id) => {
             setJustDroppedId(null);
             setManagingId(id);
-          }}
-          onSeeAllPlans={(includesHosting) => {
-            if (includesHosting) {
-              goTo('profile');
-              setProfileView('drops');
-            } else {
-              goTo('map');
-              setActiveTab('RSVPd');
-            }
           }}
         />
       ) : null}

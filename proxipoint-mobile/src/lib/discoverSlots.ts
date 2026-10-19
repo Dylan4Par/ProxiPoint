@@ -169,7 +169,20 @@ export function upNext<T extends PlanNode>(
   nodes: T[],
   now = Date.now(),
 ): { node: T; role: PlanRole; live: boolean; more: number; moreHosting: boolean } | null {
-  const plans = nodes
+  const [first, ...rest] = upNextPlans(nodes, now);
+  if (!first) return null;
+  return {
+    node: first.node,
+    role: first.role,
+    live: first.live,
+    more: rest.length,
+    moreHosting: rest.some((plan) => plan.role === 'hosting'),
+  };
+}
+
+/** Every plan for the "Up next" cards, in order (the first is the one upNext picks). */
+export function upNextPlans<T extends PlanNode>(nodes: T[], now = Date.now()): Array<{ node: T; role: PlanRole; live: boolean }> {
+  return nodes
     .map((node) => {
       const role: PlanRole | null = node.origin === 'local' ? 'hosting' : node.isRsvpd ? 'going' : null;
       if (!role || !node.startsAt) return null;
@@ -184,14 +197,6 @@ export function upNext<T extends PlanNode>(
         Number(b.live) - Number(a.live) ||
         a.start - b.start ||
         Number(b.role === 'hosting') - Number(a.role === 'hosting'),
-    );
-  const [first, ...rest] = plans;
-  if (!first) return null;
-  return {
-    node: first.node,
-    role: first.role,
-    live: first.live,
-    more: rest.length,
-    moreHosting: rest.some((plan) => plan.role === 'hosting'),
-  };
+    )
+    .map(({ node, role, live }) => ({ node, role, live }));
 }
