@@ -10,25 +10,12 @@ import {
   PanResponder,
 } from 'react-native';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
-import { LiveBadge } from '../drops/LiveBadge';
-import { CategoryBadge } from './CategoryBadge';
-import { isLiveStatus } from '../../lib/liveStatus';
+import { PointCard } from './PointCard';
 import { matchesDiscoverFilters } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { useModeration } from '../../lib/moderation';
 import { isBoosted, useBoosts } from '../../lib/boost';
-import { BoostedChip } from '../drops/BoostCard';
-import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
-
-/** Cover photo, if the node carries one under any of the usual names. */
-function photoOf(node: DiscoveryNode): string | null {
-  const n = node as unknown as Record<string, unknown>;
-  for (const key of ['coverPhotoUri', 'coverPhoto', 'photoUri', 'imageUrl', 'image']) {
-    const value = n[key];
-    if (typeof value === 'string' && value) return value;
-  }
-  return null;
-}
+import { useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const EXPANDED_HEIGHT = 360;
 const COLLAPSED_HEIGHT = 64;
@@ -52,7 +39,6 @@ export const EventCardList: React.FC<{
   onFullChange?: (full: boolean) => void;
 }> = ({ liveOnly = false, onOpenDetails, fullHeight = null, resetSignal = 0, onFullChange }) => {
   const styles = useThemedStyles(createStyles);
-  const { colors: c } = useTheme();
   const getVisibleNodes = useDiscoveryStore((s) => s.getVisibleNodes);
   const allNodes = useDiscoveryStore((s) => s.nodes);
   const toggleRsvp = useDiscoveryStore((s) => s.toggleRsvp);
@@ -158,79 +144,20 @@ export const EventCardList: React.FC<{
     return () => sub.remove();
   }, [isFull]);
 
-  const renderCard = ({ item }: { item: DiscoveryNode }) => {
-    const isSelected = item.id === selectedNodeId;
-    const boosted = isBoosted(item.id, boostClock);
-
-    return (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => {
-          setSelectedNodeId(item.id);
-          // From the full list, drop back to the map so the Point can be shown on it.
-          if (modeRef.current === 'full') animateDrawer('half');
-          onOpenDetails?.(item.id);
-        }}
-        style={[styles.card, boosted && styles.cardBoosted, isSelected && styles.cardSelected, isSelected && boosted && styles.cardBoosted]}
-        accessibilityRole="button"
-        accessibilityHint="Opens the details"
-      >
-        <View style={styles.cardTop}>
-          <CategoryBadge tag={item.tag} title={item.title} photoUri={photoOf(item)} />
-          <View style={styles.cardMeta}>
-            <View style={styles.tagLine}>
-              <Text style={styles.tagText}>{item.tag}</Text>
-              {boosted ? <BoostedChip /> : null}
-            </View>
-            <Text style={styles.titleText}>{item.title}</Text>
-            <Text style={styles.hostText}>{item.venue}</Text>
-          </View>
-        </View>
-
-        <View style={styles.statusRow}>
-          <View style={styles.badgeRow}>
-            <View style={styles.distanceBadge}>
-              <View style={styles.greenDot} />
-              <Text style={styles.distanceText}>{item.distanceMeters}m away</Text>
-            </View>
-            {isLiveStatus(item.status) ? (
-              // Same pulsing badge as My Drops (holds still with Reduce Motion on).
-              <LiveBadge label="LIVE NOW" />
-            ) : (
-              <View style={styles.liveBadge}>
-                <Text style={styles.liveText}>{item.status}</Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.actionRow}>
-            <View style={styles.avatarStack}>
-              <View style={[styles.avatar, { backgroundColor: c.orange }]} />
-              <View style={[styles.avatar, { backgroundColor: c.blue, marginLeft: -8 }]} />
-              <View style={[styles.avatarCount, { marginLeft: -8 }]}>
-                <Text style={styles.avatarCountText}>{item.attendeeCount}+</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.rsvpBtn}
-              onPress={() => toggleRsvp(item.id)}
-            >
-              <Text style={[styles.rsvpIcon, item.isRsvpd && styles.rsvpIconActive]}>✓</Text>
-              <Text style={[styles.rsvpLabel, item.isRsvpd && styles.rsvpLabelActive]}>
-                RSVP
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.etaText}>🚶 {item.eta}</Text>
-          <Text style={styles.activeReadout}>{item.attendeeCount} active</Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const renderCard = ({ item }: { item: DiscoveryNode }) => (
+    <PointCard
+      node={item}
+      boosted={isBoosted(item.id, boostClock)}
+      selected={item.id === selectedNodeId}
+      onOpen={() => {
+        setSelectedNodeId(item.id);
+        // From the full list, drop back to the map so the Point can be shown on it.
+        if (modeRef.current === 'full') animateDrawer('half');
+        onOpenDetails?.(item.id);
+      }}
+      onToggleRsvp={() => toggleRsvp(item.id)}
+    />
+  );
 
   return (
     <Animated.View style={[styles.drawerContainer, { height: animatedHeight }]}>
@@ -378,165 +305,9 @@ const createStyles = (c: ThemeColors) =>
   },
   list: { flex: 1 },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingBottom: 24,
     gap: 12,
-  },
-  card: {
-    backgroundColor: c.surface,
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: c.border,
-  },
-  cardSelected: {
-    borderColor: c.accentDeep,
-    backgroundColor: c.surfaceSelected,
-  },
-  // Boosted: gold border (kept when selected too).
-  cardBoosted: {
-    borderColor: '#f59e0b',
-    borderWidth: 1.5,
-  },
-  tagLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 2,
-  },
-  cardTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  cardMeta: {
-    flex: 1,
-    minWidth: 0,
-  },
-  tagText: {
-    color: c.accentDeep,
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  titleText: {
-    color: c.text,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  hostText: {
-    color: c.textFaint,
-    fontSize: 11,
-    marginTop: 2,
-    marginBottom: 8,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  distanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: c.chipBlue,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    gap: 4,
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: c.greenDeep,
-  },
-  distanceText: {
-    color: c.sky,
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  liveBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  liveText: {
-    color: c.greenDeep,
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  avatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: c.surface,
-  },
-  avatarCount: {
-    width: 24,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: c.borderStrong,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: c.surface,
-  },
-  avatarCountText: {
-    color: c.text,
-    fontSize: 8,
-    fontWeight: '700',
-  },
-  rsvpBtn: {
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  rsvpIcon: {
-    color: c.textMuted,
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  rsvpIconActive: {
-    color: c.accentDeep,
-  },
-  rsvpLabel: {
-    color: c.textFaint,
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  rsvpLabelActive: {
-    color: c.accentDeep,
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: c.border,
-    paddingTop: 6,
-  },
-  etaText: {
-    color: c.textMuted,
-    fontSize: 10,
-  },
-  activeReadout: {
-    color: c.textFaint,
-    fontSize: 10,
   },
   emptyContainer: {
     alignItems: 'center',

@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Linking, Platform, ScrollView, useWindowDimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
+import { PointCard } from '../components/discovery/PointCard';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
 import { localSpots, matchesInterests, placeBoosts, spotsLabel, upNextPlans, type PlanRole } from '../lib/discoverSlots';
 import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
@@ -908,9 +909,10 @@ const SpotCard: React.FC<{
   );
 };
 
+/** A Point on Discover: the shared card (same as the Explore Map list). */
 const EventRow: React.FC<{
   node: DiscoveryNode;
-  /** Upcoming list: show the start time instead of the status text. */
+  /** Kept for callers; the card shows "Starts in …" or the start time on its own. */
   showTime?: boolean;
   /** Distance to show instead of the distance from you (search: from the searched area). */
   distanceMeters?: number | null;
@@ -919,66 +921,17 @@ const EventRow: React.FC<{
   /** Paid Boost: labeled, with "Why am I seeing this?". */
   boosted?: boolean;
   onWhyBoosted?: () => void;
-}> = ({ node, showTime = false, distanceMeters, onOpen, onToggleRsvp, boosted = false, onWhyBoosted }) => {
-  const styles = useThemedStyles(createStyles);
-  const { colors: c } = useTheme();
-  const live = isLiveNode(node);
-  const tag = node.tags?.[0] ?? node.tag;
-  const where = node.locationPrivacy?.regionName ? `In ${node.locationPrivacy.regionName}` : node.venue;
-  const distance = formatDistance(distanceMeters ?? node.distanceMeters);
-  const when = live ? 'LIVE NOW' : showTime && node.startsAt ? timeLabel(node.startsAt) : node.status;
-
-  return (
-    <TouchableOpacity
-      style={[styles.eventRow, live && styles.eventRowLive, boosted && styles.eventRowBoosted]}
-      onPress={onOpen}
-      accessibilityRole="button"
-      accessibilityLabel={`${node.title}. ${when}. ${where}`}
-      testID={`discover-event-${node.id}`}
-    >
-      <CategoryBadge tag={tag} title={node.title} photoUri={node.coverPhotoUri} size={38} />
-      <View style={styles.eventCopy}>
-        <View style={styles.eventTagRow}>
-          {tag ? (
-            <Text style={styles.eventTag} numberOfLines={1}>
-              {tag}
-            </Text>
-          ) : null}
-          {boosted ? <BoostedLabel onWhy={onWhyBoosted} /> : null}
-        </View>
-        <Text style={styles.eventTitle} numberOfLines={1}>
-          {node.title}
-        </Text>
-        <Text style={styles.eventMeta} numberOfLines={1}>
-          {[where, distance ? `${distance} away` : null].filter(Boolean).join(' · ')}
-        </Text>
-        {when ? (
-          <View style={[styles.whenChip, live && styles.whenChipLive]}>
-            {live ? <View style={styles.liveDot} /> : null}
-            <Text style={[styles.whenText, live && styles.whenTextLive]}>{when}</Text>
-          </View>
-        ) : null}
-      </View>
-      <TouchableOpacity
-        style={styles.rsvpBtn}
-        onPress={onToggleRsvp}
-        accessibilityRole="button"
-        accessibilityState={{ selected: node.isRsvpd }}
-        accessibilityLabel={node.isRsvpd ? `Cancel RSVP for ${node.title}` : `RSVP to ${node.title}`}
-        hitSlop={6}
-      >
-        {node.isRsvpd ? (
-          <View style={styles.rsvpDone}>
-            <Check size={16} color={c.onAccent} strokeWidth={3} />
-          </View>
-        ) : (
-          <Check size={18} color={c.textMuted} strokeWidth={2.5} />
-        )}
-        <Text style={[styles.rsvpText, node.isRsvpd && styles.rsvpTextDone]}>{node.isRsvpd ? 'GOING' : 'RSVP'}</Text>
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-};
+}> = ({ node, distanceMeters, onOpen, onToggleRsvp, boosted = false, onWhyBoosted }) => (
+  <PointCard
+    node={node}
+    distanceMeters={distanceMeters}
+    boosted={boosted}
+    onWhyBoosted={onWhyBoosted}
+    onOpen={onOpen}
+    onToggleRsvp={onToggleRsvp}
+    testID={`discover-event-${node.id}`}
+  />
+);
 
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
