@@ -444,7 +444,9 @@ const createStyles = (c: ThemeColors) =>
     borderTopWidth: 1.5,
     borderColor: c.accent,
   },
-  handleRow: { alignItems: 'center', paddingTop: 8, paddingBottom: 4 },
+  // Tall enough to hold the close and report buttons, and above the scrolling content
+  // (the cover photo used to slide over them).
+  handleRow: { alignItems: 'center', paddingTop: 8, paddingBottom: 4, minHeight: 44, zIndex: 2, elevation: 2 },
   handleHit: { paddingVertical: 6, paddingHorizontal: 30 },
   handle: { width: 44, height: 4, borderRadius: 2, backgroundColor: c.borderStrong },
   closeBtn: { position: 'absolute', right: 14, top: 10, padding: 4 },
