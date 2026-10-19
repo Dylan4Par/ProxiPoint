@@ -109,6 +109,21 @@ export const PointCard: React.FC<{
             </Text>
           ) : null}
         </View>
+        {/* Going faces: top row's bottom-right corner, right above RSVP (no extra row). */}
+        {going ? (
+          <View style={styles.faces} accessibilityLabel={`${going} going`}>
+            {pills.face.map((bg, i) => (
+              <View key={bg} style={[styles.face, { backgroundColor: bg }, i > 0 && styles.faceOverlap]}>
+                <User size={12} color="#334155" strokeWidth={2.25} />
+              </View>
+            ))}
+            <View style={[styles.face, styles.faceOverlap, styles.count, { backgroundColor: pills.count.bg }]}>
+              <Text style={[styles.countText, { color: pills.count.fg }]} numberOfLines={1} adjustsFontSizeToFit>
+                {going}
+              </Text>
+            </View>
+          </View>
+        ) : null}
       </View>
 
       <View style={styles.bottom}>
@@ -132,20 +147,6 @@ export const PointCard: React.FC<{
         </View>
 
         <View style={styles.actions}>
-          {going ? (
-            <View style={styles.faces} accessibilityLabel={`${going} going`}>
-              {pills.face.map((bg, i) => (
-                <View key={bg} style={[styles.face, { backgroundColor: bg }, i > 0 && styles.faceOverlap]}>
-                  <User size={12} color="#334155" strokeWidth={2.25} />
-                </View>
-              ))}
-              <View style={[styles.face, styles.faceOverlap, styles.count, { backgroundColor: pills.count.bg }]}>
-                <Text style={[styles.countText, { color: pills.count.fg }]} numberOfLines={1} adjustsFontSizeToFit>
-                  {going}
-                </Text>
-              </View>
-            </View>
-          ) : null}
           <TouchableOpacity
             style={[styles.rsvp, { backgroundColor: node.isRsvpd ? c.accent : pills.rsvp.bg }]}
             onPress={onToggleRsvp}
@@ -194,7 +195,7 @@ const createStyles = (c: ThemeColors) =>
     boostedText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
     title: { color: c.text, fontSize: 16, fontWeight: '800', lineHeight: 20 },
     venue: { color: c.textMuted, fontSize: 12 },
-    bottom: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
+    bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     pills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
     pill: {
       flexDirection: 'row',
@@ -208,9 +209,8 @@ const createStyles = (c: ThemeColors) =>
     dot: { width: 7, height: 7, borderRadius: 4 },
     pillText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.2, flexShrink: 1 },
     pillTextPlain: { fontWeight: '600', letterSpacing: 0 },
-    // Going faces stacked above the RSVP button, both right-aligned.
-    actions: { flexDirection: 'column', alignItems: 'flex-end', gap: 4 },
-    faces: { flexDirection: 'row', alignItems: 'center' },
+    actions: { flexDirection: 'row', alignItems: 'center' },
+    faces: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end' },
     face: {
       width: 24,
       height: 24,
