@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Check, ChevronDown, ChevronRight, Hash, Map as MapIcon, MapPin, Search, Users, X } from 'lucide-react-native';
+import { Alert, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
-import { useBoosts } from '../lib/boost';
+import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
+import { localSpots, matchesInterests, placeBoosts, spotsLabel } from '../lib/discoverSlots';
+import { isBusinessHost } from '../lib/hostProfiles';
 import { canSeePoint, toggleMembership, useChannels, useVisiblePosts, type Channel } from '../lib/channels';
 import { MEMBERSHIP_LABEL, accessOf, membershipAction } from '../lib/channelAccess';
 import { PLACE_ICON, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
@@ -116,6 +118,25 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters],
   );
   const upcomingDays = useMemo(() => groupByDay(upcoming, now), [upcoming, now]);
+  // Businesses on Discover: Boosted Points in fixed, labeled slots (never re-ranking the rest), and
+  // one card per business venue with something on today (discoverSlots.ts).
+  const hiddenBoosts = getHiddenBoosts();
+  const nearbyPlaced = useMemo(
+    () => placeBoosts(nearby as DiscoveryNode[], (node) => isBoosted(node.id, now), { interestTags, hidden: hiddenBoosts }),
+    [nearby, now, interestTags, hiddenBoosts],
+  );
+  const spots = useMemo(
+    () =>
+      localSpots((Object.values(nodes || {}) as DiscoveryNode[]).filter(allowed), {
+        now,
+        isBusiness: isBusinessHost,
+        isBoosted: (node) => isBoosted(node.id, now),
+        hidden: hiddenBoosts,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, hiddenBoosts],
+  );
+  const whyBoosted = (node: DiscoveryNode) => showBoostInfo(node, matchesInterests(node, interestTags));
   const posts = useVisiblePosts();
   const channelPicks = useMemo(
     () => recommendChannels(channels, nodes, interestTags, now),
@@ -363,31 +384,16 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         </>
       ) : (
         <>
-          {/* ---- Channel recommendations ---- */}
-          {channelPicks.length ? (
-            <>
-              <SectionHeader label="CHANNELS FOR YOU" action="See all" onAction={onBrowseChannels} />
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.channelRow}
-                style={styles.channelScroll}
-              >
-                {channelPicks.map((pick) => (
-                  <ChannelCard key={pick.channel.id} pick={pick} onOpen={() => onOpenChannel(pick.channel.id)} />
-                ))}
-              </ScrollView>
-            </>
-          ) : null}
-
           {/* ---- Nearby now ---- */}
           <SectionHeader label="HAPPENING NEARBY" action="Map" onAction={onOpenMap} />
           {nearby.length ? (
             <View style={styles.list}>
-              {nearby.map((node) => (
+              {nearbyPlaced.map(({ item: node, boosted }) => (
                 <EventRow
                   key={node.id}
-                  node={node as DiscoveryNode}
+                  node={node}
+                  boosted={boosted}
+                  onWhyBoosted={() => whyBoosted(node)}
                   onOpen={() => onOpenPoint(node.id)}
                   onToggleRsvp={() => onToggleRsvp(node.id)}
                 />
@@ -399,6 +405,31 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
               {rangeMeters == null ? ' around here' : ` within ${rangeLabel}`}.
             </Text>
           )}
+
+          {/* ---- Local spots: businesses with something on today ---- */}
+          {spots.length ? (
+            <>
+              <SectionHeader label={spotsLabel(now)} />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.channelRow}
+                style={styles.channelScroll}
+                testID="discover-local-spots"
+              >
+                {spots.map(({ node, boosted, live }) => (
+                  <SpotCard
+                    key={node.id}
+                    node={node}
+                    boosted={boosted}
+                    live={live}
+                    onOpen={() => onOpenPoint(node.id)}
+                    onWhyBoosted={() => whyBoosted(node)}
+                  />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
 
           {/* ---- Upcoming ---- */}
           <SectionHeader label="UPCOMING" />
@@ -422,6 +453,24 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
           ) : (
             <Text style={styles.emptyText}>No upcoming Points in range yet. Try a wider range, or drop one from the map.</Text>
           )}
+
+          {/* ---- Channel recommendations ---- */}
+          {channelPicks.length ? (
+            <>
+              <SectionHeader label="CHANNELS FOR YOU" action="See all" onAction={onBrowseChannels} />
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.channelRow}
+                style={styles.channelScroll}
+              >
+                {channelPicks.map((pick) => (
+                  <ChannelCard key={pick.channel.id} pick={pick} onOpen={() => onOpenChannel(pick.channel.id)} />
+                ))}
+              </ScrollView>
+            </>
+          ) : null}
+
         </>
       )}
     </ScrollView>
@@ -589,6 +638,84 @@ const ChannelCard: React.FC<{ pick: ChannelPick; onOpen: () => void }> = ({ pick
   );
 };
 
+/** "Why am I seeing this?" for a Boosted Point, with Hide. */
+function showBoostInfo(node: DiscoveryNode, matchesYourTags: boolean) {
+  const host = node.host ? node.host : 'The host';
+  Alert.alert(
+    'Why am I seeing this?',
+    `${host} paid to Boost this Point, so it's shown in a labeled spot. It's happening within your area and range` +
+      `${matchesYourTags ? ' and matches your #tags' : ''}. Boosts never change how posts, channels or Signal are ranked.`,
+    [
+      { text: 'Hide this Boost', style: 'destructive', onPress: () => hideBoost(node.id) },
+      { text: 'OK', style: 'cancel' },
+    ],
+  );
+}
+
+/** Gold "BOOSTED" label; tap for why. */
+const BoostedLabel: React.FC<{ onWhy?: () => void }> = ({ onWhy }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  return (
+    <TouchableOpacity
+      style={styles.boostedLabel}
+      onPress={onWhy}
+      disabled={!onWhy}
+      hitSlop={8}
+      accessibilityRole="button"
+      accessibilityLabel="Boosted. Why am I seeing this?"
+      testID="discover-boosted-why"
+    >
+      <Zap size={10} color={c.amber} fill={c.amber} strokeWidth={2.5} />
+      <Text style={styles.boostedText}>BOOSTED</Text>
+      {onWhy ? <Info size={11} color={c.amber} strokeWidth={2.5} /> : null}
+    </TouchableOpacity>
+  );
+};
+
+/** A business with something on today: venue, what's on, when. */
+const SpotCard: React.FC<{
+  node: DiscoveryNode;
+  boosted: boolean;
+  live: boolean;
+  onOpen: () => void;
+  onWhyBoosted: () => void;
+}> = ({ node, boosted, live, onOpen, onWhyBoosted }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const when = live ? 'LIVE NOW' : node.startsAt ? timeLabel(node.startsAt) : node.status;
+  return (
+    <TouchableOpacity
+      style={[styles.spotCard, boosted && styles.spotCardBoosted]}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${node.venue}: ${node.title}, ${when}${boosted ? '. Boosted' : ''}`}
+      testID={`discover-spot-${node.id}`}
+    >
+      {node.coverPhotoUri ? (
+        <Image source={{ uri: node.coverPhotoUri }} style={styles.spotPhoto} resizeMode="cover" />
+      ) : (
+        <View style={[styles.spotPhoto, styles.spotPhotoEmpty]}>
+          <Store size={26} color={c.textFaint} strokeWidth={2} />
+        </View>
+      )}
+      <View style={styles.spotBody}>
+        {boosted ? <BoostedLabel onWhy={onWhyBoosted} /> : null}
+        <Text style={styles.spotVenue} numberOfLines={1}>
+          {node.venue}
+        </Text>
+        <Text style={styles.spotTitle} numberOfLines={2}>
+          {node.title}
+        </Text>
+        <View style={[styles.whenChip, live && styles.whenChipLive]}>
+          {live ? <View style={styles.liveDot} /> : null}
+          <Text style={[styles.whenText, live && styles.whenTextLive]}>{when}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+};
+
 const EventRow: React.FC<{
   node: DiscoveryNode;
   /** Upcoming list: show the start time instead of the status text. */
@@ -597,7 +724,10 @@ const EventRow: React.FC<{
   distanceMeters?: number | null;
   onOpen: () => void;
   onToggleRsvp: () => void;
-}> = ({ node, showTime = false, distanceMeters, onOpen, onToggleRsvp }) => {
+  /** Paid Boost: labeled, with "Why am I seeing this?". */
+  boosted?: boolean;
+  onWhyBoosted?: () => void;
+}> = ({ node, showTime = false, distanceMeters, onOpen, onToggleRsvp, boosted = false, onWhyBoosted }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const live = isLiveNode(node);
@@ -608,7 +738,7 @@ const EventRow: React.FC<{
 
   return (
     <TouchableOpacity
-      style={[styles.eventRow, live && styles.eventRowLive]}
+      style={[styles.eventRow, live && styles.eventRowLive, boosted && styles.eventRowBoosted]}
       onPress={onOpen}
       accessibilityRole="button"
       accessibilityLabel={`${node.title}. ${when}. ${where}`}
@@ -616,11 +746,14 @@ const EventRow: React.FC<{
     >
       <CategoryBadge tag={tag} title={node.title} photoUri={node.coverPhotoUri} size={38} />
       <View style={styles.eventCopy}>
-        {tag ? (
-          <Text style={styles.eventTag} numberOfLines={1}>
-            {tag}
-          </Text>
-        ) : null}
+        <View style={styles.eventTagRow}>
+          {tag ? (
+            <Text style={styles.eventTag} numberOfLines={1}>
+              {tag}
+            </Text>
+          ) : null}
+          {boosted ? <BoostedLabel onWhy={onWhyBoosted} /> : null}
+        </View>
         <Text style={styles.eventTitle} numberOfLines={1}>
           {node.title}
         </Text>
@@ -853,6 +986,35 @@ const createStyles = (c: ThemeColors) =>
       padding: 12,
     },
     eventRowLive: { borderColor: c.accentBorder },
+    eventRowBoosted: { borderColor: c.amberBorder },
+    eventTagRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    boostedLabel: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'flex-start',
+      gap: 3,
+      paddingHorizontal: 6,
+      paddingVertical: 2,
+      borderRadius: 8,
+      backgroundColor: c.amberTint,
+      borderWidth: 1,
+      borderColor: c.amberBorder,
+    },
+    boostedText: { color: c.amber, fontSize: 9.5, fontWeight: '900', letterSpacing: 0.6 },
+    spotCard: {
+      width: 176,
+      borderRadius: 16,
+      overflow: 'hidden',
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    spotCardBoosted: { borderColor: c.amber },
+    spotPhoto: { width: '100%', height: 92 },
+    spotPhotoEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: c.surfaceDim },
+    spotBody: { padding: 10, gap: 4 },
+    spotVenue: { color: c.textMuted, fontSize: 12, fontWeight: '800' },
+    spotTitle: { color: c.text, fontSize: 14, fontWeight: '800', lineHeight: 18 },
     eventCopy: { flex: 1, gap: 2 },
     eventTag: { color: c.accent, fontSize: 12, fontWeight: '800' },
     eventTitle: { color: c.text, fontSize: 15, fontWeight: '800' },

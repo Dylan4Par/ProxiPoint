@@ -75,6 +75,19 @@ export async function authorizeBoostPayment(pointId: string): Promise<{ paymentI
   return { paymentId: `test_pi_${pointId}_${Date.now().toString(36)}`, amountCents: BOOST_PRICE_CENTS };
 }
 
+// Boosts you hid from Discover ("Hide this"). They drop back to their normal place in lists,
+// still labeled. In memory for now; server side later: POST /me/hidden-boosts/:pointId.
+let hiddenBoosts = new Set<string>();
+
+export function hideBoost(pointId: string) {
+  hiddenBoosts = new Set(hiddenBoosts).add(pointId);
+  changed();
+}
+
+export function getHiddenBoosts(): Set<string> {
+  return hiddenBoosts;
+}
+
 /** Every boost still running. */
 export function getActiveBoosts(now = Date.now()): Boost[] {
   return [...boosts.values()].filter((boost) => new Date(boost.endsAt).getTime() > now);

@@ -106,6 +106,9 @@ export interface ChannelPick {
  * Channels you haven't joined, best first: ones that share your #tags, then ones with
  * something happening around you, then the biggest.
  */
+/** At most this many Points count toward a town channel's recommendation score. */
+export const CITY_CHANNEL_POINT_CAP = 1;
+
 export function recommendChannels(
   channels: Channel[],
   nodes: Record<string, FeedNode> | FeedNode[] | null | undefined,
@@ -123,12 +126,18 @@ export function recommendChannels(
     .map((channel) => {
       const matched = channel.tags.filter((tag) => followed.has(key(tag)));
       const activeCount = channelNodes(channel, live).length;
-      const score = matched.length * 30 + activeCount * 8 + Math.log10(channel.memberCount + 1) * 2;
-      const reason = matched.length
-        ? `Matches ${matched.slice(0, 2).join(', ')}`
-        : activeCount
-          ? `${activeCount} ${activeCount === 1 ? 'Point' : 'Points'} near you`
-          : `${formatCount(channel.memberCount)} members`;
+      // A town channel has no #tags, so it takes every Point in town: cap what that adds, or it
+      // outranks every real interest match (a new, empty "Erie Local" above a 1.6k-member channel).
+      const town = channel.tags.length === 0;
+      const pointsScore = Math.min(activeCount, town ? CITY_CHANNEL_POINT_CAP : activeCount) * 8;
+      const score = matched.length * 30 + pointsScore + Math.log10(channel.memberCount + 1) * 2;
+      const reason = town
+        ? 'Your town’s channel'
+        : matched.length
+          ? `Matches ${matched.slice(0, 2).join(', ')}`
+          : activeCount
+            ? `${activeCount} ${activeCount === 1 ? 'Point' : 'Points'} near you`
+            : `${formatCount(channel.memberCount)} members`;
       return { channel, matched, activeCount, reason, score };
     })
     .sort((a, b) => b.score - a.score)

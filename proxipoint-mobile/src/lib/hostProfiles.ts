@@ -16,6 +16,8 @@ export interface HostProfile {
   joined: string;
   /** Shown as a small check next to the name. */
   verified?: boolean;
+  /** A business (venue, shop, market): listed in Discover's "local spots". */
+  business?: boolean;
   avatarUri?: string | null;
   recaps: PointRecap[];
   contact: HostContact;
@@ -78,6 +80,7 @@ function recap(
 const PROFILES: HostProfile[] = [
   {
     handle: '@rustyanchor',
+    business: true,
     displayName: 'The Rusty Anchor',
     bio: 'Neighborhood bar with a tiny stage. Live jazz and soul Wednesday through Saturday.',
     followers: 1284,
@@ -103,6 +106,7 @@ const PROFILES: HostProfile[] = [
   },
   {
     handle: '@mesa4tacos',
+    business: true,
     displayName: 'Mesa 4 Tacos',
     bio: 'Birria and al pastor on wheels. Find us at the plaza every Tuesday.',
     followers: 642,
@@ -134,6 +138,7 @@ const PROFILES: HostProfile[] = [
   },
   {
     handle: '@creeksidemarket',
+    business: true,
     displayName: 'Creekside Market',
     bio: 'Evening farmers market by the creek. 30+ local growers, bakers and makers.',
     followers: 2045,
@@ -151,6 +156,7 @@ const PROFILES: HostProfile[] = [
   },
   {
     handle: '@meeplecafe',
+    business: true,
     displayName: 'Meeple Café',
     bio: 'Board game café with 600+ games and teachers who will explain the rules for you.',
     followers: 877,
@@ -167,6 +173,7 @@ const PROFILES: HostProfile[] = [
   },
   {
     handle: '@laughinggoat',
+    business: true,
     displayName: 'The Laughing Goat',
     bio: 'Coffeehouse by day, open mic by night. Comedy, poetry and acoustic sets.',
     followers: 1530,
@@ -195,6 +202,7 @@ const PROFILES: HostProfile[] = [
   },
   {
     handle: '@oldtownarts',
+    business: true,
     displayName: 'Old Town Arts',
     bio: 'Gallery collective running the First Wednesday art walk and artist talks.',
     followers: 1102,
@@ -266,6 +274,11 @@ const BY_HANDLE = new Map(PROFILES.map((profile) => [profile.handle.toLowerCase(
 function normalizeHandle(handle: string): string {
   const clean = handle.trim().replace(/^@+/, '').toLowerCase();
   return `@${clean}`;
+}
+
+/** Whether a host is a business (venue, shop, market), for Discover's local spots. */
+export function isBusinessHost(handle: string): boolean {
+  return BY_HANDLE.get(normalizeHandle(handle))?.business === true;
 }
 
 /** Profile for a handle, or a simple stand-in for hosts we don't have details for yet. */
