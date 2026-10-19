@@ -10,6 +10,7 @@ import { StrongestSignalCard } from '../components/profile/Signal';
 import { PLACE_ICON, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
 import { searchLocalPlaces, type LocalPlace } from '../lib/localPlaces';
 import { kindInfo, searchPosts } from '../lib/postKinds';
+import { countInterested, interestLine, useInterestMembers } from '../lib/nearbyInterest';
 import { timeAgo } from '../lib/activity';
 import type { ChannelPost } from '../lib/channels';
 import {
@@ -157,6 +158,17 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const words = query.trim().split(/\s+/);
   const exactTag =
     words.length === 1 ? suggestions.find((s) => tagKey(s.tag) === tagKey(words[0]))?.tag ?? null : null;
+  // Searching one #tag: how many people around here are into it (rounded; hidden under 10).
+  const interestMembers = useInterestMembers();
+  const tagWord = words.length === 1 && words[0].replace(/^#+/, '').length >= 2 ? words[0] : null;
+  const nearbyInterest =
+    searching && tagWord && !channelSearch
+      ? interestLine(
+          countInterested(interestMembers, exactTag ?? tagWord, center, rangeMeters ?? 25000),
+          (exactTag ?? `#${tagWord.replace(/^#+/, '')}`).replace(/^#+/, ''),
+          rangeMeters ?? 25000,
+        )
+      : null;
 
   return (
     <ScrollView
@@ -259,6 +271,13 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
                   {s.count ? <Text style={styles.suggestCount}>{s.count}</Text> : null}
                 </TouchableOpacity>
               ))}
+            </View>
+          ) : null}
+
+          {nearbyInterest ? (
+            <View style={styles.interestRow} testID="discover-nearby-interest">
+              <Users size={14} color={c.violet} strokeWidth={2.25} />
+              <Text style={styles.interestText}>{nearbyInterest}</Text>
             </View>
           ) : null}
 
@@ -745,6 +764,17 @@ const createStyles = (c: ThemeColors) =>
       marginBottom: 8,
     },
     sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+    interestRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 9,
+      borderRadius: 12,
+      backgroundColor: c.violetTint,
+    },
+    interestText: { flex: 1, color: c.violetText, fontSize: 13, fontWeight: '700' },
     placeResultIcon: {
       width: 34,
       height: 34,

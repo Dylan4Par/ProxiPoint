@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { Bell, Globe, Lock, Plus, X } from 'lucide-react-native';
+import { Bell, Globe, Lock, Plus, Users, X } from 'lucide-react-native';
 import { INTEREST_TAG_LIMIT } from '../../lib/myProfile';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
@@ -21,7 +21,12 @@ export const MyTagsTile: React.FC<{
   tags: string[];
   isPublic: boolean;
   onChange: (tags: string[], isPublic: boolean) => void;
-}> = ({ tags, isPublic, onChange }) => {
+  /** Counted in "20+ people into #tag nearby" numbers (opt-in). */
+  countMeIn?: boolean;
+  onChangeCountMeIn?: (on: boolean) => void;
+  /** Rounded nearby counts per #tag ("20+"), or null when too few to show. */
+  nearbyCounts?: Record<string, string | null>;
+}> = ({ tags, isPublic, onChange, countMeIn = false, onChangeCountMeIn, nearbyCounts = {} }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [input, setInput] = useState('');
@@ -85,6 +90,11 @@ export const MyTagsTile: React.FC<{
           {tags.map((tag) => (
             <View key={tag} style={styles.chip}>
               <Text style={styles.chipText}>{tag}</Text>
+              {nearbyCounts[tag] ? (
+                <Text style={styles.chipCount} accessibilityLabel={`${nearbyCounts[tag]} people nearby`}>
+                  {nearbyCounts[tag]}
+                </Text>
+              ) : null}
               <TouchableOpacity
                 onPress={() => remove(tag)}
                 hitSlop={{ top: 8, bottom: 8, left: 6, right: 8 }}
@@ -155,6 +165,27 @@ export const MyTagsTile: React.FC<{
         </ScrollView>
       ) : null}
 
+      {onChangeCountMeIn ? (
+        <View style={styles.countRow}>
+          <Users size={16} color={countMeIn ? c.violet : c.textMuted} strokeWidth={2.25} />
+          <View style={styles.visibilityCopy}>
+            <Text style={styles.visibilityLabel}>Count me in nearby numbers</Text>
+            <Text style={styles.hint}>
+              Adds you to counts like “20+ people into #Hiking within 5 km”. No name, no dot on the map: just
+              your home area, never your live location. Numbers under 10 are never shown.
+            </Text>
+          </View>
+          <Switch
+            value={countMeIn}
+            onValueChange={onChangeCountMeIn}
+            trackColor={{ false: c.borderStrong, true: c.accentTrack }}
+            thumbColor={countMeIn ? c.accent : c.textMuted}
+            accessibilityLabel="Count me in nearby interest numbers"
+            testID="profile-count-me-in"
+          />
+        </View>
+      ) : null}
+
       <View style={styles.footer}>
         <Bell size={13} color={c.textMuted} strokeWidth={2} />
         <Text style={styles.hint}>
@@ -194,6 +225,15 @@ const createStyles = (c: ThemeColors) =>
       backgroundColor: c.accentTint,
     },
     chipText: { color: c.accent, fontSize: 13, fontWeight: '800' },
+    chipCount: { color: c.textMuted, fontSize: 11, fontWeight: '800' },
+    countRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+      borderTopWidth: 1,
+      borderTopColor: c.border,
+      paddingTop: 10,
+    },
     empty: { color: c.textFaint, fontSize: 13 },
     inputRow: { flexDirection: 'row', gap: 8 },
     input: {

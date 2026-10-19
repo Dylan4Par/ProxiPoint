@@ -20,6 +20,11 @@ export interface MyProfile {
   interestTagsPublic: boolean;
   /** True: the channels you've joined are listed on your public profile. False: only you see them. */
   channelsPublic: boolean;
+  /**
+   * True: you're counted (no name, no location) in numbers like "20+ people into #Hiking within
+   * 5 km", from your home area's ~1 km cell. Off by default. See nearbyInterest.ts.
+   */
+  countMeInInterests: boolean;
   /** Your home city. Null = the app's default area until you pick one. */
   homeCity: { name: string; region?: string; latitude: number; longitude: number } | null;
   /** True: Discover follows your GPS. False: Discover opens on your home city. */
@@ -40,6 +45,7 @@ export const DEFAULT_PROFILE: MyProfile = {
   interestTags: [],
   interestTagsPublic: false,
   channelsPublic: false,
+  countMeInInterests: false,
   homeCity: null,
   trackLocation: false,
 };

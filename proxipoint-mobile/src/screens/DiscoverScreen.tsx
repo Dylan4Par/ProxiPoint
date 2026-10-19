@@ -24,6 +24,7 @@ import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
 import { setTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
 import { DEFAULT_POST_FILTER, activePostFilterCount, isDefaultPostFilter, setMapPostFilter, useMapPostFilter } from '../lib/mapFilters';
 import { areaName } from '../lib/mapArea';
+import { interestCell, setMyInterestMembership } from '../lib/nearbyInterest';
 import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
 import { formatRange } from '../lib/calendarRange';
 import { CalendarDays, ChevronLeft, X } from 'lucide-react-native';
@@ -157,6 +158,16 @@ export const DiscoverScreen: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const home: CityPlace = profile.homeCity ?? defaultArea;
+  // Nearby interest numbers: count you in (your home area's ~1 km cell, never GPS) only when you've
+  // opted in and follow some #tags.
+  const interestTagsKey = (profile.interestTags ?? []).join(',');
+  useEffect(() => {
+    const tags = profile.interestTags ?? [];
+    setMyInterestMembership(
+      profile.countMeInInterests && tags.length ? { ...interestCell(home.latitude, home.longitude), tags } : null,
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profile.countMeInInterests, interestTagsKey, home.latitude, home.longitude]);
   const [cityPickerOpen, setCityPickerOpen] = useState(false);
   const [gpsPlace, setGpsPlace] = useState<CityPlace | null>(null);
 
@@ -615,6 +626,9 @@ export const DiscoverScreen: React.FC = () => {
             goTo('channels');
             setPostId(id);
           }}
+          // Server side: PATCH /me { countInInterests }
+          onChangeCountMeIn={(countMeInInterests) => setProfile((current) => ({ ...current, countMeInInterests }))}
+          homeArea={{ latitude: home.latitude, longitude: home.longitude }}
         />
       ) : null}
 

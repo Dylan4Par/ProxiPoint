@@ -10,6 +10,7 @@ import { LocationTile } from '../components/profile/LocationTile';
 import { SignalChip, SignalTile } from '../components/profile/Signal';
 import { useVisibleComments, useVisiblePosts } from '../lib/channels';
 import { computeSignal, contributionsOf } from '../lib/signalScore';
+import { INTEREST_RADIUS_METERS, countInterested, roundedCount, useInterestMembers } from '../lib/nearbyInterest';
 import type { CityPlace } from '../lib/places';
 import { type DroppedPoint } from '../lib/droppedPoint';
 import { pickCoverPhoto } from '../lib/coverPhoto';
@@ -61,6 +62,10 @@ interface ProfileScreenProps {
   defaultAreaLabel: string;
   /** One of your posts (from Contributions): its page in the Channels tab. */
   onOpenPost: (postId: string) => void;
+  /** Counted in nearby interest numbers (opt-in). */
+  onChangeCountMeIn: (on: boolean) => void;
+  /** Your home area: where "nearby" counts are worked out from (never GPS). */
+  homeArea: { latitude: number; longitude: number };
 }
 
 /** Same tints as the category badges, scattered behind the avatar. */
@@ -107,6 +112,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   recaps,
   onChangeRecaps,
   onOpenPost,
+  onChangeCountMeIn,
+  homeArea,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -141,6 +148,15 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     [profile.handle, posts, comments, drops.length, recaps],
   );
   const contributions = useMemo(() => contributionsOf(profile.handle, posts, comments), [profile.handle, posts, comments]);
+  // "20+" people near your home area into each of your #tags (null when too few to show).
+  const interestMembers = useInterestMembers();
+  const nearbyCounts = useMemo(() => {
+    const counts: Record<string, string | null> = {};
+    for (const tag of profile.interestTags ?? []) {
+      counts[tag] = roundedCount(countInterested(interestMembers, tag, homeArea, INTEREST_RADIUS_METERS));
+    }
+    return counts;
+  }, [interestMembers, profile.interestTags, homeArea.latitude, homeArea.longitude]);
   const [bannerBusy, setBannerBusy] = useState(false);
 
   const pickBanner = async () => {
@@ -327,6 +343,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             tags={profile.interestTags ?? []}
             isPublic={profile.interestTagsPublic ?? false}
             onChange={onChangeInterestTags}
+            countMeIn={profile.countMeInInterests ?? false}
+            onChangeCountMeIn={onChangeCountMeIn}
+            nearbyCounts={nearbyCounts}
           />
 
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY CHANNELS</Text>

@@ -59,6 +59,10 @@ export interface DiscoveryNode {
   /** Set when the host hid the exact spot; others only see the area name. */
   locationPrivacy?: { level: 'street' | 'neighborhood' | 'city'; regionName: string } | null;
   coverPhotoUri?: string | null;
+  /** Other people who tapped "I'm here" (live Points only; a count, never names). */
+  hereCount?: number;
+  /** You tapped "I'm here". Only counts while the Point is live. */
+  imHere?: boolean;
   x: number;
   y: number;
 }
@@ -142,6 +146,8 @@ export interface DiscoveryState {
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
   toggleRsvp: (id: string) => void;
+  /** "I'm here" at a live Point, or take it back. Server side: PUT/DELETE /points/:id/here. */
+  toggleHere: (id: string) => void;
   dropBeacon: (input: DropBeaconInput) => string;
   /**
    * Copy changes made in My Drops (edit, tags, place, time, end) onto the Point's map pin and
@@ -573,6 +579,8 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
       eta: distanceMeters > 1000 ? `${Math.max(2, Math.round(etaMinutes / 4))} min drive` : `${etaMinutes} min walk`,
       etaMode: distanceMeters > 1000 ? 'drive' : 'walk',
       attendeeCount: point.attendeeCount,
+      // Sample: about a third of those going have said they're there (only shown while live).
+      hereCount: Math.floor(point.attendeeCount / 3),
       maxAttendance: point.maxAttendance ?? null,
       requiresApproval: point.requiresApproval ?? false,
       isRsvpd: point.isRsvpd ?? false,
@@ -768,6 +776,13 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           [id]: { ...existing, isRsvpd: !existing.isRsvpd },
         },
       };
+    }),
+
+  toggleHere: (id) =>
+    set((state) => {
+      const existing = state.nodes[id];
+      if (!existing) return state;
+      return { nodes: { ...state.nodes, [id]: { ...existing, imHere: !existing.imHere } } };
     }),
 
   syncMyPoint: (point) => {

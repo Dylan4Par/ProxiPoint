@@ -20,6 +20,7 @@ import {
   EyeOff,
   Footprints,
   MapPin,
+  MapPinCheck,
   Navigation,
   Share2,
   Flag,
@@ -37,6 +38,8 @@ import { useNavBarHeight } from './BottomNavBar';
 import { formatBeaconDate, formatBeaconTime } from '../../lib/beaconWindow';
 import { SHARE_BASE_URL } from '../../lib/droppedPoint';
 import { isLiveNode } from '../../lib/liveStatus';
+import { hereCountNow, hereLabel } from '../../lib/nearbyInterest';
+import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const NAV_BAR_HEIGHT = 72;
@@ -88,6 +91,8 @@ interface NodeView {
   latitude: number | null;
   longitude: number | null;
   live: boolean;
+  hereCount: number;
+  imHere: boolean;
 }
 
 function str(value: unknown): string {
@@ -128,6 +133,8 @@ function readNode(node: unknown): NodeView {
     latitude: num(n.latitude),
     longitude: num(n.longitude),
     live: isLiveNode(node),
+    hereCount: num(n.hereCount) ?? 0,
+    imHere: n.imHere === true,
   };
 }
 
@@ -163,6 +170,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const navBarHeight = useNavBarHeight();
+  const toggleHere = useDiscoveryStore((state) => state.toggleHere);
   const slide = useRef(new Animated.Value(0)).current;
   const sheetRef = useRef<View | null>(null);
   const reportTop = () => {
@@ -402,6 +410,30 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
         {view.isRsvpd ? (
           <Text style={styles.subNote}>Tap {rsvpLabel} again to cancel your RSVP.</Text>
         ) : null}
+        {/* Live: say you're here. Shown as a number on this Point only, and it switches itself
+            off when the Point ends. Nobody sees who, or where you are. */}
+        {view.live ? (
+          <View style={styles.hereRow} testID="point-detail-here">
+            <TouchableOpacity
+              style={[styles.hereBtn, view.imHere && styles.hereBtnOn]}
+              onPress={() => toggleHere(view.id)}
+              accessibilityRole="button"
+              accessibilityState={{ selected: view.imHere }}
+              accessibilityLabel={view.imHere ? "You're here. Tap to take it back" : "I'm here"}
+              testID="point-detail-here-btn"
+            >
+              <MapPinCheck size={15} color={view.imHere ? c.base : c.green} strokeWidth={2.5} />
+              <Text style={[styles.hereBtnText, view.imHere && styles.hereBtnTextOn]}>
+                {view.imHere ? 'YOU’RE HERE' : 'I’M HERE'}
+              </Text>
+            </TouchableOpacity>
+            <Text style={styles.hereText}>
+              {hereLabel(hereCountNow(view.hereCount, view.imHere, view.live)) ?? 'Be the first to say you’re here.'}
+              {'\n'}
+              <Text style={styles.hereHint}>Just a count: no names, no locations.</Text>
+            </Text>
+          </View>
+        ) : null}
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       </ScrollView>
     </Animated.View>
@@ -536,4 +568,20 @@ const createStyles = (c: ThemeColors) =>
   },
   iconBtnText: { color: c.textSecondary, fontSize: 11, fontWeight: '700' },
   notice: { color: c.amber, fontSize: 12, fontWeight: '600', textAlign: 'center' },
+  hereRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  hereBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    minHeight: 40,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: c.green,
+  },
+  hereBtnOn: { backgroundColor: c.green },
+  hereBtnText: { color: c.green, fontSize: 13, fontWeight: '900', letterSpacing: 0.6 },
+  hereBtnTextOn: { color: c.base },
+  hereText: { flex: 1, color: c.textBody, fontSize: 13, fontWeight: '700', lineHeight: 18 },
+  hereHint: { color: c.textFaint, fontSize: 11, fontWeight: '600' },
 });

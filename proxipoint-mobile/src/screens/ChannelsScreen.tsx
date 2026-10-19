@@ -61,6 +61,7 @@ import {
 import { ACCESS_ICON, CreateChannelSheet } from '../components/channels/CreateChannelSheet';
 import { PLACE_ICON, PlacePicker, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
 import { PLACE_KIND_LABEL, bestTips, placeRef, pointsAtPlace, postsAtPlace, type LocalPlace } from '../lib/localPlaces';
+import { interestLine, topInterest, useInterestMembers } from '../lib/nearbyInterest';
 import { POST_KINDS, asksStillHappening, defaultPinHours, kindInfo, pinChoices, type PostKind } from '../lib/postKinds';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
@@ -506,6 +507,13 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   }, [channel, nodes, now, moderation]);
   const viewable = canViewChannel(channel);
   const canPost = canPostIn(channel);
+  // "20+ people into #Pickleball within 5 km": its busiest #tag, counted privately (nearbyInterest.ts).
+  const interestMembers = useInterestMembers();
+  const nearbyInterest = useMemo(() => {
+    const top = topInterest(interestMembers, channel.tags, myLocation);
+    return top ? interestLine(top.count, top.tag) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interestMembers, channel.tags, myLocation.latitude, myLocation.longitude]);
   const access = accessOf(channel);
   const AccessIcon = ACCESS_ICON[access];
   const [draft, setDraft] = useState('');
@@ -591,6 +599,12 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
           </View>
         ))}
       </View>
+      {nearbyInterest ? (
+        <View style={styles.interestRow} testID="channel-nearby-interest">
+          <Users size={13} color={c.textMuted} strokeWidth={2.25} />
+          <Text style={styles.interestText}>{nearbyInterest}</Text>
+        </View>
+      ) : null}
       {channel.auto && !channel.owner ? (
         // Started automatically: nobody moderates it yet. Claiming makes you its moderator.
         <View style={styles.claimBox} testID="channel-unclaimed">
@@ -1922,6 +1936,8 @@ const createStyles = (c: ThemeColors) =>
       borderWidth: 1,
       borderColor: c.violet,
     },
+    interestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+    interestText: { color: c.textMuted, fontSize: 12, fontWeight: '700' },
     kindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
     kindChip: {
       paddingHorizontal: 10,
