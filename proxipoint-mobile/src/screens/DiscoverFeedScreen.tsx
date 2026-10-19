@@ -384,28 +384,6 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         </>
       ) : (
         <>
-          {/* ---- Nearby now ---- */}
-          <SectionHeader label="HAPPENING NEARBY" action="Map" onAction={onOpenMap} />
-          {nearby.length ? (
-            <View style={styles.list}>
-              {nearbyPlaced.map(({ item: node, boosted }) => (
-                <EventRow
-                  key={node.id}
-                  node={node}
-                  boosted={boosted}
-                  onWhyBoosted={() => whyBoosted(node)}
-                  onOpen={() => onOpenPoint(node.id)}
-                  onToggleRsvp={() => onToggleRsvp(node.id)}
-                />
-              ))}
-            </View>
-          ) : (
-            <Text style={styles.emptyText}>
-              Nothing live or starting in the next two hours
-              {rangeMeters == null ? ' around here' : ` within ${rangeLabel}`}.
-            </Text>
-          )}
-
           {/* ---- Local spots: businesses with something on today ---- */}
           {spots.length ? (
             <>
@@ -430,6 +408,28 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
               </ScrollView>
             </>
           ) : null}
+
+          {/* ---- Nearby now ---- */}
+          <SectionHeader label="HAPPENING NEARBY" action="Map" onAction={onOpenMap} />
+          {nearby.length ? (
+            <View style={styles.list}>
+              {nearbyPlaced.map(({ item: node, boosted }) => (
+                <EventRow
+                  key={node.id}
+                  node={node}
+                  boosted={boosted}
+                  onWhyBoosted={() => whyBoosted(node)}
+                  onOpen={() => onOpenPoint(node.id)}
+                  onToggleRsvp={() => onToggleRsvp(node.id)}
+                />
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.emptyText}>
+              Nothing live or starting in the next two hours
+              {rangeMeters == null ? ' around here' : ` within ${rangeLabel}`}.
+            </Text>
+          )}
 
           {/* ---- Upcoming ---- */}
           <SectionHeader label="UPCOMING" />
