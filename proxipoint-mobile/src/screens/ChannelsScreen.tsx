@@ -65,12 +65,13 @@ import { PLACE_KIND_LABEL, bestTips, placeRef, pointsAtPlace, postsAtPlace, type
 import { interestLine, topInterest, useInterestMembers } from '../lib/nearbyInterest';
 import {
   CHANNEL_REPLY_OPTIONS,
+  QUICK_REACTIONS,
   channelAllowsReplies,
   defaultRepliesOn,
+  emojiFromInput,
   repliesAllowed,
   topEmojis,
 } from '../lib/postReactions';
-import { REACTION_EMOJIS } from '../lib/pointRecap';
 import { POST_KINDS, asksStillHappening, defaultPinHours, kindInfo, pinChoices, type PostKind } from '../lib/postKinds';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
@@ -1468,8 +1469,35 @@ const PostReactions: React.FC<{ post: ChannelPost; mine: boolean }> = ({ post, m
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [picking, setPicking] = useState(false);
+  // "+": the phone's own keyboard, for any emoji (switch it to emoji). A hidden field takes it.
+  const [typing, setTyping] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [typeHint, setTypeHint] = useState('');
+  const keyboardInput = useRef<TextInput | null>(null);
   const shown = topEmojis(post.reactions);
   const total = post.upvotes;
+  const openKeyboard = () => {
+    setTyping(true);
+    setTypeHint('Pick an emoji on your keyboard');
+    setTimeout(() => keyboardInput.current?.focus(), 50);
+  };
+  const closeKeyboard = () => {
+    setTyping(false);
+    setTyped('');
+    setTypeHint('');
+    keyboardInput.current?.blur();
+  };
+  const onTyped = (text: string) => {
+    const emoji = emojiFromInput(text);
+    if (emoji) {
+      reactToPost(post.id, emoji);
+      closeKeyboard();
+      setPicking(false);
+      return;
+    }
+    setTyped('');
+    if (text.trim()) setTypeHint('That one isn’t available. Pick an emoji.');
+  };
   return (
     <View style={styles.reactWrap}>
       <View style={styles.reactRow}>
@@ -1504,13 +1532,28 @@ const PostReactions: React.FC<{ post: ChannelPost; mine: boolean }> = ({ post, m
       </View>
       {picking && !mine ? (
         <View style={styles.reactPicker}>
-          {REACTION_EMOJIS.map((emoji) => (
+          {/* Your reaction from the keyboard (not a quick pick) shows here so you can tap it off. */}
+          {post.myReaction && !(QUICK_REACTIONS as readonly string[]).includes(post.myReaction) ? (
+            <TouchableOpacity
+              style={[styles.reactPick, styles.reactPickOn]}
+              onPress={() => {
+                reactToPost(post.id, post.myReaction as string);
+                setPicking(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${post.myReaction}`}
+            >
+              <Text style={styles.reactPickEmoji}>{post.myReaction}</Text>
+            </TouchableOpacity>
+          ) : null}
+          {QUICK_REACTIONS.map((emoji) => (
             <TouchableOpacity
               key={emoji}
               style={[styles.reactPick, post.myReaction === emoji && styles.reactPickOn]}
               onPress={() => {
                 reactToPost(post.id, emoji);
                 setPicking(false);
+                closeKeyboard();
               }}
               accessibilityRole="button"
               accessibilityLabel={post.myReaction === emoji ? `Remove ${emoji}` : `React ${emoji}`}
@@ -1518,7 +1561,32 @@ const PostReactions: React.FC<{ post: ChannelPost; mine: boolean }> = ({ post, m
               <Text style={styles.reactPickEmoji}>{emoji}</Text>
             </TouchableOpacity>
           ))}
+          <TouchableOpacity
+            style={[styles.reactPick, styles.reactMore, typing && styles.reactPickOn]}
+            onPress={() => (typing ? closeKeyboard() : openKeyboard())}
+            accessibilityRole="button"
+            accessibilityLabel="More emojis: opens your keyboard"
+            testID={`post-react-more-${post.id}`}
+          >
+            <Plus size={18} color={c.accent} strokeWidth={2.5} />
+          </TouchableOpacity>
         </View>
+      ) : null}
+      {typing ? <Text style={styles.reactHint}>{typeHint}</Text> : null}
+      {/* Hidden field the keyboard types into; it's on screen (but invisible) so it can take focus. */}
+      {typing ? (
+        <TextInput
+          ref={keyboardInput}
+          value={typed}
+          onChangeText={onTyped}
+          onBlur={() => setTyping(false)}
+          autoCorrect={false}
+          autoCapitalize="none"
+          caretHidden
+          contextMenuHidden
+          style={styles.reactInput}
+          accessibilityLabel="Type an emoji"
+        />
       ) : null}
     </View>
   );
@@ -2059,7 +2127,7 @@ const createStyles = (c: ThemeColors) =>
     postChannelText: { color: c.accent, fontSize: 12, fontWeight: '800', flexShrink: 1 },
     postMeta: { color: c.textFaint, fontSize: 12, flexShrink: 1 },
     postBody: { color: c.text, fontSize: 14, lineHeight: 20 },
-    postFooter: { flexDirection: 'row', gap: 8 },
+    postFooter: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
     reportBtn: { marginLeft: 'auto', paddingLeft: 6 },
     placeIcon: {
       width: 52,
@@ -2109,6 +2177,9 @@ const createStyles = (c: ThemeColors) =>
     reactPick: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
     reactPickOn: { backgroundColor: c.accentTint },
     reactPickEmoji: { fontSize: 20 },
+    reactMore: { borderLeftWidth: 1, borderLeftColor: c.border, borderRadius: 0, marginLeft: 2 },
+    reactHint: { color: c.textMuted, fontSize: 12 },
+    reactInput: { position: 'absolute', width: 1, height: 1, opacity: 0, left: 0, bottom: 0 },
     repliesToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
     checkbox: {
       width: 18,

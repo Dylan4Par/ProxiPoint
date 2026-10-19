@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   channelAllowsReplies,
+  emojiFromInput,
   defaultRepliesOn,
   reactTo,
   repliesAllowed,
@@ -43,4 +44,26 @@ test('the channel setting wins over the poster', () => {
   assert.equal(repliesAllowed({ kind: 'question' }, 'questions'), true);
   assert.equal(repliesAllowed({ kind: 'question', repliesOn: true }, 'off'), false);
   assert.equal(channelAllowsReplies('tip', undefined), true);
+});
+
+test('emoji keyboard input: one emoji (with skin tones, flags, sequences), never text or blocked ones', () => {
+  assert.equal(emojiFromInput('🥳'), '🥳');
+  assert.equal(emojiFromInput('😀🌮'), '🌮'); // the last one typed
+  assert.equal(emojiFromInput('👍🏽'), '👍🏽');
+  assert.equal(emojiFromInput('🇺🇸'), '🇺🇸');
+  assert.equal(emojiFromInput('👩‍🍳'), '👩‍🍳');
+  assert.equal(emojiFromInput('❤️'), '❤️');
+  assert.equal(emojiFromInput('hello'), null);
+  assert.equal(emojiFromInput('hi 😀'), null);
+  assert.equal(emojiFromInput('!!'), null);
+  assert.equal(emojiFromInput(''), null);
+  assert.equal(emojiFromInput('🖕'), null);
+  assert.equal(emojiFromInput('🖕🏻'), null);
+});
+
+test('any emoji can be a reaction; summary puts quick picks first on ties', () => {
+  const post: Reactable = { upvotes: 2, reactions: { '🌮': 1, '🔥': 1 } };
+  assert.deepEqual(topEmojis(post.reactions), ['🔥', '🌮']);
+  const taco = reactTo(post, '🌮');
+  assert.deepEqual([taco.upvotes, taco.reactions, taco.myReaction], [3, { '🌮': 2, '🔥': 1 }, '🌮']);
 });

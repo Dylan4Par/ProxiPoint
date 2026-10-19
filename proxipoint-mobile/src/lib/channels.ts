@@ -11,7 +11,6 @@ import {
 import { SAMPLE_PLACES, placeRef, type PlaceKind } from './localPlaces';
 import { answerStillHappening, type PostKind } from './postKinds';
 import { reactTo, sampleReactions, type ChannelReplies, type ReactionCounts } from './postReactions';
-import type { ReactionEmoji } from './pointRecap';
 
 /**
  * Channels: groups people join, like subreddits for a local scene. Each channel has its own
@@ -113,8 +112,8 @@ export interface ChannelPost {
   voted: boolean;
   /** Reactions by emoji (they add up to `upvotes`). */
   reactions?: ReactionCounts;
-  /** Your reaction, if any. */
-  myReaction?: ReactionEmoji | null;
+  /** Your reaction, if any (any emoji). */
+  myReaction?: string | null;
   /** The poster's "Allow replies" choice. Unset = the kind's default (see postReactions.ts). */
   repliesOn?: boolean;
   /** Pinned to the map at this place, until pinnedUntil. The post itself stays in the feed. */
@@ -672,7 +671,7 @@ export function removeApproved(id: string, handle: string) {
  * React to a post (one reaction each): add, swap to another emoji, or tap yours again to take it
  * back. The screen doesn't offer it on your own posts.
  */
-export function reactToPost(postId: string, emoji: ReactionEmoji) {
+export function reactToPost(postId: string, emoji: string) {
   posts = posts.map((post) => {
     if (post.id !== postId) return post;
     const next = reactTo(post, emoji);
