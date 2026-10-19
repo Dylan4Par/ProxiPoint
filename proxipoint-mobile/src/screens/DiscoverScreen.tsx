@@ -25,12 +25,12 @@ import { CalendarScreen } from './CalendarScreen';
 import { DiscoverFeedScreen } from './DiscoverFeedScreen';
 import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
 import { setTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
-import { DEFAULT_POST_FILTER, activePostFilterCount, isDefaultPostFilter, setMapPostFilter, useMapPostFilter } from '../lib/mapFilters';
+import { activePostFilterCount, isDefaultPostFilter, useMapPostFilter } from '../lib/mapFilters';
 import { areaName } from '../lib/mapArea';
 import { interestCell, setMyInterestMembership } from '../lib/nearbyInterest';
 import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
 import { formatRange } from '../lib/calendarRange';
-import { CalendarDays, ChevronLeft, Plus, X } from 'lucide-react-native';
+import { CalendarDays, ChevronDown, ChevronLeft, Plus } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
 import { CITY_LIST, cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
@@ -445,7 +445,7 @@ export const DiscoverScreen: React.FC = () => {
           <TopFilterHeader
             liveOnly={liveOnly}
             onToggleLiveOnly={() => setLiveOnly((on) => !on)}
-            // Top row: Drop Point · city · dates (next 3 days by default) · Calendar.
+            // Top row: Drop Point · city · dates (Next 3 days by default; ⌄ opens When → Calendar).
             topRow={
               <>
                 <TouchableOpacity
@@ -472,7 +472,8 @@ export const DiscoverScreen: React.FC = () => {
                   onPress={() => setCityPickerOpen(true)}
                   onReturn={returnHome}
                 />
-                {/* Dates (and post filters): opens the When sheet; ✕ puts it back to the next 3 days. */}
+                {/* Dates (and post filters), like Discover's: opens the When sheet, which has the quick
+                    ranges and Pick dates (the Calendar). Next 3 days there puts it back. */}
                 <TouchableOpacity
                   style={[styles.dateChip, (timeWindow.custom || !isDefaultPostFilter(postFilter)) && styles.dateChipOn]}
                   onPress={() => setFiltersOpen(true)}
@@ -490,32 +491,7 @@ export const DiscoverScreen: React.FC = () => {
                       <Text style={styles.filterBadgeText}>+{activePostFilterCount(postFilter)}</Text>
                     </View>
                   ) : null}
-                  {timeWindow.custom || !isDefaultPostFilter(postFilter) ? (
-                    <TouchableOpacity
-                      onPress={() => {
-                        setTimeWindow(null);
-                        setMapPostFilter(DEFAULT_POST_FILTER);
-                      }}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      accessibilityLabel="Back to the next 3 days"
-                      testID="discover-date-window-reset"
-                    >
-                      <X size={13} color={c.textMuted} strokeWidth={2.75} />
-                    </TouchableOpacity>
-                  ) : null}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.headerRound}
-                  onPress={() => {
-                    setDetailId(null);
-                    setOverlay('calendar');
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Open calendar"
-                  testID="header-calendar"
-                >
-                  <CalendarDays size={19} color={c.sky} strokeWidth={2.25} />
+                  <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
                 </TouchableOpacity>
               </>
             }
@@ -836,7 +812,7 @@ const createStyles = (c: ThemeColors) =>
     alignItems: 'center',
     gap: 5,
     flexShrink: 1,
-    maxWidth: '42%',
+    maxWidth: '48%',
     paddingHorizontal: 10,
     minHeight: 38,
     borderRadius: 19,
