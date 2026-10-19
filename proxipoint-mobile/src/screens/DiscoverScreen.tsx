@@ -30,7 +30,7 @@ import { areaName } from '../lib/mapArea';
 import { interestCell, setMyInterestMembership } from '../lib/nearbyInterest';
 import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
 import { formatRange } from '../lib/calendarRange';
-import { CalendarDays, ChevronLeft, X } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, Plus, X } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
 import { CITY_LIST, cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
@@ -443,14 +443,82 @@ export const DiscoverScreen: React.FC = () => {
       {tab === 'map' ? (
         <>
           <TopFilterHeader
-            // Profile has its own tab now, so the map header skips the avatar.
-            showAvatar={false}
             liveOnly={liveOnly}
             onToggleLiveOnly={() => setLiveOnly((on) => !on)}
-            onOpenCalendar={() => {
-              setDetailId(null);
-              setOverlay('calendar');
-            }}
+            // Top row: Drop Point · city · dates (next 3 days by default) · Calendar.
+            topRow={
+              <>
+                <TouchableOpacity
+                  style={styles.headerRound}
+                  onPress={() => {
+                    setDetailId(null);
+                    setHostHandle(null);
+                    // Always starts a fresh Point.
+                    setManagingId(null);
+                    setDropPrefill(null);
+                    setDropOpen(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Drop a Point"
+                  testID="map-drop-point"
+                >
+                  <Plus size={20} color={c.accent} strokeWidth={2.75} />
+                </TouchableOpacity>
+                <CityPill
+                  inline
+                  label={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
+                  exploring={viewPlace.kind === 'search'}
+                  tracking={Boolean(profile.trackLocation)}
+                  onPress={() => setCityPickerOpen(true)}
+                  onReturn={returnHome}
+                />
+                {/* Dates (and post filters): opens the When sheet; ✕ puts it back to the next 3 days. */}
+                <TouchableOpacity
+                  style={[styles.dateChip, (timeWindow.custom || !isDefaultPostFilter(postFilter)) && styles.dateChipOn]}
+                  onPress={() => setFiltersOpen(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Showing ${timeWindowLabel(timeWindow) ?? 'Calendar dates'}. Change dates`}
+                  testID="discover-date-window"
+                >
+                  <CalendarDays size={13} color={c.accent} strokeWidth={2.5} />
+                  <Text style={styles.datePillText} numberOfLines={1}>
+                    {timeWindowLabel(timeWindow) ??
+                      formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
+                  </Text>
+                  {activePostFilterCount(postFilter) ? (
+                    <View style={styles.filterBadge}>
+                      <Text style={styles.filterBadgeText}>+{activePostFilterCount(postFilter)}</Text>
+                    </View>
+                  ) : null}
+                  {timeWindow.custom || !isDefaultPostFilter(postFilter) ? (
+                    <TouchableOpacity
+                      onPress={() => {
+                        setTimeWindow(null);
+                        setMapPostFilter(DEFAULT_POST_FILTER);
+                      }}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Back to the next 3 days"
+                      testID="discover-date-window-reset"
+                    >
+                      <X size={13} color={c.textMuted} strokeWidth={2.75} />
+                    </TouchableOpacity>
+                  ) : null}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.headerRound}
+                  onPress={() => {
+                    setDetailId(null);
+                    setOverlay('calendar');
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Open calendar"
+                  testID="header-calendar"
+                >
+                  <CalendarDays size={19} color={c.sky} strokeWidth={2.25} />
+                </TouchableOpacity>
+              </>
+            }
           />
           {/* Map + cards share this area; the cards can grow to cover all of it (full list). */}
           <View style={styles.mapAndCards} onLayout={(event) => setCardsArea(event.nativeEvent.layout.height)}>
@@ -479,66 +547,7 @@ export const DiscoverScreen: React.FC = () => {
                   kind: 'search',
                 });
               }}
-              // "+" next to the recenter button. Hidden while a sheet is up so it never covers the sheet.
-              onDropPoint={
-                detailId || dropOpen || managing
-                  ? undefined
-                  : () => {
-                      setHostHandle(null);
-                      // Always starts a fresh Point.
-                      setManagingId(null);
-                      setDropPrefill(null);
-                      setDropOpen(true);
-                    }
-              }
             />
-            {/* Which city Discover is showing; tap to look somewhere else. (Hidden under the full list.) */}
-            {cardsFull ? null : (
-            <CityPill
-              label={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
-              exploring={viewPlace.kind === 'search'}
-              tracking={Boolean(profile.trackLocation)}
-              onPress={() => setCityPickerOpen(true)}
-              onReturn={returnHome}
-            />
-            )}
-            {/* When (and post filters): opens the map filters; ✕ puts everything back. */}
-            {!cardsFull ? (
-              <View style={styles.datePillRow} pointerEvents="box-none">
-                <TouchableOpacity
-                  style={[styles.datePill, !timeWindow.custom && isDefaultPostFilter(postFilter) && styles.datePillQuiet]}
-                  onPress={() => setFiltersOpen(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Showing ${timeWindowLabel(timeWindow) ?? 'Calendar dates'}. Change map filters`}
-                  testID="discover-date-window"
-                >
-                  <CalendarDays size={13} color={c.accent} strokeWidth={2.5} />
-                  <Text style={styles.datePillText}>
-                    {timeWindowLabel(timeWindow) ??
-                      formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
-                  </Text>
-                  {activePostFilterCount(postFilter) ? (
-                    <View style={styles.filterBadge}>
-                      <Text style={styles.filterBadgeText}>+{activePostFilterCount(postFilter)}</Text>
-                    </View>
-                  ) : null}
-                </TouchableOpacity>
-                {timeWindow.custom || !isDefaultPostFilter(postFilter) ? (
-                  <TouchableOpacity
-                    style={styles.datePillClose}
-                    onPress={() => {
-                      setTimeWindow(null);
-                      setMapPostFilter(DEFAULT_POST_FILTER);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Reset map filters"
-                    testID="discover-date-window-reset"
-                  >
-                    <X size={13} color={c.text} strokeWidth={2.5} />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            ) : null}
             <MapFilterSheet
               visible={filtersOpen}
               window={timeWindow}
@@ -756,17 +765,12 @@ export const DiscoverScreen: React.FC = () => {
             setOverlay(null);
             setCalendarFromDiscover(false);
           }}
-          applyLabel={calendarFromDiscover ? 'SHOW THESE DATES' : undefined}
           onShowOnMap={(range) => {
             setTimeWindow(range); // Discover, the map and the cards show these dates until reset
             setDetailId(null);
             setOverlay(null);
             if (calendarFromDiscover) setCalendarFromDiscover(false);
             else setTab('map');
-          }}
-          onOpenPoint={(id) => {
-            setOverlay(null);
-            openHostPoint(id); // select it on the map and open its details
           }}
         />
       ) : null}
@@ -815,32 +819,34 @@ const createStyles = (c: ThemeColors) =>
   subPage: { flex: 1 },
   subBack: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4, alignSelf: 'flex-start' },
   subBackText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
-  datePillRow: { position: 'absolute', top: 60, left: 14, flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 15 },
-  datePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 11,
-    minHeight: 30,
-    borderRadius: 15,
-    backgroundColor: c.glassStrong,
-    borderWidth: 1.5,
-    borderColor: c.accent,
-  },
-  datePillText: { color: c.text, fontSize: 12, fontWeight: '800' },
-  datePillQuiet: { borderColor: c.border, borderWidth: 1 },
-  filterBadge: { paddingHorizontal: 5, borderRadius: 8, backgroundColor: c.violet },
-  filterBadgeText: { color: c.white, fontSize: 10, fontWeight: '900' },
-  datePillClose: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+  datePillText: { color: c.text, fontSize: 12, fontWeight: '800', flexShrink: 1 },
+  /* Explore Map top row */
+  headerRound: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    backgroundColor: c.border,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.25)',
+  },
+  dateChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    flexShrink: 1,
+    maxWidth: '42%',
+    paddingHorizontal: 10,
+    minHeight: 38,
+    borderRadius: 19,
     backgroundColor: c.glassStrong,
     borderWidth: 1,
     borderColor: c.border,
   },
+  dateChipOn: { borderColor: c.accent, borderWidth: 1.5 },
+  filterBadge: { paddingHorizontal: 5, borderRadius: 8, backgroundColor: c.violet },
+  filterBadgeText: { color: c.white, fontSize: 10, fontWeight: '900' },
   placeholder: {
     flex: 1,
     alignItems: 'center',

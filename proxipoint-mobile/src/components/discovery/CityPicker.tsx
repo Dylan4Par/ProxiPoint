@@ -35,11 +35,13 @@ export const CityPill: React.FC<{
   onPress: () => void;
   /** Back to your own area (only shown while exploring). */
   onReturn: () => void;
-}> = ({ label, exploring, tracking, onPress, onReturn }) => {
+  /** In a header row (Explore Map's top bar) instead of floating over the map. */
+  inline?: boolean;
+}> = ({ label, exploring, tracking, onPress, onReturn, inline = false }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   return (
-    <View style={styles.pillRow} pointerEvents="box-none">
+    <View style={inline ? styles.pillRowInline : styles.pillRow} pointerEvents="box-none">
       <TouchableOpacity
         style={[styles.pill, exploring && styles.pillExploring]}
         onPress={onPress}
@@ -53,7 +55,7 @@ export const CityPill: React.FC<{
         ) : (
           <MapPin size={14} color={exploring ? c.violetText : c.accent} strokeWidth={2.5} />
         )}
-        <View>
+        <View style={styles.pillCopy}>
           {exploring ? <Text style={styles.pillKicker}>EXPLORING</Text> : null}
           <Text style={styles.pillText} numberOfLines={1}>
             {label}
@@ -262,6 +264,8 @@ const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
     flex: { flex: 1 },
     pillRow: { position: 'absolute', top: 14, left: 14, right: 70, flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 15 },
+    pillRowInline: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
+    pillCopy: { flexShrink: 1, minWidth: 0 },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',

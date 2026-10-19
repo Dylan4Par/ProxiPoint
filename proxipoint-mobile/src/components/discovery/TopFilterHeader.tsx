@@ -27,6 +27,8 @@ interface TopFilterHeaderProps {
   onOpenCalendar?: () => void;
   /** Avatar at the left of the top row. Off on Explore Map, where Profile is its own tab. */
   showAvatar?: boolean;
+  /** Replaces the default top row (avatar, Nearby / RSVP'd, calendar). Explore Map uses its own. */
+  topRow?: React.ReactNode;
 }
 
 export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
@@ -37,6 +39,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   onToggleLiveOnly,
   onOpenCalendar,
   showAvatar = true,
+  topRow,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -54,6 +57,11 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const [tenantId, setTenantId] = useState('00000000-0000-0000-0000-000000000001');
   const [serverUrl, setServerUrl] = useState('ws://10.0.2.2:8080/api/v1/ingest');
 
+  // Explore Map's own top row has no Nearby / RSVP'd switch, so it always shows Nearby.
+  React.useEffect(() => {
+    if (topRow && activeTab !== 'Nearby') setActiveTab('Nearby');
+  }, [topRow, activeTab, setActiveTab]);
+
   // Filter & sort sheet (sort order, Live now, and the hashtag chips).
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const sort = usePointSort();
@@ -70,7 +78,10 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
 
   return (
     <View style={styles.headerContainer}>
-      {/* Top Row: Avatar Pill + Segmented Switcher */}
+      {/* Top row: a custom one (Explore Map), or avatar + Nearby / RSVP'd + calendar. */}
+      {topRow ? (
+        <View style={styles.topRow}>{topRow}</View>
+      ) : (
       <View style={styles.topRow}>
         {showAvatar ? (
         <TouchableOpacity
@@ -129,6 +140,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           </TouchableOpacity>
         ) : null}
       </View>
+      )}
 
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
       <ScrollView
@@ -394,7 +406,7 @@ const createStyles = (c: ThemeColors) =>
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    gap: 10,
+    gap: 8,
   },
   avatarButton: {
     width: 44,
