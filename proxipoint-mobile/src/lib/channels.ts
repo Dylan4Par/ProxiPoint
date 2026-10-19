@@ -711,8 +711,10 @@ export function addPost(
     myReaction: null,
     repliesOn,
     place: pin ? pin.place : null,
-    // A place with 0 hours: on the place's page only, not on the map.
-    pinnedUntil: pin && pin.hours > 0 ? new Date(Date.now() + pin.hours * 3600000).toISOString() : null,
+    // On the map only when attached to an event (a Point) with hours > 0; otherwise the post is on
+    // the place's page only.
+    pinnedUntil:
+      pin && pin.place.pointId && pin.hours > 0 ? new Date(Date.now() + pin.hours * 3600000).toISOString() : null,
     photos: photos.slice(0, POST_PHOTO_LIMIT),
     kind,
   };

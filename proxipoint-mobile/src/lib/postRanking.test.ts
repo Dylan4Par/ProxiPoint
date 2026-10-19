@@ -28,7 +28,7 @@ const post = (id: string, minutesOld: number, upvotes: number, extra: Partial<Ch
 });
 
 // ~1.1 km per 0.01° latitude
-const nextDoor = { latitude: 40.0605, longitude: -105.04, label: 'Next door' };
+const nextDoor = { latitude: 40.0605, longitude: -105.04, label: 'Next door', pointId: 'pt-next-door' };
 const acrossTown = { latitude: 40.15, longitude: -105.04, label: 'Across town' };
 
 const posts = [
@@ -68,6 +68,9 @@ test('pins expire and report time left', () => {
   assert.equal(isPinLive(live, NOW), true);
   assert.equal(isPinLive(ended, NOW), false);
   assert.equal(isPinLive(post('z', 5, 1), NOW), false);
+  // Not attached to an event: never on the map, even with a pin time.
+  const placeOnly = { latitude: 40.0605, longitude: -105.04, label: 'Library' };
+  assert.equal(isPinLive(post('v', 5, 1, { place: placeOnly, pinnedUntil: later(150) }), NOW), false);
   assert.equal(pinTimeLeft(live, NOW), '3h left');
   assert.equal(pinTimeLeft(post('w', 5, 1, { place: nextDoor, pinnedUntil: later(40) }), NOW), '40m left');
 });

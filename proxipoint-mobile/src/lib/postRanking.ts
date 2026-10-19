@@ -90,9 +90,12 @@ export function countComments(comments: PostComment[]): Record<string, number> {
 /** Pin lengths offered when posting. */
 export const PIN_HOURS = [2, 6, 24];
 
-/** The post is still showing on the map. */
+/**
+ * The post is still showing on the map. Posts only go on the map attached to an event (a Point),
+ * shown as a badge on that Point; a post about a place with no Point stays on the place's page.
+ */
 export function isPinLive(post: ChannelPost, now = Date.now()): boolean {
-  return Boolean(post.place && post.pinnedUntil && new Date(post.pinnedUntil).getTime() > now);
+  return Boolean(post.place?.pointId && post.pinnedUntil && new Date(post.pinnedUntil).getTime() > now);
 }
 
 /** "2h left", "45m left" */

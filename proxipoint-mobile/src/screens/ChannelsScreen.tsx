@@ -564,16 +564,17 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   };
   // A post needs text or at least one photo.
   const canSend = Boolean(draft.trim() || photos.length);
+  // Only a place that's an event (a Point's venue) can put the post on the map, as a badge on it.
+  const placePointId = place?.id.startsWith('venue-') ? place.id.slice('venue-'.length) : undefined;
 
   const post = () => {
     if (!canSend || !canPost) return;
     // Server side: upload the photos first, then POST the post with their URLs.
-    const pointId = place?.id.startsWith('venue-') ? place.id.slice('venue-'.length) : undefined;
     addPost(
       channel.id,
       myHandle,
       draft,
-      place ? { place: placeRef(place, pointId), hours: pinHours } : null,
+      place ? { place: placeRef(place, placePointId), hours: placePointId ? pinHours : 0 } : null,
       photos,
       kind,
       repliesPossible && repliesOn,
@@ -803,6 +804,8 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
                   <X size={15} color={c.textMuted} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
+              {placePointId ? (
+              <>
               <Text style={styles.pinOptionsLabel}>ON THE MAP FOR</Text>
               <View style={styles.pinChipRow}>
                 {[...pinChoices(kind), 0].map((hours) => {
@@ -821,8 +824,15 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
                 })}
               </View>
               <Text style={styles.pinNote}>
-                It stays on {place.kind === 'block' ? 'this block' : place.name}’s page after it leaves the map.
+                Shows on this event on the map, and stays on {place.name}’s page after it leaves the map.
               </Text>
+              </>
+              ) : (
+                <Text style={styles.pinNote}>
+                  Shows on {place.kind === 'block' ? 'this block' : place.name}’s page. To put it on the map, pick an
+                  event (a Point) so it shows on that event.
+                </Text>
+              )}
             </View>
           ) : null}
           <PlacePicker
@@ -875,7 +885,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
             >
               <MapPin size={14} color={place ? c.white : c.violet} strokeWidth={2.5} />
               <Text style={[styles.pinToggleText, place && styles.pinToggleTextOn]} numberOfLines={1}>
-                {place ? (pinHours ? `${pinLabel(pinHours)} on map` : 'Place only') : 'Add place'}
+                {place ? (placePointId && pinHours ? `${pinLabel(pinHours)} on map` : 'Place only') : 'Add place'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity

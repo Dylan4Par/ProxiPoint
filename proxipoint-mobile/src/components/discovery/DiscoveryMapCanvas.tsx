@@ -10,7 +10,7 @@ import {
   PanResponder,
   AccessibilityInfo,
 } from 'react-native';
-import { toCanvasCoordinates, useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { toCanvasCoordinates, useDiscoveryStore, type DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { matchesDiscoverFilters } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
@@ -151,10 +151,12 @@ export const DiscoveryMapCanvas: React.FC<{
     .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab }))
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
 
-  // Channel posts pinned to a place, while their pin lasts, from channels you FOLLOW (joining alone
-  // doesn't put a channel on your map). Same #tag chip as the Points (matched against the post's
+  // Channel posts attached to a Point on the map, while their pin lasts, from channels you FOLLOW
+  // (joining alone doesn't put a channel on your map). They sit on their Point (a badge on its pin
+  // or bubble), never on their own. Same #tag chip as the Points (matched against the post's
   // channel tags); hidden on the RSVP'd view, which is about your plans.
   const posts = useVisiblePosts();
+  const nodesById = new Map(nodeList.map((node) => [node.id, node]));
   const channelsById = new Map(useChannels().map((channel) => [channel.id, channel]));
   const tagKey = (tag: string) => tag.replace(/^#+/, '').toLowerCase();
   // The When sheet's post filters: which kinds, and how recent.
@@ -172,10 +174,10 @@ export const DiscoveryMapCanvas: React.FC<{
               selectedTag === 'All' ||
               (channelsById.get(post.channelId)?.tags ?? []).some((tag) => tagKey(tag) === tagKey(selectedTag)),
           )
-          .map((post) => ({
-            post,
-            ...toCanvasCoordinates(post.place!.latitude, post.place!.longitude, viewPlace.latitude, viewPlace.longitude),
-          }));
+          .map((post) => ({ post, point: nodesById.get(post.place?.pointId ?? '') }))
+          // Only while its Point is on the map (same filters as the Points).
+          .filter((entry): entry is { post: ChannelPost; point: DiscoveryNode } => Boolean(entry.point))
+          .map(({ post, point }) => ({ post, x: point.x ?? 480, y: point.y ?? 480 }));
 
   // Respect the system Reduce Motion setting for the beacon pulse.
   const [reducedMotion, setReducedMotion] = useState(false);
