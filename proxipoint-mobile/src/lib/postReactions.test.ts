@@ -2,8 +2,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
   channelAllowsReplies,
-  emojiFromInput,
   defaultRepliesOn,
+  isAllowedReaction,
+  QUICK_REACTIONS,
+  REACTION_GROUPS,
   reactTo,
   repliesAllowed,
   sampleReactions,
@@ -46,24 +48,19 @@ test('the channel setting wins over the poster', () => {
   assert.equal(channelAllowsReplies('tip', undefined), true);
 });
 
-test('emoji keyboard input: one emoji (with skin tones, flags, sequences), never text or blocked ones', () => {
-  assert.equal(emojiFromInput('🥳'), '🥳');
-  assert.equal(emojiFromInput('😀🌮'), '🌮'); // the last one typed
-  assert.equal(emojiFromInput('👍🏽'), '👍🏽');
-  assert.equal(emojiFromInput('🇺🇸'), '🇺🇸');
-  assert.equal(emojiFromInput('👩‍🍳'), '👩‍🍳');
-  assert.equal(emojiFromInput('❤️'), '❤️');
-  assert.equal(emojiFromInput('hello'), null);
-  assert.equal(emojiFromInput('hi 😀'), null);
-  assert.equal(emojiFromInput('!!'), null);
-  assert.equal(emojiFromInput(''), null);
-  assert.equal(emojiFromInput('🖕'), null);
-  assert.equal(emojiFromInput('🖕🏻'), null);
+test('only the approved mood set can be used', () => {
+  const post: Reactable = { upvotes: 2, reactions: { '😐': 1, '🔥': 1 } };
+  assert.equal(reactTo(post, '🌮'), post); // not in the set: nothing changes
+  assert.equal(reactTo(post, '🖕'), post);
+  const sad = reactTo(post, '😢');
+  assert.deepEqual([sad.upvotes, sad.myReaction], [3, '😢']);
+  assert.deepEqual(topEmojis(post.reactions), ['🔥', '😐']); // ties in the set's order
 });
 
-test('any emoji can be a reaction; summary puts quick picks first on ties', () => {
-  const post: Reactable = { upvotes: 2, reactions: { '🌮': 1, '🔥': 1 } };
-  assert.deepEqual(topEmojis(post.reactions), ['🔥', '🌮']);
-  const taco = reactTo(post, '🌮');
-  assert.deepEqual([taco.upvotes, taco.reactions, taco.myReaction], [3, { '🌮': 2, '🔥': 1 }, '🌮']);
+test('every quick pick is allowed, the set has four moods and no repeats', () => {
+  assert.ok(QUICK_REACTIONS.every(isAllowedReaction));
+  assert.deepEqual(REACTION_GROUPS.map((g) => g.id), ['happy', 'meh', 'sad', 'frustrated']);
+  const all = REACTION_GROUPS.flatMap((g) => g.emojis);
+  assert.equal(new Set(all).size, all.length);
+  assert.ok(sampleReactions('p4', 50) && Object.keys(sampleReactions('p4', 50)).every(isAllowedReaction));
 });

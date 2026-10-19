@@ -66,9 +66,9 @@ import { interestLine, topInterest, useInterestMembers } from '../lib/nearbyInte
 import {
   CHANNEL_REPLY_OPTIONS,
   QUICK_REACTIONS,
+  REACTION_GROUPS,
   channelAllowsReplies,
   defaultRepliesOn,
-  emojiFromInput,
   repliesAllowed,
   topEmojis,
 } from '../lib/postReactions';
@@ -1461,50 +1461,47 @@ const PostCard: React.FC<{
 // ---- Reactions ------------------------------------------------------------------------------
 
 /**
- * Likes as emoji reactions: one per person from the six used on recaps. The summary shows the
- * most-used emojis and the total; the smiley (or your emoji) opens the six to pick from. Picking
- * yours again takes it back. Your own posts show the summary only.
+ * Likes as emoji reactions: one per person from an approved set grouped by mood. The summary shows
+ * the most-used emojis and the total; the smiley (or your emoji) opens six quick picks, and "+"
+ * opens the full set by mood (happy, so-so, sad, frustrated). Picking yours again takes it back.
+ * Your own posts show the summary only.
  */
 const PostReactions: React.FC<{ post: ChannelPost; mine: boolean }> = ({ post, mine }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [picking, setPicking] = useState(false);
-  // "+": the phone's own keyboard, for any emoji (switch it to emoji). A hidden field takes it.
-  const [typing, setTyping] = useState(false);
-  const [typed, setTyped] = useState('');
-  const [typeHint, setTypeHint] = useState('');
-  const keyboardInput = useRef<TextInput | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const shown = topEmojis(post.reactions);
   const total = post.upvotes;
-  const openKeyboard = () => {
-    setTyping(true);
-    setTypeHint('Pick an emoji on your keyboard');
-    setTimeout(() => keyboardInput.current?.focus(), 50);
+  const close = () => {
+    setPicking(false);
+    setShowAll(false);
   };
-  const closeKeyboard = () => {
-    setTyping(false);
-    setTyped('');
-    setTypeHint('');
-    keyboardInput.current?.blur();
+  const toggle = () => (picking ? close() : setPicking(true));
+  const pick = (emoji: string) => {
+    reactToPost(post.id, emoji);
+    close();
   };
-  const onTyped = (text: string) => {
-    const emoji = emojiFromInput(text);
-    if (emoji) {
-      reactToPost(post.id, emoji);
-      closeKeyboard();
-      setPicking(false);
-      return;
-    }
-    setTyped('');
-    if (text.trim()) setTypeHint('That one isn’t available. Pick an emoji.');
-  };
+  const pickButton = (emoji: string) => (
+    <TouchableOpacity
+      key={emoji}
+      style={[styles.reactPick, post.myReaction === emoji && styles.reactPickOn]}
+      onPress={() => pick(emoji)}
+      accessibilityRole="button"
+      accessibilityLabel={post.myReaction === emoji ? `Remove ${emoji}` : `React ${emoji}`}
+    >
+      <Text style={styles.reactPickEmoji}>{emoji}</Text>
+    </TouchableOpacity>
+  );
+  // Your reaction from the full set (not a quick pick) shows first so you can tap it off.
+  const extraMine = post.myReaction && !QUICK_REACTIONS.includes(post.myReaction) ? post.myReaction : null;
   return (
     <View style={styles.reactWrap}>
       <View style={styles.reactRow}>
         {total ? (
           <TouchableOpacity
             style={styles.reactSummary}
-            onPress={() => !mine && setPicking((open) => !open)}
+            onPress={() => !mine && toggle()}
             disabled={mine}
             accessibilityRole={mine ? 'text' : 'button'}
             accessibilityLabel={`${total} ${total === 1 ? 'like' : 'likes'}: ${shown.join(' ')}`}
@@ -1516,7 +1513,7 @@ const PostReactions: React.FC<{ post: ChannelPost; mine: boolean }> = ({ post, m
         {mine ? null : (
           <TouchableOpacity
             style={[styles.reactBtn, (picking || post.myReaction) && styles.reactBtnOn]}
-            onPress={() => setPicking((open) => !open)}
+            onPress={toggle}
             hitSlop={6}
             accessibilityRole="button"
             accessibilityLabel={post.myReaction ? `You reacted ${post.myReaction}. Change` : 'React'}
@@ -1532,61 +1529,32 @@ const PostReactions: React.FC<{ post: ChannelPost; mine: boolean }> = ({ post, m
       </View>
       {picking && !mine ? (
         <View style={styles.reactPicker}>
-          {/* Your reaction from the keyboard (not a quick pick) shows here so you can tap it off. */}
-          {post.myReaction && !(QUICK_REACTIONS as readonly string[]).includes(post.myReaction) ? (
-            <TouchableOpacity
-              style={[styles.reactPick, styles.reactPickOn]}
-              onPress={() => {
-                reactToPost(post.id, post.myReaction as string);
-                setPicking(false);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove ${post.myReaction}`}
-            >
-              <Text style={styles.reactPickEmoji}>{post.myReaction}</Text>
-            </TouchableOpacity>
-          ) : null}
-          {QUICK_REACTIONS.map((emoji) => (
-            <TouchableOpacity
-              key={emoji}
-              style={[styles.reactPick, post.myReaction === emoji && styles.reactPickOn]}
-              onPress={() => {
-                reactToPost(post.id, emoji);
-                setPicking(false);
-                closeKeyboard();
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={post.myReaction === emoji ? `Remove ${emoji}` : `React ${emoji}`}
-            >
-              <Text style={styles.reactPickEmoji}>{emoji}</Text>
-            </TouchableOpacity>
-          ))}
+          {extraMine ? pickButton(extraMine) : null}
+          {QUICK_REACTIONS.map(pickButton)}
           <TouchableOpacity
-            style={[styles.reactPick, styles.reactMore, typing && styles.reactPickOn]}
-            onPress={() => (typing ? closeKeyboard() : openKeyboard())}
+            style={[styles.reactPick, styles.reactMore, showAll && styles.reactPickOn]}
+            onPress={() => setShowAll((open) => !open)}
             accessibilityRole="button"
-            accessibilityLabel="More emojis: opens your keyboard"
+            accessibilityLabel={showAll ? 'Fewer reactions' : 'More reactions'}
             testID={`post-react-more-${post.id}`}
           >
-            <Plus size={18} color={c.accent} strokeWidth={2.5} />
+            {showAll ? (
+              <X size={18} color={c.accent} strokeWidth={2.5} />
+            ) : (
+              <Plus size={18} color={c.accent} strokeWidth={2.5} />
+            )}
           </TouchableOpacity>
         </View>
       ) : null}
-      {typing ? <Text style={styles.reactHint}>{typeHint}</Text> : null}
-      {/* Hidden field the keyboard types into; it's on screen (but invisible) so it can take focus. */}
-      {typing ? (
-        <TextInput
-          ref={keyboardInput}
-          value={typed}
-          onChangeText={onTyped}
-          onBlur={() => setTyping(false)}
-          autoCorrect={false}
-          autoCapitalize="none"
-          caretHidden
-          contextMenuHidden
-          style={styles.reactInput}
-          accessibilityLabel="Type an emoji"
-        />
+      {picking && showAll && !mine ? (
+        <View style={styles.reactPanel}>
+          {REACTION_GROUPS.map((group) => (
+            <View key={group.id} style={styles.reactGroup}>
+              <Text style={styles.reactGroupLabel}>{group.label}</Text>
+              <View style={styles.reactGroupRow}>{group.emojis.map(pickButton)}</View>
+            </View>
+          ))}
+        </View>
       ) : null}
     </View>
   );
@@ -2178,8 +2146,18 @@ const createStyles = (c: ThemeColors) =>
     reactPickOn: { backgroundColor: c.accentTint },
     reactPickEmoji: { fontSize: 20 },
     reactMore: { borderLeftWidth: 1, borderLeftColor: c.border, borderRadius: 0, marginLeft: 2 },
-    reactHint: { color: c.textMuted, fontSize: 12 },
-    reactInput: { position: 'absolute', width: 1, height: 1, opacity: 0, left: 0, bottom: 0 },
+    reactPanel: {
+      alignSelf: 'stretch',
+      gap: 8,
+      padding: 10,
+      borderRadius: 14,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    reactGroup: { gap: 2 },
+    reactGroupLabel: { color: c.textMuted, fontSize: 11, fontWeight: '700', textTransform: 'uppercase', letterSpacing: 0.5 },
+    reactGroupRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 2 },
     repliesToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
     checkbox: {
       width: 18,
