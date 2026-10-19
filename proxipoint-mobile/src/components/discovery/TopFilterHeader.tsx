@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
   TouchableWithoutFeedback,
   Image,
 } from 'react-native';
-import { CalendarDays, Check, SlidersHorizontal, X } from 'lucide-react-native';
+import { CalendarDays, Check, ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react-native';
 import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort } from '../../lib/pointSort';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
@@ -56,6 +56,17 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const [callsign, setCallsign] = useState('Ranger-F0A5ACCF');
   const [tenantId, setTenantId] = useState('00000000-0000-0000-0000-000000000001');
   const [serverUrl, setServerUrl] = useState('ws://10.0.2.2:8080/api/v1/ingest');
+
+  // Chip row: arrows on whichever side has more chips hidden (tap to scroll that way).
+  const chipScroll = useRef<ScrollView | null>(null);
+  const [chipView, setChipView] = useState({ x: 0, width: 0, content: 0 });
+  const moreLeft = chipView.x > 4;
+  const moreRight = chipView.content - chipView.width - chipView.x > 4;
+  const nudgeChips = (direction: 1 | -1) => {
+    const max = Math.max(0, chipView.content - chipView.width);
+    const x = Math.min(max, Math.max(0, chipView.x + direction * chipView.width * 0.7));
+    chipScroll.current?.scrollTo({ x, animated: true });
+  };
 
   // Explore Map's own top row has no Nearby / RSVP'd switch, so it always shows Nearby.
   React.useEffect(() => {
@@ -143,10 +154,22 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
       )}
 
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
+      <View style={styles.chipArea}>
       <ScrollView
+        ref={chipScroll}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tagScrollContainer}
+        scrollEventThrottle={32}
+        onScroll={(e) => {
+          const x = e.nativeEvent.contentOffset.x;
+          setChipView((v) => (Math.abs(v.x - x) < 1 ? v : { ...v, x }));
+        }}
+        onLayout={(e) => {
+          const width = e.nativeEvent.layout.width;
+          setChipView((v) => (v.width === width ? v : { ...v, width }));
+        }}
+        onContentSizeChange={(content) => setChipView((v) => (v.content === content ? v : { ...v, content }))}
       >
         {/* Filter & sort, first in the row. The badge counts choices that aren't the defaults. */}
         <TouchableOpacity
@@ -201,6 +224,29 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           );
         })}
       </ScrollView>
+      {moreLeft ? (
+        <TouchableOpacity
+          style={[styles.moreArrow, styles.moreArrowLeft]}
+          onPress={() => nudgeChips(-1)}
+          accessibilityRole="button"
+          accessibilityLabel="Scroll filters back"
+          testID="chips-more-left"
+        >
+          <ChevronLeft size={16} color={c.accent} strokeWidth={2.75} />
+        </TouchableOpacity>
+      ) : null}
+      {moreRight ? (
+        <TouchableOpacity
+          style={[styles.moreArrow, styles.moreArrowRight]}
+          onPress={() => nudgeChips(1)}
+          accessibilityRole="button"
+          accessibilityLabel="More filters"
+          testID="chips-more-right"
+        >
+          <ChevronRight size={16} color={c.accent} strokeWidth={2.75} />
+        </TouchableOpacity>
+      ) : null}
+      </View>
 
       {/* Filter & sort sheet */}
       <Modal
@@ -487,6 +533,19 @@ const createStyles = (c: ThemeColors) =>
     color: c.sky,
     fontWeight: '700',
   },
+  chipArea: { position: 'relative' },
+  /* Small round arrow over the chip row's edge, centered on the chips (below the 12pt top padding). */
+  moreArrow: {
+    position: 'absolute',
+    top: 12,
+    bottom: 0,
+    width: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.headerGlass,
+  },
+  moreArrowLeft: { left: 0, borderTopRightRadius: 16, borderBottomRightRadius: 16 },
+  moreArrowRight: { right: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
   tagScrollContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
