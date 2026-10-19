@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { PointCard } from './PointCard';
+import { sortPoints, usePointSort } from '../../lib/pointSort';
 import { matchesDiscoverFilters } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { useModeration } from '../../lib/moderation';
@@ -50,17 +51,20 @@ export const EventCardList: React.FC<{
   useModeration(); // re-filter when you report or block someone
   const boostClock = useBoosts(); // re-render when a boost starts or runs out
   useTimeWindow(); // re-filter when the date window changes (3 days, or Calendar dates)
+  const sort = usePointSort(); // Filter & sort sheet: closest, soonest or most going
   const [mode, setMode] = useState<DrawerMode>('half');
   const isExpanded = mode !== 'collapsed';
   const isFull = mode === 'full';
 
-  // Half: what's in view on the map (the store limits it), in the store's order.
-  // Full: every Point, closest first. Boosted Points lead in both.
+  // Half: what's in view on the map (the store limits it). Full: every Point.
+  // Both use the order picked in Filter & sort (closest by default); Boosted Points lead.
   const source: DiscoveryNode[] = isFull
     ? (Object.values(allNodes || {}) as DiscoveryNode[]).sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0))
     : getVisibleNodes();
-  const visibleNodes = source
-    .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab }))
+  const visibleNodes = sortPoints(
+    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab })),
+    sort,
+  )
     .map((node, index) => ({ node, index, boosted: isBoosted(node.id, boostClock) }))
     .sort((a, b) => Number(b.boosted) - Number(a.boosted) || a.index - b.index)
     .map((entry) => entry.node);

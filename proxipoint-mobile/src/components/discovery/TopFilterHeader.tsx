@@ -10,7 +10,8 @@ import {
   TouchableWithoutFeedback,
   Image,
 } from 'react-native';
-import { CalendarDays, Plus } from 'lucide-react-native';
+import { CalendarDays, Check, SlidersHorizontal, X } from 'lucide-react-native';
+import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort } from '../../lib/pointSort';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -53,8 +54,11 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const [tenantId, setTenantId] = useState('00000000-0000-0000-0000-000000000001');
   const [serverUrl, setServerUrl] = useState('ws://10.0.2.2:8080/api/v1/ingest');
 
-  // Tag Editor Modal State
+  // Filter & sort sheet (sort order, Live now, and the hashtag chips).
   const [tagModalOpen, setTagModalOpen] = useState(false);
+  const sort = usePointSort();
+  // Badge on the filter button: how many choices differ from the defaults.
+  const activeCount = (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (liveOnly ? 1 : 0);
   const [newTagInput, setNewTagInput] = useState('');
 
   const handleAddNewTag = () => {
@@ -132,16 +136,21 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tagScrollContainer}
       >
-        {/* "+" first in the row: add or remove the hashtag chips. */}
+        {/* Filter & sort, first in the row. The badge counts choices that aren't the defaults. */}
         <TouchableOpacity
-          style={styles.addTagPill}
+          style={[styles.addTagPill, activeCount > 0 && styles.filterBtnActive]}
           activeOpacity={0.8}
           onPress={() => setTagModalOpen(true)}
           accessibilityRole="button"
-          accessibilityLabel="Add or remove hashtags"
+          accessibilityLabel={activeCount ? `Filter and sort, ${activeCount} on` : 'Filter and sort'}
           testID="filter-manage-tags"
         >
-          <Plus size={16} color={c.accent} strokeWidth={2.75} />
+          <SlidersHorizontal size={16} color={activeCount ? c.onAccent : c.accent} strokeWidth={2.5} />
+          {activeCount > 0 ? (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeCount}</Text>
+            </View>
+          ) : null}
         </TouchableOpacity>
         {tags.map((tag) => {
           const isAll = tag === 'All';
@@ -181,68 +190,125 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         })}
       </ScrollView>
 
-      {/* Tag Management Modal */}
+      {/* Filter & sort sheet */}
       <Modal
         visible={tagModalOpen}
-        animationType="fade"
+        animationType="slide"
         transparent={true}
         onRequestClose={() => setTagModalOpen(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setTagModalOpen(false)}>
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalCard}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Manage Keyword Hashtags</Text>
-                  <TouchableOpacity onPress={() => setTagModalOpen(false)}>
-                    <Text style={styles.modalCloseText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+        <View style={styles.sheetBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setTagModalOpen(false)}>
+            <View style={styles.sheetDismiss} />
+          </TouchableWithoutFeedback>
+          <View style={styles.sheet} testID="filter-sheet">
+            <View style={styles.sheetHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter & sort</Text>
+              <TouchableOpacity onPress={() => setTagModalOpen(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+                <X size={20} color={c.textMuted} strokeWidth={2.5} />
+              </TouchableOpacity>
+            </View>
 
-                {/* Add New Tag Input */}
-                <View style={styles.addTagRow}>
-                  <TextInput
-                    style={styles.addTagInput}
-                    placeholder="e.g. Pickleball, FarmersMarket"
-                    placeholderTextColor={c.iconFaint}
-                    value={newTagInput}
-                    onChangeText={setNewTagInput}
-                    onSubmitEditing={handleAddNewTag}
-                    returnKeyType="done"
-                  />
-                  <TouchableOpacity style={styles.addTagBtn} onPress={handleAddNewTag}>
-                    <Text style={styles.addTagBtnText}>+ Add</Text>
-                  </TouchableOpacity>
-                </View>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
+              {/* Sort */}
+              <Text style={styles.sectionSubtitle}>Sort by</Text>
+              <View style={styles.sortList}>
+                {POINT_SORTS.map((option) => {
+                  const on = sort === option.id;
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.sortRow, on && styles.sortRowOn]}
+                      onPress={() => setPointSort(option.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      testID={`sort-${option.id}`}
+                    >
+                      <View style={styles.sortCopy}>
+                        <Text style={[styles.sortLabel, on && styles.sortLabelOn]}>{option.label}</Text>
+                        <Text style={styles.sortHint}>{option.hint}</Text>
+                      </View>
+                      {on ? <Check size={18} color={c.accent} strokeWidth={3} /> : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.sortNote}>Boosted Points stay at the top, labeled.</Text>
 
-                {/* Active Tags */}
-                <Text style={styles.sectionSubtitle}>Active Keywords (tap ✕ to remove)</Text>
-                <View style={styles.chipWrap}>
-                  {tags.map((tag) => (
-                    <View key={tag} style={styles.editorChip}>
-                      <Text style={styles.editorChipText}>{tag}</Text>
-                      {tag !== 'All' && (
-                        <TouchableOpacity
-                          onPress={() => removeTag(tag)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Text style={styles.removeChipText}>✕</Text>
-                        </TouchableOpacity>
-                      )}
+              {/* Show */}
+              {onToggleLiveOnly ? (
+                <>
+                  <Text style={styles.sectionSubtitle}>Show</Text>
+                  <TouchableOpacity
+                    style={[styles.sortRow, liveOnly && styles.sortRowOn]}
+                    onPress={onToggleLiveOnly}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: liveOnly }}
+                    testID="filter-sheet-live"
+                  >
+                    <View style={styles.sortCopy}>
+                      <Text style={[styles.sortLabel, liveOnly && styles.sortLabelOn]}>Live now only</Text>
+                      <Text style={styles.sortHint}>Points happening right now</Text>
                     </View>
-                  ))}
-                </View>
+                    {liveOnly ? <Check size={18} color={c.accent} strokeWidth={3} /> : null}
+                  </TouchableOpacity>
+                </>
+              ) : null}
 
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={() => setTagModalOpen(false)}
-                >
-                  <Text style={styles.saveBtnText}>Done</Text>
+              {/* Hashtag chips */}
+              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Your hashtags</Text>
+              <View style={styles.addTagRow}>
+                <TextInput
+                  style={styles.addTagInput}
+                  placeholder="Add a hashtag, e.g. Pickleball"
+                  placeholderTextColor={c.iconFaint}
+                  value={newTagInput}
+                  onChangeText={setNewTagInput}
+                  onSubmitEditing={handleAddNewTag}
+                  returnKeyType="done"
+                />
+                <TouchableOpacity style={styles.addTagBtn} onPress={handleAddNewTag}>
+                  <Text style={styles.addTagBtnText}>+ Add</Text>
                 </TouchableOpacity>
               </View>
-            </TouchableWithoutFeedback>
+              <View style={styles.chipWrap}>
+                {tags.map((tag) => (
+                  <View key={tag} style={styles.editorChip}>
+                    <Text style={styles.editorChipText}>{tag}</Text>
+                    {tag !== 'All' && (
+                      <TouchableOpacity
+                        onPress={() => removeTag(tag)}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove ${tag}`}
+                      >
+                        <Text style={styles.removeChipText}>✕</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                ))}
+              </View>
+            </ScrollView>
+
+            <View style={styles.sheetButtons}>
+              <TouchableOpacity
+                style={[styles.resetBtn, activeCount === 0 && styles.resetBtnOff]}
+                disabled={activeCount === 0}
+                onPress={() => {
+                  setPointSort(DEFAULT_POINT_SORT);
+                  if (liveOnly) onToggleLiveOnly?.();
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.resetText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.saveBtn, styles.doneBtn]} onPress={() => setTagModalOpen(false)} accessibilityRole="button">
+                <Text style={styles.saveBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       {/* Settings Modal Sheet */}
@@ -462,7 +528,7 @@ const createStyles = (c: ThemeColors) =>
     color: c.surface,
     fontWeight: '700',
   },
-  /* Round "+" at the start of the chip row (same height as the chips). */
+  /* Round filter button at the start of the chip row (same height as the chips). */
   addTagPill: {
     width: 32,
     height: 32,
@@ -473,6 +539,82 @@ const createStyles = (c: ThemeColors) =>
     alignItems: 'center',
     justifyContent: 'center',
   },
+  filterBtnActive: {
+    backgroundColor: c.accent,
+    borderColor: c.accent,
+  },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    backgroundColor: c.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: { color: '#1c1917', fontSize: 10, fontWeight: '900' },
+  /* Filter & sort sheet */
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  sheetDismiss: { flex: 1 },
+  sheet: {
+    maxHeight: '85%',
+    backgroundColor: c.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  sheetHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: c.borderStrong,
+    alignSelf: 'center',
+    marginBottom: 10,
+  },
+  sheetContent: { paddingBottom: 8 },
+  sortList: { gap: 6 },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    marginBottom: 6,
+  },
+  sortRowOn: { borderColor: c.accent, backgroundColor: c.accentTint },
+  sortCopy: { flex: 1, gap: 1 },
+  sortLabel: { color: c.text, fontSize: 14, fontWeight: '700' },
+  sortLabelOn: { color: c.accent },
+  sortHint: { color: c.textMuted, fontSize: 12 },
+  sortNote: { color: c.textFaint, fontSize: 11, marginBottom: 16 },
+  sectionGap: { marginTop: 10 },
+  sheetButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  resetBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  resetBtnOff: { opacity: 0.4 },
+  resetText: { color: c.text, fontSize: 14, fontWeight: '700' },
+  doneBtn: { flex: 1 },
   /* Modals */
   modalBackdrop: {
     flex: 1,
