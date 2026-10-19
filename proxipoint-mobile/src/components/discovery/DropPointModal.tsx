@@ -13,6 +13,8 @@ import {
   Platform,
   StatusBar,
   Modal,
+  Share,
+  Switch,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -28,6 +30,7 @@ import {
   Lock,
   MapPin,
   Users,
+  Link2,
   Rocket,
   UserPlus,
   ImagePlus,
@@ -56,7 +59,7 @@ import {
 } from '../../lib/beaconDraft';
 import { useChannels, type Channel } from '../../lib/channels';
 import { BeaconApiError, postBeacon } from '../../services/beaconApi';
-import { cleanVenueLabel, type DroppedPoint } from '../../lib/droppedPoint';
+import { cleanVenueLabel, shareMessage, shareUrl, type DroppedPoint } from '../../lib/droppedPoint';
 import {
   BOUNDARY_RADII,
   getRecommendedTier,
@@ -293,7 +296,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [revealing, setRevealing] = useState(false);
   const [invites, setInvites] = useState<BeaconInvite[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteKind, setInviteKind] = useState<InviteKind>('proxipoint');
+  const [inviteKind, setInviteKind] = useState<InviteKind | 'link'>('proxipoint');
+  // "Link" tab: open the share sheet with the Point's link as soon as it's dropped.
+  const [shareAfterDrop, setShareAfterDrop] = useState(false);
   const [handleInput, setHandleInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [inviteError, setInviteError] = useState('');
@@ -437,6 +442,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setInvites([]);
     setInviteOpen(false);
     setInviteKind('proxipoint');
+    setShareAfterDrop(false);
     setHandleInput('');
     setPhoneInput('');
     setInviteError('');
@@ -679,9 +685,19 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     // Long enough to watch the pin land and the beacon spread; short when motion is reduced.
     const delay = animation && !animation.reducedMotion ? 1800 : 700;
     if (point) draftCleared.current = true; // dropped: the next open starts fresh
+    const share = point && shareAfterDrop;
     closeTimer.current = setTimeout(() => {
       if (point && onDropped) onDropped(point);
       else onClose();
+      // Link tab: the Point exists now, so its link can go out. Same message as Manage → Share.
+      if (share && point) {
+        void Share.share(
+          Platform.OS === 'ios'
+            ? { message: shareMessage(point).replace(`\n${shareUrl(point)}`, ''), url: shareUrl(point) }
+            : { message: shareMessage(point) },
+          { subject: point.title },
+        ).catch(() => undefined);
+      }
     }, delay);
   };
 
@@ -693,9 +709,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
 
-    if (visibility === 'private' && invites.length === 0) {
+    // A share link counts as the invite for a Private Point.
+    if (visibility === 'private' && invites.length === 0 && !shareAfterDrop) {
       setInviteOpen(true);
-      setFormError('Private Points need at least one invite. Add someone, or switch to Channel or Public.');
+      setFormError('Private Points need at least one invite. Add someone, share a link, or switch to Channel or Public.');
       return;
     }
 
@@ -743,6 +760,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     const payload = Object.assign(toBeaconCreatePayload(draft), {
       requiresRsvpApproval: requiresApproval,
       maxAttendance, // null = no limit
+      // Link invite: the server returns a share link that opens the Point (for a Private Point,
+      // the link itself grants access, like an invite).
+      shareLink: shareAfterDrop,
       // 512x512 JPEG as a data URI (about 40–80 KB), or null. Shown as a circle by the app.
       coverPhoto: coverPhoto?.base64 ? `data:image/jpeg;base64,${coverPhoto.base64}` : null,
       // The server should place a randomly offset circle of this radius around the real spot,
@@ -1883,6 +1903,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     [
                       ['proxipoint', 'Users'],
                       ['phone', 'Phone'],
+                      ['link', 'Link'],
                     ] as const
                   ).map(([kind, label]) => {
                     const selected = inviteKind === kind;
@@ -1896,6 +1917,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                         onPress={() => {
                             setInviteKind(kind);
                             setInviteError('');
+                            if (kind === 'link') setShareAfterDrop(true);
                         }}
                       >
                         <Text style={[styles.inviteKindText, selected && styles.inviteKindTextSelected]}>{label}</Text>
@@ -1911,6 +1933,33 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   <Text style={styles.inviteHint}>
                     They’ll get a text with a link to this Point, even if they don’t have the app yet.
                   </Text>
+                ) : null}
+
+                {inviteKind === 'link' ? (
+                  <View style={styles.linkPanel} testID="invite-link">
+                    <Text style={styles.inviteHint}>
+                      {visibility === 'private'
+                        ? 'Anyone you send the link to can open this Point and RSVP, even though it’s Private.'
+                        : 'Send a link to this Point by text, email or any app. It opens the Point, even for people without ProxiPoint yet.'}
+                    </Text>
+                    <View style={styles.linkRow}>
+                      <Link2 size={16} color={c.accent} strokeWidth={2.25} />
+                      <Text style={styles.linkRowText}>Share the link after I drop it</Text>
+                      <Switch
+                        value={shareAfterDrop}
+                        onValueChange={setShareAfterDrop}
+                        trackColor={{ false: c.borderStrong, true: c.accentTrack }}
+                        thumbColor={shareAfterDrop ? c.accent : c.textMuted}
+                        accessibilityLabel="Share the link after dropping"
+                        testID="invite-link-toggle"
+                      />
+                    </View>
+                    <Text style={styles.linkNote}>
+                      {shareAfterDrop
+                        ? 'Your share sheet opens as soon as the Point is dropped. You can share it again later from My Drops.'
+                        : 'You can still share it later from My Drops.'}
+                    </Text>
+                  </View>
                 ) : null}
 
                 {inviteKind === 'proxipoint' ? (
@@ -3141,6 +3190,20 @@ const createStyles = (c: ThemeColors) =>
     fontSize: 12,
     lineHeight: 17,
   },
+  linkPanel: { gap: 10 },
+  linkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 12,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  linkRowText: { flex: 1, color: c.text, fontSize: 13, fontWeight: '700' },
+  linkNote: { color: c.textFaint, fontSize: 11.5, lineHeight: 16 },
   inviteError: {
     color: c.amber,
     fontSize: 11,
