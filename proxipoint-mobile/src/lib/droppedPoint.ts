@@ -12,6 +12,8 @@ export interface DroppedPoint {
   description: string;
   tags: string[];
   visibility: BeaconVisibility;
+  /** Channel it was posted to, if any. */
+  channelId?: string | null;
   venue: string;
   latitude: number;
   longitude: number;

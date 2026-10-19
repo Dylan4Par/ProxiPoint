@@ -26,7 +26,8 @@ import { CalendarDays, ChevronLeft, X } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
 import { cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
-import { getChannels, getPost, syncAutoChannels } from '../lib/channels';
+import { addPost, getChannel, getChannels, getPost, syncAutoChannels } from '../lib/channels';
+import { formatPointWhen, publicWhere } from '../lib/droppedPoint';
 import { planAutoChannels } from '../lib/autoChannels';
 import { useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
@@ -300,6 +301,12 @@ export const DiscoverScreen: React.FC = () => {
     setMyDrops((current) => [point, ...current.filter((drop) => drop.id !== point.id)]);
     // Give the new pin its full details (times, all #tags) so the calendar and alerts see it.
     syncMyPoint(point);
+    // Posted to a channel you're in: the channel gets a post about the new Point.
+    // (Server side this happens with the Point's create call.)
+    const channel = point.channelId ? getChannel(point.channelId) : null;
+    if (channel?.joined) {
+      addPost(channel.id, profile.handle, `New Point: ${point.title}\n${formatPointWhen(point)} · ${publicWhere(point)}`);
+    }
     setDropOpen(false);
     setDropPrefill(null);
     setTab('profile');

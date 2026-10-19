@@ -3,7 +3,7 @@ import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 
 import { Check, ChevronDown, ChevronRight, Hash, Map as MapIcon, MapPin, Search, Users, X } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { useBoosts } from '../lib/boost';
-import { setJoined, useChannels, type Channel } from '../lib/channels';
+import { canSeePoint, setJoined, useChannels, type Channel } from '../lib/channels';
 import {
   DEFAULT_RANGE_METERS,
   SEARCH_RANGES,
@@ -90,7 +90,8 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const center = { latitude: viewPlace.latitude, longitude: viewPlace.longitude };
   const searching = query.trim().length > 0;
   const rangeLabel = SEARCH_RANGES.find((r) => r.meters === rangeMeters)?.label ?? 'Any';
-  const allowed = (node: FeedNode) => isNodeAllowed(node) && inRange(center, node, rangeMeters);
+  const visible = (node: FeedNode) => isNodeAllowed(node) && canSeePoint(node);
+  const allowed = (node: FeedNode) => visible(node) && inRange(center, node, rangeMeters);
 
   // ---- Feed (no search) ----
   const { nearby, upcoming } = useMemo(
@@ -106,7 +107,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
 
   // ---- Search ----
   const results = useMemo(
-    () => (searching ? searchPoints(nodes, query, center, rangeMeters, now, isNodeAllowed) : []),
+    () => (searching ? searchPoints(nodes, query, center, rangeMeters, now, visible) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [searching, nodes, query, viewPlace.latitude, viewPlace.longitude, rangeMeters, now, moderation],
   );

@@ -26,7 +26,6 @@ import {
   MapPin,
   MessageSquare,
   Pencil,
-  Radio,
   RotateCcw,
   Share2,
   ShieldCheck,
@@ -60,7 +59,7 @@ const NAV_BAR_HEIGHT = 72;
 
 const VISIBILITY: Record<BeaconVisibility, { label: string; Icon: LucideIcon; accent: string }> = {
   private: { label: 'Private', Icon: Lock, accent: '#f59e0b' },
-  tag_network: { label: 'Tag Network', Icon: Radio, accent: '#22d3ee' },
+  channel: { label: 'Channel', Icon: Users, accent: '#a78bfa' },
   public: { label: 'Public', Icon: Globe, accent: '#34d399' },
 };
 
@@ -144,7 +143,8 @@ export const ManagePointSheet: React.FC<ManagePointSheetProps> = ({ point, justD
   const showEditor = editing && !ended;
   const rsvps = point.rsvps ?? [];
   const going = rsvps.filter((rsvp) => rsvp.status === 'going');
-  const visibility = VISIBILITY[point.visibility] ?? VISIBILITY.tag_network;
+  // Old 'tag_network' Points read as Public.
+  const visibility = VISIBILITY[point.visibility] ?? VISIBILITY.public;
   const phoneInvites = point.invites.filter((invite) => invite.kind === 'phone');
   const phoneNumbers = phoneInvites
     .map(phoneNumberFromInvite)

@@ -363,6 +363,16 @@ export function claimChannel(id: string, handle: string) {
   changed();
 }
 
+/**
+ * A Point with 'channel' visibility is only for that channel's members (and its host, whose own
+ * Points are always shown). Everything else passes. The server enforces the same rule.
+ */
+export function canSeePoint(node: unknown): boolean {
+  const n = (node ?? {}) as { visibility?: unknown; channelId?: unknown; origin?: unknown };
+  if (n.visibility !== 'channel' || n.origin === 'local') return true;
+  return typeof n.channelId === 'string' && Boolean(getChannel(n.channelId)?.joined);
+}
+
 /** Follow or unfollow: whether the channel's pinned posts show on your map. */
 export function setFollowed(id: string, followed: boolean) {
   channels = channels.map((channel) => (channel.id === id ? { ...channel, followed } : channel));

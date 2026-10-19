@@ -23,6 +23,8 @@ export interface FeedNode {
   attendeeCount?: number;
   latitude?: number;
   longitude?: number;
+  /** Channel the Point was posted to. */
+  channelId?: string | null;
 }
 
 /** Points starting within this many minutes count as "nearby now" rather than "upcoming". */
@@ -75,9 +77,17 @@ export function splitFeed(
   return { nearby, upcoming };
 }
 
-/** Points that use any of the channel's #tags. A channel with no #tags (a city channel) has them all. */
-export function channelNodes<T extends FeedNode>(channel: Pick<Channel, 'tags'>, nodes: T[]): T[] {
+/**
+ * Points in a channel: ones posted to it, plus ones using any of its #tags. A channel with no
+ * #tags (a city channel) has them all.
+ */
+export function channelNodes<T extends FeedNode>(channel: Pick<Channel, 'tags'> & { id?: string }, nodes: T[]): T[] {
   if (!channel.tags.length) return nodes;
+  if (channel.id) {
+    const posted = nodes.filter((node) => node.channelId === channel.id);
+    const tagged = channelNodes({ tags: channel.tags }, nodes).filter((node) => node.channelId !== channel.id);
+    return [...posted, ...tagged];
+  }
   const wanted = new Set(channel.tags.map(key));
   return nodes.filter((node) => nodeTags(node).some((tag) => wanted.has(key(tag))));
 }

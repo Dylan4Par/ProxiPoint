@@ -1,5 +1,6 @@
 import { isLiveNode } from './liveStatus';
 import { isNodeAllowed } from './moderation';
+import { canSeePoint } from './channels';
 import { getTimeWindow, inTimeWindow } from './timeWindow';
 
 /**
@@ -31,6 +32,8 @@ export function nodeTags(node: unknown): string[] {
 export function matchesDiscoverFilters(node: unknown, filters: DiscoverFilters): boolean {
   // Points you reported, and Points from people you blocked, never show.
   if (!isNodeAllowed(node)) return false;
+  // Channel-only Points show to that channel's members.
+  if (!canSeePoint(node)) return false;
   const tag = filters.selectedTag ? normalizeTag(filters.selectedTag) : '';
   if (tag && tag !== 'all' && !nodeTags(node).includes(tag)) return false;
   if (filters.liveOnly && !isLiveNode(node)) return false;

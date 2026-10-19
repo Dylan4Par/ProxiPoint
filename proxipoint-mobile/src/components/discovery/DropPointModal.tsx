@@ -27,7 +27,7 @@ import {
   Landmark,
   Lock,
   MapPin,
-  Radio,
+  Users,
   Rocket,
   UserPlus,
   ImagePlus,
@@ -50,9 +50,11 @@ import {
   countBeaconWords,
   createBeaconDraft,
   GEOCODE_DEBOUNCE_MS,
+  normalizeVisibility,
   parseBeaconTags,
   toBeaconCreatePayload,
 } from '../../lib/beaconDraft';
+import { useChannels, type Channel } from '../../lib/channels';
 import { BeaconApiError, postBeacon } from '../../services/beaconApi';
 import { cleanVenueLabel, type DroppedPoint } from '../../lib/droppedPoint';
 import {
@@ -128,11 +130,11 @@ const VISIBILITY_OPTIONS: Array<{
     hint: 'Only people you invite can see this Point.',
   },
   {
-    id: 'tag_network',
-    label: 'Tag Network',
-    accent: '#22d3ee',
-    Icon: Radio,
-    hint: 'Reaches people nearby who follow your tags.',
+    id: 'channel',
+    label: 'Channel',
+    accent: '#a78bfa',
+    Icon: Users,
+    hint: 'Only members of the channel you pick can see this Point.',
   },
   {
     id: 'public',
@@ -144,12 +146,15 @@ const VISIBILITY_OPTIONS: Array<{
 ];
 
 /** The one-line summary under the perimeter chips, worded for the chosen visibility. */
-function describeReach(visibility: BeaconVisibility, tags: string, radius: string): string {
+function describeReach(visibility: BeaconVisibility, tags: string, radius: string, channelName?: string): string {
   if (visibility === 'public') return `Visible to anyone on ProxiPoint within ${radius}.`;
+  if (visibility === 'channel') {
+    return channelName ? `Visible to ${channelName} members within ${radius}.` : `Pick a channel to choose who sees this within ${radius}.`;
+  }
   const tagList = parseBeaconTags(tags)
     .map((tag) => `#${tag.replace(/^#+/, '')}`)
     .slice(0, 3);
-  if (tagList.length === 0) return `Add tags to choose who in your Tag Network sees this within ${radius}.`;
+  if (tagList.length === 0) return `Visible to people you invite within ${radius}.`;
   const more = parseBeaconTags(tags).length > tagList.length ? ' and more' : '';
   return `Broadcasting to people following ${tagList.join(', ')}${more} within ${radius}.`;
 }
@@ -260,7 +265,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     return store.beacons ?? store.events;
   });
 
-  const [visibility, setVisibility] = useState<BeaconVisibility>('tag_network');
+  const [visibility, setVisibility] = useState<BeaconVisibility>('public');
+  // Channel the Point is posted to: required for Channel visibility, optional for the others.
+  const [channelId, setChannelId] = useState<string | null>(null);
+  const allChannels = useChannels();
   const initialWindow = useRef(liveBeaconWindow());
   const [isLiveNow, setIsLiveNow] = useState(true);
   const [startsAt, setStartsAt] = useState(initialWindow.current.startsAt);
@@ -406,7 +414,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     const window = liveBeaconWindow();
     durationRef.current = window.endsAt.getTime() - window.startsAt.getTime();
     clockHold.current = 0;
-    setVisibility('tag_network');
+    setVisibility('public');
+    setChannelId(null);
     setIsLiveNow(true);
     setStartsAt(window.startsAt);
     setEndsAt(window.endsAt);
@@ -453,7 +462,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     if (!source) return;
 
     // ---- "Drop again": copy the earlier Point into the sheet ----
-    setVisibility(source.visibility);
+    // Old 'tag_network' Points come back as Public.
+    setVisibility(normalizeVisibility(source.visibility));
+    setChannelId(source.channelId ?? null);
     setTitle(source.title);
     setDescription(source.description);
     setTags(tagsToInput(source.tags));
@@ -684,7 +695,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
     if (visibility === 'private' && invites.length === 0) {
       setInviteOpen(true);
-      setFormError('Private Points need at least one invite. Add someone, or switch to Tag Network or Public.');
+      setFormError('Private Points need at least one invite. Add someone, or switch to Channel or Public.');
+      return;
+    }
+
+    if (visibility === 'channel' && !channelId) {
+      setFormError('Channel Points need a channel. Pick one under Tags, or switch to Public.');
       return;
     }
 
@@ -709,6 +725,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       description,
       tags,
       visibility,
+      channelId,
       venue: cleanVenueLabel(locationSearch) || 'Dropped Point',
       latitude: coords.lat,
       longitude: coords.lon,
@@ -755,6 +772,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       description: description.trim(),
       tags: parseBeaconTags(tags).map((tag) => tag.replace(/^#+/, '')),
       visibility,
+      channelId,
       venue: cleanVenueLabel(locationSearch) || 'Dropped Point',
       latitude: coords.lat,
       longitude: coords.lon,
@@ -891,11 +909,41 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
         ? `Others will see: somewhere in ${selectedRegion.name}. ${guestReveal}`
         : 'Finding areas around this spot…';
 
-  const activeVisibility = VISIBILITY_OPTIONS.find((option) => option.id === visibility) ?? VISIBILITY_OPTIONS[1];
+  const activeVisibility =
+    VISIBILITY_OPTIONS.find((option) => option.id === visibility) ??
+    VISIBILITY_OPTIONS.find((option) => option.id === 'public')!;
+
+  // Channel choices: channels you've joined first, then (not for Channel visibility, which needs
+  // membership) channels whose #tags match what's typed. The picked one always stays listed.
+  const tagKeys = new Set(parseBeaconTags(tags).map((tag) => tag.replace(/^#+/, '').toLowerCase()));
+  const joinedChannels = allChannels.filter((channel) => channel.joined);
+  const tagMatches =
+    visibility === 'channel'
+      ? []
+      : allChannels.filter(
+          (channel) => !channel.joined && channel.tags.some((tag) => tagKeys.has(tag.replace(/^#+/, '').toLowerCase())),
+        );
+  const pickedChannel = channelId ? allChannels.find((channel) => channel.id === channelId) ?? null : null;
+  const channelOptions: Channel[] = [...joinedChannels, ...tagMatches].slice(0, 8);
+  if (pickedChannel && !channelOptions.some((channel) => channel.id === pickedChannel.id)) channelOptions.unshift(pickedChannel);
+  const channelHint =
+    visibility === 'channel'
+      ? pickedChannel
+        ? `Only ${pickedChannel.name} members can see it.`
+        : joinedChannels.length
+          ? 'Pick which channel can see it.'
+          : 'Join a channel first to drop a channel-only Point.'
+      : pickedChannel
+        ? pickedChannel.joined
+          ? `Also listed in ${pickedChannel.name}, with a post there.`
+          : `Also listed in ${pickedChannel.name}.`
+        : 'Optional: list it in a channel too.';
 
   const selectVisibility = (next: BeaconVisibility) => {
     setVisibility(next);
     setFormError(null);
+    // Channel visibility needs a channel you're in: drop a picked channel you haven't joined.
+    if (next === 'channel' && pickedChannel && !pickedChannel.joined) setChannelId(null);
     // A private beacon only reaches invitees, so open the invite panel right away.
     if (next === 'private') {
       setInviteOpen(true);
@@ -1238,6 +1286,60 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 ))}
               </ScrollView>
             <View style={styles.hairline} />
+            {/* Channel: who can see it (Channel visibility), or where else it's listed (Public/Private). */}
+            <View style={styles.channelField} testID="drop-channel">
+              <View style={styles.inputRow}>
+                <Text style={styles.inputLabel}>Channel</Text>
+                <Text
+                  style={[styles.channelHint, visibility === 'channel' && !pickedChannel && styles.channelHintNeeded]}
+                  numberOfLines={2}
+                >
+                  {channelHint}
+                </Text>
+              </View>
+              {channelOptions.length || visibility !== 'channel' ? (
+                <ScrollView
+                  horizontal
+                  showsHorizontalScrollIndicator={false}
+                  keyboardShouldPersistTaps="always"
+                  contentContainerStyle={styles.channelChips}
+                >
+                  {visibility !== 'channel' ? (
+                    <TouchableOpacity
+                      style={[styles.channelChip, !channelId && styles.channelChipActive]}
+                      onPress={() => setChannelId(null)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: !channelId }}
+                      testID="drop-channel-none"
+                    >
+                      <Text style={[styles.channelChipText, !channelId && styles.channelChipTextActive]}>None</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  {channelOptions.map((channel) => {
+                    const active = channel.id === channelId;
+                    return (
+                      <TouchableOpacity
+                        key={channel.id}
+                        style={[styles.channelChip, active && styles.channelChipActive]}
+                        onPress={() => {
+                          setChannelId(active && visibility !== 'channel' ? null : channel.id);
+                          setFormError(null);
+                        }}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: active }}
+                        accessibilityLabel={`Post to ${channel.name}`}
+                        testID={`drop-channel-${channel.id}`}
+                      >
+                        <Text style={[styles.channelChipText, active && styles.channelChipTextActive]} numberOfLines={1}>
+                          {channel.name}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              ) : null}
+            </View>
+            <View style={styles.hairline} />
             <View style={styles.descriptionBlock}>
               <View style={styles.descriptionHeader}>
                 <Text style={styles.descriptionLabel}>Description</Text>
@@ -1537,7 +1639,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   })}
                 </View>
                 <Text style={styles.broadcastSubtext} testID="drop-broadcast">
-                  {describeReach(visibility, tags, activeTier.displayRadius)}
+                  {describeReach(visibility, tags, activeTier.displayRadius, pickedChannel?.name)}
                 </Text>
               </View>
             ) : null}
@@ -2110,6 +2212,22 @@ const createStyles = (c: ThemeColors) =>
     fontSize: 12,
     fontWeight: '600',
   },
+  channelField: { gap: 8, paddingVertical: 2 },
+  channelHint: { flex: 1, color: c.textFaint, fontSize: 12, lineHeight: 16 },
+  channelHintNeeded: { color: c.violet, fontWeight: '700' },
+  channelChips: { gap: 8 },
+  channelChip: {
+    maxWidth: 200,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 16,
+    backgroundColor: c.surfaceDim,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  channelChipActive: { backgroundColor: c.violetTint, borderColor: c.violet },
+  channelChipText: { color: c.textSecondary, fontSize: 12.5, fontWeight: '700' },
+  channelChipTextActive: { color: c.violetText },
   tagSuggestionRow: {
     gap: 8,
     paddingTop: 10,

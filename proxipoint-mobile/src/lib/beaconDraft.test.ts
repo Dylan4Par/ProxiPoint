@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import {
   describeBeaconTiming,
   isBeaconVisibility,
+  normalizeVisibility,
   parseBeaconTags,
   primaryBeaconTag,
   GEOCODE_DEBOUNCE_MS,
@@ -19,7 +20,8 @@ import {
 
 test('visibility is the three-way model', () => {
   assert.equal(isBeaconVisibility('private'), true);
-  assert.equal(isBeaconVisibility('tag_network'), true);
+  assert.equal(isBeaconVisibility('channel'), true);
+  assert.equal(isBeaconVisibility('tag_network'), false);
   assert.equal(isBeaconVisibility('public'), true);
   assert.equal(isBeaconVisibility('true'), false);
   assert.equal(isBeaconVisibility('friends'), false);
@@ -75,7 +77,7 @@ test('description keeps the first 200 words', () => {
     title: 'GIS Meetup',
     description: words.join(' '),
     tags: '#TechMeetup',
-    visibility: 'tag_network',
+    visibility: 'channel',
     venue: 'Pearl St & Broadway',
     latitude: 40.0179,
     longitude: -105.2789,
@@ -95,7 +97,7 @@ test('create payload maps channels, radius, and duration hours', () => {
   const draft = createBeaconDraft({
     title: 'Boulder Tech & GIS Meetup',
     tags: '#TechMeetup, PostGIS',
-    visibility: 'tag_network',
+    visibility: 'channel',
     venue: 'Pearl St Mall',
     latitude: 40.0179,
     longitude: -105.2789,
@@ -116,7 +118,7 @@ test('create payload maps channels, radius, and duration hours', () => {
     latitude: 40.0179,
     longitude: -105.2789,
     radius_meters: 1500,
-    visibility: 'tag_network',
+    visibility: 'channel',
     duration_hours: 2,
   });
   assert.equal(resolveBeaconCreateUrl({}), 'http://127.0.0.1:8090/api/v1/beacons');
@@ -128,4 +130,27 @@ test('create payload maps channels, radius, and duration hours', () => {
     resolveBeaconCreateUrl({ beaconUrl: 'https://events.example/api/v1/beacons', apiUrl: 'http://ignored' }),
     'https://events.example/api/v1/beacons',
   );
+});
+
+test('old Tag Network Points are treated as Public', () => {
+  assert.equal(normalizeVisibility('tag_network'), 'public');
+  assert.equal(normalizeVisibility('channel'), 'channel');
+  assert.equal(normalizeVisibility('private'), 'private');
+  assert.equal(normalizeVisibility(undefined), 'public');
+});
+
+test('a channel id rides along in the create payload only when set', () => {
+  const base = {
+    title: 'Open play',
+    tags: '#Pickleball',
+    visibility: 'channel' as const,
+    venue: 'Meadow Park Courts',
+    latitude: 40.06,
+    longitude: -105.04,
+    isLiveNow: true,
+    duration: '2 hrs' as const,
+    scheduledStart: 'now',
+  };
+  assert.equal(toBeaconCreatePayload(createBeaconDraft({ ...base, channelId: 'dink-crew' })).channel_id, 'dink-crew');
+  assert.equal('channel_id' in toBeaconCreatePayload(createBeaconDraft({ ...base, visibility: 'public' })), false);
 });

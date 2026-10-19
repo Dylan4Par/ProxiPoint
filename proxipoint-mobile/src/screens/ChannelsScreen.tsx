@@ -13,6 +13,7 @@ import {
   addComment,
   POST_PHOTO_LIMIT,
   addPost,
+  canSeePoint,
   claimChannel,
   setFollowed,
   setJoined,
@@ -412,7 +413,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, DiscoveryNode>;
   const moderation = useModeration();
   const points = useMemo(() => {
-    const { nearby, upcoming } = splitFeed(nodes, now, isNodeAllowed);
+    const { nearby, upcoming } = splitFeed(nodes, now, (node) => isNodeAllowed(node) && canSeePoint(node));
     return channelNodes(channel, [...nearby, ...upcoming]) as DiscoveryNode[];
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel, nodes, now, moderation]);

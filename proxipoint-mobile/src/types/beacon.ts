@@ -1,4 +1,8 @@
-export type BeaconVisibility = 'private' | 'tag_network' | 'public';
+/**
+ * Who can see a Point. 'channel' = members of one channel (channelId). The old 'tag_network'
+ * option is gone; Points saved with it are treated as public (see normalizeVisibility).
+ */
+export type BeaconVisibility = 'private' | 'channel' | 'public';
 
 export const BEACON_DURATIONS = ['1 hr', '2 hrs', '4 hrs', 'All Day'] as const;
 
@@ -45,6 +49,8 @@ export interface DropBeaconInput {
   description?: string;
   tags: string;
   visibility: BeaconVisibility;
+  /** Channel the Point is posted to. Required for 'channel' visibility, optional otherwise. */
+  channelId?: string | null;
   venue: string;
   latitude: number;
   longitude: number;
@@ -71,6 +77,8 @@ export interface BeaconCreatePayload {
   longitude: number;
   radius_meters: number;
   visibility: BeaconVisibility;
+  /** Present when the Point is posted to a channel. */
+  channel_id?: string;
   duration_hours: number;
 }
 

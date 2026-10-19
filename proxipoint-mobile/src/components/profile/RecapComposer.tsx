@@ -26,7 +26,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
 const EXPLAIN_STEPS: Array<{ Icon: LucideIcon; title: string; body: string }> = [
   { Icon: Zap, title: 'Start it now', body: 'Drop it while it’s happening and it shows as LIVE NOW.' },
   { Icon: Clock, title: 'Or schedule it', body: 'Pick a start and end time; it goes live on its own.' },
-  { Icon: Globe, title: 'Choose who sees it', body: 'Private (people you invite), your Tag Network, or Public.' },
+  { Icon: Globe, title: 'Choose who sees it', body: 'Private (people you invite), one Channel, or Public.' },
   { Icon: ImagePlus, title: 'Post a recap here', body: 'Once it has started, share photos and a few words.' },
 ];
 

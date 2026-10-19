@@ -65,7 +65,15 @@ export function describeBeaconTiming(input: {
 }
 
 export function isBeaconVisibility(value: string): value is BeaconVisibility {
-  return value === 'private' || value === 'tag_network' || value === 'public';
+  return value === 'private' || value === 'channel' || value === 'public';
+}
+
+/**
+ * Visibility from anywhere (server, old saved drafts): the retired 'tag_network' becomes 'public',
+ * and anything unknown falls back to 'public'.
+ */
+export function normalizeVisibility(value: unknown): BeaconVisibility {
+  return typeof value === 'string' && isBeaconVisibility(value) ? value : 'public';
 }
 
 export function createBeaconDraft(input: DropBeaconInput): BeaconDraft {
@@ -114,6 +122,7 @@ export function toBeaconCreatePayload(draft: BeaconDraft): BeaconCreatePayload {
     longitude: draft.longitude,
     radius_meters: draft.radiusMeters,
     visibility: draft.visibility,
+    ...(draft.channelId ? { channel_id: draft.channelId } : {}),
     duration_hours: resolveDurationHours(draft),
     ...(description ? { description } : {}),
   };

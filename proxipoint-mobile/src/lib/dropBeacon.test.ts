@@ -8,7 +8,7 @@ test('dropping a beacon stores visibility, duration, and survives a feed sync', 
     title: 'GIS Meetup',
     description: 'Bring a laptop.',
     tags: 'TechMeetup, PostGIS',
-    visibility: 'tag_network',
+    visibility: 'public',
     venue: 'Downtown Tech Lab',
     latitude: 40.071,
     longitude: -105.032,
@@ -19,7 +19,7 @@ test('dropping a beacon stores visibility, duration, and survives a feed sync', 
 
   const dropped = useDiscoveryStore.getState().nodes[id];
   assert.ok(dropped);
-  assert.equal(dropped?.visibility, 'tag_network');
+  assert.equal(dropped?.visibility, 'public');
   assert.equal(dropped?.description, 'Bring a laptop.');
   assert.equal(dropped?.duration, '4 hrs');
   assert.equal(dropped?.origin, 'local');
@@ -60,7 +60,7 @@ test('a persisted beacon keeps the server id and flies to its perimeter', () => 
   const draft = createBeaconDraft({
     title: 'Boulder Tech & GIS Meetup',
     tags: 'TechMeetup PostGIS',
-    visibility: 'tag_network',
+    visibility: 'public',
     venue: 'Pearl St Mall',
     latitude: 40.0179,
     longitude: -105.2789,
@@ -79,7 +79,7 @@ test('a persisted beacon keeps the server id and flies to its perimeter', () => 
       latitude: draft.latitude,
       longitude: draft.longitude,
       radius_meters: 1500,
-      visibility: 'tag_network',
+      visibility: 'public',
       duration_hours: 2,
     },
     draft,

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { describeBeaconTiming, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
+import { describeBeaconTiming, normalizeVisibility, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
 import { calculateDistanceMeters } from '../lib/locationFilter';
 import type {
   BeaconDraft,
@@ -42,6 +42,8 @@ export interface DiscoveryNode {
   radii: number[];
   batteryPct?: number;
   visibility?: BeaconVisibility;
+  /** Channel the Point was posted to (its page lists it; 'channel' visibility = members only). */
+  channelId?: string | null;
   duration?: BeaconDuration;
   radiusMeters?: number;
   tierLevel?: BoundaryTierLevel;
@@ -659,6 +661,7 @@ function placeLocalBeacon(
       isRsvpd: true,
       radii: [draft.radiusMeters],
       visibility: draft.visibility,
+      channelId: draft.channelId ?? null,
       duration: draft.duration,
       radiusMeters: draft.radiusMeters,
       tierLevel: draft.tierLevel,
@@ -844,7 +847,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       title: saved.title || draft.title,
       description: saved.description || draft.description,
       venue: saved.venue || draft.venue,
-      visibility: saved.visibility || draft.visibility,
+      visibility: saved.visibility ? normalizeVisibility(saved.visibility) : draft.visibility,
+      channelId: saved.channel_id ?? draft.channelId ?? null,
       latitude: saved.latitude,
       longitude: saved.longitude,
       radiusMeters: saved.radius_meters,
