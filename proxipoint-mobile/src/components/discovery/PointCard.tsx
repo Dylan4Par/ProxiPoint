@@ -194,7 +194,7 @@ const createStyles = (c: ThemeColors) =>
     boostedText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
     title: { color: c.text, fontSize: 16, fontWeight: '800', lineHeight: 20 },
     venue: { color: c.textMuted, fontSize: 12 },
-    bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
+    bottom: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 },
     pills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
     pill: {
       flexDirection: 'row',
@@ -208,7 +208,8 @@ const createStyles = (c: ThemeColors) =>
     dot: { width: 7, height: 7, borderRadius: 4 },
     pillText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.2, flexShrink: 1 },
     pillTextPlain: { fontWeight: '600', letterSpacing: 0 },
-    actions: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    // Going faces stacked above the RSVP button, both right-aligned.
+    actions: { flexDirection: 'column', alignItems: 'flex-end', gap: 4 },
     faces: { flexDirection: 'row', alignItems: 'center' },
     face: {
       width: 24,
