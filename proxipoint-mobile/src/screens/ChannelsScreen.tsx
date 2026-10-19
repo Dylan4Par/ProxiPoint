@@ -13,6 +13,7 @@ import {
   addComment,
   POST_PHOTO_LIMIT,
   addPost,
+  answerHeadsUp,
   canSeePoint,
   approveRequest,
   claimChannel,
@@ -30,16 +31,14 @@ import {
   type Channel,
   type ChannelPost,
   type PostComment,
-  type PostPlace,
 } from '../lib/channels';
 import {
-  PIN_HOURS,
   POST_SORTS,
   buildThreads,
   countComments,
+  isPinLive,
   pinTimeLeft,
   postDistance,
-  snapToBlock,
   sortPosts,
   type LatLon,
   type PostSort,
@@ -60,6 +59,9 @@ import {
   membershipAction,
 } from '../lib/channelAccess';
 import { ACCESS_ICON, CreateChannelSheet } from '../components/channels/CreateChannelSheet';
+import { PLACE_ICON, PlacePicker, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
+import { PLACE_KIND_LABEL, bestTips, placeRef, pointsAtPlace, postsAtPlace, type LocalPlace } from '../lib/localPlaces';
+import { POST_KINDS, asksStillHappening, defaultPinHours, kindInfo, pinChoices, type PostKind } from '../lib/postKinds';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
 export type ChannelsSegment = 'feed' | 'alerts' | 'manage';
@@ -93,6 +95,11 @@ interface ChannelsScreenProps {
   onOpenSearch: () => void;
   /** Someone's @handle on a post or comment: their profile (yours goes to the Profile tab). */
   onOpenProfile: (handle: string) => void;
+  /** Place page that's open (all conversations about a park, venue, trail…), or null. */
+  placeId: string | null;
+  onOpenPlace: (id: string | null) => void;
+  /** Explore Map, slid to this spot. */
+  onShowSpotOnMap: (spot: LatLon) => void;
 }
 
 /** Points listed on a channel page (a city channel can have many). */
@@ -103,6 +110,17 @@ const channelStatus = (channel: Channel) => {
   const access = accessOf(channel);
   return access === 'public' ? '' : ` · ${access === 'private' ? 'Private' : 'Restricted'}`;
 };
+
+/** "2h", "3 days", "Not on map". */
+const pinLabel = (hours: number) => (hours === 0 ? 'Not on map' : hours >= 48 ? `${hours / 24} days` : `${hours}h`);
+
+/** Heads-up amber, question cyan, tip green. */
+const kindBadgeStyle = (kind: PostKind, c: ThemeColors) =>
+  kind === 'heads_up'
+    ? { borderColor: c.amber, backgroundColor: c.amberTint }
+    : kind === 'question'
+      ? { borderColor: c.accent, backgroundColor: c.accentTint }
+      : { borderColor: c.green, backgroundColor: c.greenTint };
 
 /** Short label for the report sheet: the start of the text. */
 const snippet = (text: string) => (text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text);
@@ -122,7 +140,7 @@ const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
  * Tapping a channel opens its page: its Points, its posts, and a box to post.
  */
 export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
-  const { segment, onChangeSegment, channelId, onOpenChannel, unreadAlerts, postId, onOpenPost } = props;
+  const { segment, onChangeSegment, channelId, onOpenChannel, unreadAlerts, postId, onOpenPost, placeId, onOpenPlace } = props;
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const channels = useChannels();
@@ -130,16 +148,17 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
   const open = channelId ? channels.find((channel) => channel.id === channelId) ?? null : null;
   const openPost = postId ? posts.find((post) => post.id === postId) ?? null : null;
 
-  // Android back: post page → whatever it was opened from; channel page → the list.
+  // Android back: post page → whatever it was opened from; place page → the same; channel page → the list.
   useEffect(() => {
-    if (!postId && !channelId) return;
+    if (!postId && !channelId && !placeId) return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       if (postId) onOpenPost(null);
+      else if (placeId) onOpenPlace(null);
       else onOpenChannel(null);
       return true;
     });
     return () => sub.remove();
-  }, [postId, channelId, onOpenChannel, onOpenPost]);
+  }, [postId, channelId, placeId, onOpenChannel, onOpenPost, onOpenPlace]);
 
   // The open post was reported (or its author blocked): close its page.
   useEffect(() => {
@@ -155,6 +174,7 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
       />
     );
   }
+  if (placeId) return <PlacePage {...props} placeId={placeId} />;
   if (open) return <ChannelPage {...props} channel={open} />;
 
   return (
@@ -227,6 +247,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   myLocation,
   myHandle,
   onOpenProfile,
+  onOpenPlace,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -297,6 +318,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
             <PostCard
               myHandle={myHandle}
               onOpenProfile={onOpenProfile}
+              onOpenPlace={onOpenPlace}
               key={post.id}
               post={post}
               now={now}
@@ -456,6 +478,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   myHandle,
   onOpenProfile,
   myLocation,
+  onOpenPlace,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -486,18 +509,17 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   const access = accessOf(channel);
   const AccessIcon = ACCESS_ICON[access];
   const [draft, setDraft] = useState('');
-  // Pin to the map: off, or a place (a Point's venue, or the block you're on) for a few hours.
-  const [pinOn, setPinOn] = useState(false);
-  const [pinPlace, setPinPlace] = useState<PostPlace | null>(null);
-  const [pinHours, setPinHours] = useState(PIN_HOURS[0]);
-  // Venues you can pin at: this channel's Points, except ones whose host hid the exact spot.
-  const venues = points
-    .filter((node) => !node.locationPrivacy && node.venue)
-    .filter((node, i, list) => list.findIndex((other) => other.venue === node.venue) === i)
-    .slice(0, 4)
-    .map((node): PostPlace => ({ latitude: node.latitude, longitude: node.longitude, label: node.venue, pointId: node.id }));
-  const nearMe: PostPlace = { ...snapToBlock(myLocation), label: 'Near you' };
-  const placeKey = (place: PostPlace | null) => (place ? place.pointId ?? place.label : '');
+  // What kind of post, and the place it's about. A post with a place stays on that place for
+  // good; it's also on the map for a while (0 = not on the map).
+  const [kind, setKind] = useState<PostKind>('chat');
+  const [place, setPlace] = useState<LocalPlace | null>(null);
+  const [pickingPlace, setPickingPlace] = useState(false);
+  const [pinHours, setPinHours] = useState(defaultPinHours('chat'));
+  const places = usePlaceIndex();
+  const chooseKind = (next: PostKind) => {
+    setKind(next);
+    setPinHours(defaultPinHours(next));
+  };
   // Photos: same picker as recaps (photo rules first, multi-select, shrunk for upload).
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -521,10 +543,11 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   const post = () => {
     if (!canSend || !canPost) return;
     // Server side: upload the photos first, then POST the post with their URLs.
-    addPost(channel.id, myHandle, draft, pinOn && pinPlace ? { place: pinPlace, hours: pinHours } : null, photos);
+    const pointId = place?.id.startsWith('venue-') ? place.id.slice('venue-'.length) : undefined;
+    addPost(channel.id, myHandle, draft, place ? { place: placeRef(place, pointId), hours: pinHours } : null, photos, kind);
     setDraft('');
-    setPinOn(false);
-    setPinPlace(null);
+    setPlace(null);
+    chooseKind('chat');
     setPhotos([]);
     setPhotoError('');
   };
@@ -675,11 +698,28 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
       <Text style={[styles.sectionLabel, styles.sectionSpaced]}>POSTS</Text>
       {canPost ? (
         <View style={styles.composer}>
+          <View style={styles.kindRow} accessibilityRole="radiogroup">
+            {POST_KINDS.map((info) => {
+              const active = kind === info.id;
+              return (
+                <TouchableOpacity
+                  key={info.id}
+                  style={[styles.kindChip, active && styles.kindChipActive]}
+                  onPress={() => chooseKind(info.id)}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: active }}
+                  testID={`post-kind-${info.id}`}
+                >
+                  <Text style={[styles.kindChipText, active && styles.kindChipTextActive]}>{info.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
           <TextInput
             style={styles.composerInput}
             value={draft}
             onChangeText={setDraft}
-            placeholder={`Post to ${channel.name}…`}
+            placeholder={`${kindInfo(kind).prompt} ${channel.name}…`}
             placeholderTextColor={c.textFaint}
             multiline
             maxLength={500}
@@ -706,30 +746,27 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
           ) : null}
           {photos.length ? <PhotoRulesNote /> : null}
           {photoError ? <Text style={styles.photoError}>{photoError}</Text> : null}
-          {pinOn ? (
+          {place ? (
             <View style={styles.pinOptions}>
-              <Text style={styles.pinOptionsLabel}>WHERE</Text>
-              <View style={styles.pinChipRow}>
-                {[nearMe, ...venues].map((place) => {
-                  const active = placeKey(pinPlace) === placeKey(place);
-                  return (
-                    <TouchableOpacity
-                      key={placeKey(place)}
-                      style={[styles.pinChip, active && styles.pinChipActive]}
-                      onPress={() => setPinPlace(place)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: active }}
-                    >
-                      <Text style={[styles.pinChipText, active && styles.pinChipTextActive]} numberOfLines={1}>
-                        {place.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
+              <View style={styles.placeRow}>
+                {React.createElement(PLACE_ICON[place.kind], { size: 14, color: c.violet, strokeWidth: 2.5 })}
+                <TouchableOpacity
+                  style={styles.rowCopy}
+                  onPress={() => setPickingPlace(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`About ${place.name}. Change place`}
+                >
+                  <Text style={styles.placeRowText} numberOfLines={1}>
+                    {place.name}
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setPlace(null)} hitSlop={8} accessibilityRole="button" accessibilityLabel="Remove place">
+                  <X size={15} color={c.textMuted} strokeWidth={2.5} />
+                </TouchableOpacity>
               </View>
-              <Text style={styles.pinOptionsLabel}>FOR</Text>
+              <Text style={styles.pinOptionsLabel}>ON THE MAP FOR</Text>
               <View style={styles.pinChipRow}>
-                {PIN_HOURS.map((hours) => {
+                {[...pinChoices(kind), 0].map((hours) => {
                   const active = pinHours === hours;
                   return (
                     <TouchableOpacity
@@ -739,14 +776,26 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
                       accessibilityRole="button"
                       accessibilityState={{ selected: active }}
                     >
-                      <Text style={[styles.pinChipText, active && styles.pinChipTextActive]}>{hours}h</Text>
+                      <Text style={[styles.pinChipText, active && styles.pinChipTextActive]}>{pinLabel(hours)}</Text>
                     </TouchableOpacity>
                   );
                 })}
               </View>
-              <Text style={styles.pinNote}>“Near you” shows the block, never your exact spot.</Text>
+              <Text style={styles.pinNote}>
+                It stays on {place.kind === 'block' ? 'this block' : place.name}’s page after it leaves the map.
+              </Text>
             </View>
           ) : null}
+          <PlacePicker
+            visible={pickingPlace}
+            places={places}
+            myLocation={myLocation}
+            onClose={() => setPickingPlace(false)}
+            onPick={(picked) => {
+              setPlace(picked);
+              setPickingPlace(false);
+            }}
+          />
           <View style={styles.composerActions}>
             <TouchableOpacity
               style={[styles.photoBtn, photos.length >= POST_PHOTO_LIMIT && styles.postBtnDisabled]}
@@ -760,19 +809,15 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
               {photos.length ? <Text style={styles.photoBtnText}>{photos.length}/{POST_PHOTO_LIMIT}</Text> : null}
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.pinToggle, pinOn && styles.pinToggleOn]}
-              onPress={() => {
-                setPinOn((on) => !on);
-                if (!pinPlace) setPinPlace(venues[0] ?? nearMe);
-              }}
+              style={[styles.pinToggle, place && styles.pinToggleOn]}
+              onPress={() => setPickingPlace(true)}
               accessibilityRole="button"
-              accessibilityState={{ selected: pinOn }}
-              accessibilityLabel="Pin this post to the map"
+              accessibilityLabel={place ? `About ${place.name}. Change place` : 'Add a place'}
               testID="channel-pin-toggle"
             >
-              <MapPin size={14} color={pinOn ? c.white : c.violet} strokeWidth={2.5} />
-              <Text style={[styles.pinToggleText, pinOn && styles.pinToggleTextOn]}>
-                {pinOn && pinPlace ? `${pinPlace.label} · ${pinHours}h` : 'Pin to map'}
+              <MapPin size={14} color={place ? c.white : c.violet} strokeWidth={2.5} />
+              <Text style={[styles.pinToggleText, place && styles.pinToggleTextOn]} numberOfLines={1}>
+                {place ? (pinHours ? `${pinLabel(pinHours)} on map` : 'Place only') : 'Add place'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -818,6 +863,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
             <PostCard
               myHandle={myHandle}
               onOpenProfile={onOpenProfile}
+              onOpenPlace={onOpenPlace}
               key={item.id}
               post={item}
               now={now}
@@ -833,6 +879,174 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
         <Text style={styles.emptyText}>No posts yet. Start the conversation.</Text>
       )}
       </>
+      )}
+    </ScrollView>
+  );
+};
+
+// ---- Place page --------------------------------------------------------------------------------
+
+/**
+ * A place's page: everything people have said about a park, venue, trail or street corner.
+ * What's live there now, its best tips and answered questions (from the last year), Points
+ * happening there, then every other conversation, newest first. Posts stay here after their map
+ * pins expire, which is what makes a place worth opening months later.
+ * Server side: GET /places/:id and GET /places/:id/posts?section=live|best|all.
+ */
+const PlacePage: React.FC<ChannelsScreenProps & { placeId: string }> = ({
+  placeId,
+  onOpenPlace,
+  onOpenPost,
+  onOpenChannel,
+  onShowPostOnMap,
+  onShowSpotOnMap,
+  onOpenPoint,
+  onOpenProfile,
+  myHandle,
+  myLocation,
+}) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const places = usePlaceIndex();
+  const place = places.find((item) => item.id === placeId) ?? null;
+  const channels = useChannels();
+  const allPosts = useVisiblePosts();
+  const comments = useVisibleComments();
+  const commentCounts = useMemo(() => countComments(comments), [comments]);
+  const now = useBoosts();
+  const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, DiscoveryNode>;
+  const moderation = useModeration();
+  const byId = new Map(channels.map((channel) => [channel.id, channel]));
+
+  const here = useMemo(() => (place ? postsAtPlace(allPosts, place) : []), [allPosts, place]);
+  const live = here.filter((post) => isPinLive(post, now));
+  const best = bestTips(here.filter((post) => !isPinLive(post, now)), now);
+  const shown = new Set([...live, ...best].map((post) => post.id));
+  const rest = sortPosts(here.filter((post) => !shown.has(post.id)), 'new', { now, commentCounts });
+  const points = useMemo(() => {
+    if (!place) return [];
+    const { nearby, upcoming } = splitFeed(nodes, now, (node) => isNodeAllowed(node) && canSeePoint(node));
+    return pointsAtPlace([...nearby, ...upcoming] as DiscoveryNode[], place);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [place, nodes, now, moderation]);
+
+  const card = (post: ChannelPost) => (
+    <PostCard
+      key={post.id}
+      myHandle={myHandle}
+      onOpenProfile={onOpenProfile}
+      post={post}
+      now={now}
+      commentCount={commentCounts[post.id] ?? 0}
+      channel={byId.get(post.channelId) ?? null}
+      onOpenChannel={() => {
+        onOpenPlace(null);
+        onOpenChannel(post.channelId);
+      }}
+      onOpen={() => onOpenPost(post.id)}
+      onShowOnMap={() => onShowPostOnMap(post)}
+    />
+  );
+
+  return (
+    <ScrollView style={styles.container} contentContainerStyle={styles.content} testID={`place-page-${placeId}`}>
+      <TouchableOpacity
+        style={styles.backBtn}
+        onPress={() => onOpenPlace(null)}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        testID="place-back"
+      >
+        <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
+        <Text style={styles.backText}>BACK</Text>
+      </TouchableOpacity>
+
+      {!place ? (
+        <Text style={styles.emptyText}>This place isn’t available.</Text>
+      ) : (
+        <>
+          <View style={styles.pageHeader}>
+            <View style={styles.placeIcon}>
+              {React.createElement(PLACE_ICON[place.kind], { size: 24, color: c.violet, strokeWidth: 2.25 })}
+            </View>
+            <View style={styles.rowCopy}>
+              <Text style={styles.pageTitle}>{place.name}</Text>
+              <Text style={styles.rowMeta}>
+                {[placeMeta(place, myLocation), place.area].filter(Boolean).join(' · ')}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.description}>
+            {here.length
+              ? `${here.length} ${here.length === 1 ? 'conversation' : 'conversations'} about this ${place.kind === 'block' ? 'block' : PLACE_KIND_LABEL[place.kind].toLowerCase()}.`
+              : 'No conversations here yet. Post about it from any channel: tap Add place and pick it.'}
+          </Text>
+          <View style={styles.membershipRow}>
+            <TouchableOpacity
+              style={styles.followBtn}
+              onPress={() => onShowSpotOnMap({ latitude: place.latitude, longitude: place.longitude })}
+              accessibilityRole="button"
+              testID="place-show-on-map"
+            >
+              <MapPin size={13} color={c.violet} strokeWidth={2.5} />
+              <Text style={styles.followText}>SHOW ON MAP</Text>
+            </TouchableOpacity>
+          </View>
+
+          {live.length ? (
+            <>
+              <Text style={[styles.sectionLabel, styles.sectionSpaced]}>ON THE MAP NOW</Text>
+              <View style={styles.list}>{live.map(card)}</View>
+            </>
+          ) : null}
+
+          {best.length ? (
+            <>
+              <Text style={[styles.sectionLabel, styles.sectionSpaced]}>BEST TIPS & ANSWERS</Text>
+              <View style={styles.list}>{best.map(card)}</View>
+            </>
+          ) : null}
+
+          {points.length ? (
+            <>
+              <Text style={[styles.sectionLabel, styles.sectionSpaced]}>POINTS HERE</Text>
+              <View style={styles.list}>
+                {points.map((node) => {
+                  const isLive = isLiveNode(node);
+                  return (
+                    <TouchableOpacity
+                      key={node.id}
+                      style={styles.row}
+                      onPress={() => onOpenPoint(node.id)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`${node.title}, show on map`}
+                    >
+                      <CategoryBadge tag={node.tags?.[0] ?? node.tag} title={node.title} photoUri={node.coverPhotoUri} size={32} />
+                      <View style={styles.rowCopy}>
+                        <Text style={styles.rowTitle} numberOfLines={1}>
+                          {node.title}
+                        </Text>
+                        <Text style={[styles.rowMeta, isLive && styles.liveMeta]} numberOfLines={1}>
+                          {isLive ? 'LIVE NOW' : node.status}
+                        </Text>
+                      </View>
+                      <ChevronRight size={16} color={c.iconFaint} strokeWidth={2.25} />
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          ) : null}
+
+          {rest.length ? (
+            <>
+              <Text style={[styles.sectionLabel, styles.sectionSpaced]}>
+                {live.length || best.length ? 'MORE CONVERSATIONS' : 'CONVERSATIONS'}
+              </Text>
+              <View style={styles.list}>{rest.map(card)}</View>
+            </>
+          ) : null}
+        </>
       )}
     </ScrollView>
   );
@@ -1004,7 +1218,9 @@ const PostCard: React.FC<{
   /** You: your own posts get no Report button. */
   myHandle: string;
   onOpenProfile: (handle: string) => void;
-}> = ({ post, now, commentCount, distanceMeters = null, channel, onOpenChannel, onOpen, onShowOnMap, myHandle, onOpenProfile }) => {
+  /** The place it's about: its page. Left out on that place's own page. */
+  onOpenPlace?: (placeId: string) => void;
+}> = ({ post, now, commentCount, distanceMeters = null, channel, onOpenChannel, onOpen, onShowOnMap, myHandle, onOpenProfile, onOpenPlace }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
@@ -1038,6 +1254,13 @@ const PostCard: React.FC<{
           · {timeAgo(post.createdAt, now)}
           {distance ? ` · ${distance}` : ''}
         </Text>
+        {post.kind && post.kind !== 'chat' ? (
+          <View style={[styles.kindBadge, kindBadgeStyle(post.kind, c)]} testID={`post-kind-badge-${post.id}`}>
+            <Text style={[styles.kindBadgeText, { color: kindBadgeStyle(post.kind, c).borderColor }]}>
+              {kindInfo(post.kind).label.toUpperCase()}
+            </Text>
+          </View>
+        ) : null}
         {mine ? null : (
           <TouchableOpacity
             style={styles.reportBtn}
@@ -1063,20 +1286,79 @@ const PostCard: React.FC<{
         <Text style={styles.postBody}>{post.body}</Text>
       )}
       {post.photos?.length ? <PostPhotos uris={post.photos} /> : null}
-      {pinLeft && post.place ? (
-        <TouchableOpacity
-          style={styles.pinBadge}
-          onPress={onShowOnMap}
-          disabled={!onShowOnMap}
-          accessibilityRole="button"
-          accessibilityLabel={`Pinned at ${post.place.label}, ${pinLeft}. Show on map`}
-          testID={`post-pin-${post.id}`}
-        >
-          <MapPin size={12} color={c.violet} strokeWidth={2.5} />
-          <Text style={styles.pinBadgeText} numberOfLines={1}>
-            {post.place.label} · {pinLeft}
-          </Text>
-        </TouchableOpacity>
+      {post.place ? (
+        <View style={styles.placeLine}>
+          {/* The place: its page (all its conversations). */}
+          {onOpenPlace && post.place.placeId ? (
+            <TouchableOpacity
+              style={styles.pinBadge}
+              onPress={() => onOpenPlace(post.place?.placeId as string)}
+              accessibilityRole="button"
+              accessibilityLabel={`About ${post.place.label}. Open place`}
+              testID={`post-place-${post.id}`}
+            >
+              {React.createElement(PLACE_ICON[post.place.placeKind ?? 'block'], { size: 12, color: c.violet, strokeWidth: 2.5 })}
+              <Text style={styles.pinBadgeText} numberOfLines={1}>
+                {post.place.label}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.pinBadge}>
+              <MapPin size={12} color={c.violet} strokeWidth={2.5} />
+              <Text style={styles.pinBadgeText} numberOfLines={1}>
+                {post.place.label}
+              </Text>
+            </View>
+          )}
+          {/* Still on the map: how long, and jump there. */}
+          {pinLeft ? (
+            <TouchableOpacity
+              style={styles.onMapChip}
+              onPress={onShowOnMap}
+              disabled={!onShowOnMap}
+              accessibilityRole="button"
+              accessibilityLabel={`On the map, ${pinLeft}. Show on map`}
+              testID={`post-pin-${post.id}`}
+            >
+              <MapPin size={11} color={c.textMuted} strokeWidth={2.5} />
+              <Text style={styles.onMapText}>{pinLeft}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      ) : null}
+      {asksStillHappening(post, now) || post.myAnswer ? (
+        <View style={styles.stillRow} testID={`post-still-${post.id}`}>
+          {post.myAnswer ? (
+            <Text style={styles.stillText}>
+              {post.myAnswer === 'yes' ? 'You said it’s still happening' : 'You said it’s over'}
+              {post.confirmations ? ` · ${post.confirmations} confirmed` : ''}
+            </Text>
+          ) : (
+            <>
+              <Text style={styles.stillText}>
+                Still happening?{post.confirmations ? ` · ${post.confirmations} said yes` : ''}
+              </Text>
+              <TouchableOpacity
+                style={styles.stillBtn}
+                onPress={() => answerHeadsUp(post.id, true)}
+                accessibilityRole="button"
+                accessibilityLabel="Yes, still happening"
+                testID={`post-still-yes-${post.id}`}
+              >
+                <Text style={styles.stillBtnText}>Yes</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.stillBtn}
+                onPress={() => answerHeadsUp(post.id, false)}
+                accessibilityRole="button"
+                accessibilityLabel="It's over"
+                testID={`post-still-over-${post.id}`}
+              >
+                <Text style={styles.stillBtnText}>It’s over</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
       ) : null}
       <View style={styles.postFooter}>
         <TouchableOpacity
@@ -1216,6 +1498,7 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
   onShowPostOnMap,
   myHandle,
   onOpenProfile,
+  onOpenPlace,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -1250,6 +1533,7 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
         <PostCard
           myHandle={myHandle}
           onOpenProfile={onOpenProfile}
+          onOpenPlace={onOpenPlace}
           post={post}
           now={now}
           commentCount={count}
@@ -1628,6 +1912,64 @@ const createStyles = (c: ThemeColors) =>
     postBody: { color: c.text, fontSize: 14, lineHeight: 20 },
     postFooter: { flexDirection: 'row', gap: 8 },
     reportBtn: { marginLeft: 'auto', paddingLeft: 6 },
+    placeIcon: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.violetTint,
+      borderWidth: 1,
+      borderColor: c.violet,
+    },
+    kindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
+    kindChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    kindChipActive: { backgroundColor: c.violetTint, borderColor: c.violet },
+    kindChipText: { color: c.textMuted, fontSize: 12, fontWeight: '800' },
+    kindChipTextActive: { color: c.violetText },
+    placeRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    placeRowText: { color: c.violetText, fontSize: 14, fontWeight: '800' },
+    kindBadge: { marginLeft: 6, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 6, borderWidth: 1 },
+    kindBadgeText: { fontSize: 9.5, fontWeight: '900', letterSpacing: 0.6 },
+    placeLine: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6 },
+    onMapChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 3,
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    onMapText: { color: c.textMuted, fontSize: 11, fontWeight: '700' },
+    stillRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flexWrap: 'wrap',
+      gap: 8,
+      paddingHorizontal: 10,
+      paddingVertical: 8,
+      borderRadius: 10,
+      backgroundColor: c.amberTint,
+      borderWidth: 1,
+      borderColor: c.amberBorder,
+    },
+    stillText: { flex: 1, color: c.textBody, fontSize: 12, fontWeight: '700' },
+    stillBtn: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.amber,
+    },
+    stillBtnText: { color: c.amber, fontSize: 12, fontWeight: '800' },
     accessPill: {
       flexDirection: 'row',
       alignItems: 'center',

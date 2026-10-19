@@ -8,6 +8,8 @@ import {
   type ChannelAccess,
   type NewChannelInput,
 } from './channelAccess';
+import { SAMPLE_PLACES, placeRef, type PlaceKind } from './localPlaces';
+import { answerStillHappening, type PostKind } from './postKinds';
 
 /**
  * Channels: groups people join, like subreddits for a local scene. Each channel has its own
@@ -89,6 +91,9 @@ export interface PostPlace {
   label: string;
   /** Set when pinned at a Point's venue. */
   pointId?: string;
+  /** The place it's about (see localPlaces.ts). Posts stay on their place after the pin expires. */
+  placeId?: string;
+  placeKind?: PlaceKind;
 }
 
 export interface ChannelPost {
@@ -105,6 +110,13 @@ export interface ChannelPost {
   pinnedUntil?: string | null;
   /** Photo URLs, up to POST_PHOTO_LIMIT (uploaded first, then sent with the post). */
   photos?: string[];
+  /** Chat (default), heads-up, question or tip. See postKinds.ts. */
+  kind?: PostKind;
+  /** Heads-ups: how many people said it's still happening / that it's over. */
+  confirmations?: number;
+  endedReports?: number;
+  /** Your answer to "Still happening?". */
+  myAnswer?: 'yes' | 'over' | null;
 }
 
 /** Most photos on one post. */
@@ -134,17 +146,12 @@ function samplePostPhotos(postId: string, count: number): string[] {
   return Array.from({ length: count }, (_, n) => `https://picsum.photos/seed/pp-${postId}-${n + 1}/1200/900`);
 }
 
-// Sample places, placed the same way as the sample Points (meters east/north of the default spot).
-const SAMPLE_ORIGIN = { latitude: 40.061708, longitude: -105.038292 };
-function sampleSpot(east: number, north: number, label: string, pointId?: string): PostPlace {
-  const metersPerDegLat = 111320;
-  const metersPerDegLon = 111320 * Math.cos((SAMPLE_ORIGIN.latitude * Math.PI) / 180);
-  return {
-    latitude: SAMPLE_ORIGIN.latitude + north / metersPerDegLat,
-    longitude: SAMPLE_ORIGIN.longitude + east / metersPerDegLon,
-    label,
-    pointId,
-  };
+// Sample posts sit at the sample places (localPlaces.ts), the same spots as the sample Points.
+const daysAgo = (days: number) => minutesAgo(days * 24 * 60);
+function samplePlace(id: string, pointId?: string): PostPlace {
+  const place = SAMPLE_PLACES.find((item) => item.id === id);
+  if (!place) throw new Error(`Unknown sample place ${id}`);
+  return placeRef(place, pointId);
 }
 
 let channels: Channel[] = [
@@ -255,7 +262,8 @@ let posts: ChannelPost[] = [
     upvotes: 42,
     voted: false,
     photos: samplePostPhotos('p1', 1),
-    place: sampleSpot(-260, 180, 'The Rusty Anchor', 'pt-midnight-owls'),
+    kind: 'heads_up',
+    place: samplePlace('pl-rusty-anchor', 'pt-midnight-owls'),
     pinnedUntil: hoursFromNow(3),
   },
   {
@@ -267,7 +275,8 @@ let posts: ChannelPost[] = [
     upvotes: 19,
     voted: false,
     photos: samplePostPhotos('p2', 1),
-    place: sampleSpot(-700, -350, 'Meadow Park Courts', 'pt-sunset-pickleball'),
+    kind: 'tip',
+    place: samplePlace('pl-meadow-park', 'pt-sunset-pickleball'),
     pinnedUntil: hoursFromNow(20),
   },
   {
@@ -275,6 +284,7 @@ let posts: ChannelPost[] = [
     channelId: 'frontrange-live',
     author: '@sam.plays.bass',
     body: 'Anyone have a spare 1/4" cable for the jazz jam? Mine died mid-song last week.',
+    kind: 'question',
     createdAt: minutesAgo(140),
     upvotes: 8,
     voted: false,
@@ -288,7 +298,9 @@ let posts: ChannelPost[] = [
     upvotes: 88,
     voted: false,
     photos: samplePostPhotos('p4', 3),
-    place: sampleSpot(340, 420, 'Central Park Plaza', 'pt-taco-rally'),
+    kind: 'heads_up',
+    confirmations: 3,
+    place: samplePlace('pl-central-plaza', 'pt-taco-rally'),
     pinnedUntil: hoursFromNow(2),
   },
   {
@@ -300,7 +312,7 @@ let posts: ChannelPost[] = [
     upvotes: 64,
     voted: false,
     photos: samplePostPhotos('p5', 2),
-    place: sampleSpot(-900, 900, 'Mesa Trailhead', 'pt-sunrise-hike'),
+    place: samplePlace('pl-mesa-trailhead', 'pt-sunrise-hike'),
     pinnedUntil: hoursFromNow(10),
   },
   {
@@ -308,6 +320,7 @@ let posts: ChannelPost[] = [
     channelId: 'dink-crew',
     author: '@kim.dinks',
     body: 'Looking for a 3.5 partner for the Saturday ladder. Reply if you’re in.',
+    kind: 'question',
     createdAt: minutesAgo(420),
     upvotes: 5,
     voted: false,
@@ -339,7 +352,8 @@ let posts: ChannelPost[] = [
     upvotes: 14,
     voted: false,
     photos: samplePostPhotos('p9', 1),
-    place: sampleSpot(120, -60, 'Near Briggs St'),
+    kind: 'heads_up',
+    place: samplePlace('pl-briggs-main'),
     pinnedUntil: hoursFromNow(5),
   },
   {
@@ -347,9 +361,60 @@ let posts: ChannelPost[] = [
     channelId: 'erie-notices',
     author: '@erie.local',
     body: 'Town board meets Tuesday at 6:30 in the library community room. Agenda: the Briggs St festival and new crosswalks.',
+    place: samplePlace('pl-erie-library'),
     createdAt: minutesAgo(200),
     upvotes: 57,
     voted: false,
+  },
+  // Older posts: their pins are long gone, but they stay on their places and in search.
+  {
+    id: 'p12',
+    channelId: 'trail-tribe',
+    author: '@earlybird',
+    body: 'The Mesa Trailhead lot is full by 7 on weekends. Park at the church on Ridge Rd and take the connector path (5 min walk).',
+    createdAt: daysAgo(20),
+    upvotes: 48,
+    voted: false,
+    kind: 'tip',
+    place: samplePlace('pl-mesa-trailhead'),
+    pinnedUntil: daysAgo(19),
+  },
+  {
+    id: 'p13',
+    channelId: 'food-truck-chasers',
+    author: '@hungryinerie',
+    body: 'Best birria at the plaza is Mesa 4 Tacos. Get there before 6 or it’s gone. Bring cash for the churro cart.',
+    createdAt: daysAgo(9),
+    upvotes: 36,
+    voted: false,
+    kind: 'tip',
+    place: samplePlace('pl-central-plaza'),
+    pinnedUntil: daysAgo(8),
+  },
+  {
+    id: 'p14',
+    channelId: 'dink-crew',
+    author: '@paddlepete',
+    body: 'Do the Meadow Park courts have lights? Thinking about evening play once it gets dark earlier.',
+    createdAt: daysAgo(30),
+    upvotes: 17,
+    voted: false,
+    kind: 'question',
+    place: samplePlace('pl-meadow-park'),
+    pinnedUntil: daysAgo(29),
+  },
+  {
+    id: 'p15',
+    channelId: 'trail-tribe',
+    author: '@trailtribe',
+    body: 'Coal Creek Trail is muddy past the second bridge after rain. Fine on a bike, messy on foot.',
+    createdAt: daysAgo(3),
+    upvotes: 22,
+    voted: false,
+    kind: 'tip',
+    photos: samplePostPhotos('p15', 1),
+    place: samplePlace('pl-coal-creek'),
+    pinnedUntil: daysAgo(2),
   },
   {
     // In a private channel: only its approved members ever see this.
@@ -374,6 +439,8 @@ let comments: PostComment[] = [
   { id: 'c8', postId: 'p4', parentId: null, author: '@veggiedan', body: 'Any vegetarian options this time?', createdAt: minutesAgo(10), upvotes: 4, voted: false },
   { id: 'c9', postId: 'p5', parentId: null, author: '@earlybird', body: 'What time exactly? Want to carpool from Lafayette.', createdAt: minutesAgo(250), upvotes: 5, voted: false },
   { id: 'c10', postId: 'p2', parentId: null, author: '@paddlepete', body: 'Finally! Nets are new too.', createdAt: minutesAgo(40), upvotes: 4, voted: false },
+  { id: 'c11', postId: 'p14', parentId: null, author: '@dinkcrew', body: 'Yes, courts 1–4 have lights until 10pm. The switch is on the pole by the gate.', createdAt: daysAgo(29), upvotes: 21, voted: false },
+  { id: 'c12', postId: 'p12', parentId: null, author: '@flowwithmaya', body: 'Can confirm, the church lot is fine on Saturdays too.', createdAt: daysAgo(18), upvotes: 6, voted: false },
 ];
 
 const listeners = new Set<() => void>();
@@ -581,8 +648,8 @@ export function toggleVote(postId: string) {
 }
 
 /**
- * New post, starting with your own upvote. Pass `pin` to show it on the map at a place for
- * `hours` (the place should already be block-level or a Point's venue).
+ * New post, starting with your own upvote. Pass `pin` to tie it to a place (block-level or a
+ * known place, never an exact GPS fix) and show it on the map for `hours` (0: place only).
  */
 export function addPost(
   channelId: string,
@@ -590,6 +657,7 @@ export function addPost(
   body: string,
   pin: { place: PostPlace; hours: number } | null = null,
   photos: string[] = [],
+  kind: PostKind = 'chat',
 ): ChannelPost {
   const post: ChannelPost = {
     id: `p-${Date.now()}`,
@@ -600,12 +668,27 @@ export function addPost(
     upvotes: 1,
     voted: true,
     place: pin ? pin.place : null,
-    pinnedUntil: pin ? new Date(Date.now() + pin.hours * 3600000).toISOString() : null,
+    // A place with 0 hours: on the place's page only, not on the map.
+    pinnedUntil: pin && pin.hours > 0 ? new Date(Date.now() + pin.hours * 3600000).toISOString() : null,
     photos: photos.slice(0, POST_PHOTO_LIMIT),
+    kind,
   };
   posts = [post, ...posts];
   changed();
   return post;
+}
+
+/**
+ * "Still happening?" on a heads-up: yes keeps it on the map a while longer, over takes the pin
+ * down. One answer per person. Server side: PUT /posts/:id/still-happening { value: true | false };
+ * the server should need a couple of "over" answers (or the author's) before taking a pin down.
+ */
+export function answerHeadsUp(postId: string, stillHappening: boolean) {
+  posts = posts.map((post) => {
+    if (post.id !== postId || post.myAnswer) return post;
+    return { ...answerStillHappening(post, stillHappening), myAnswer: stillHappening ? 'yes' : 'over' };
+  });
+  changed();
 }
 
 export function addComment(postId: string, author: string, body: string, parentId: string | null = null): PostComment {

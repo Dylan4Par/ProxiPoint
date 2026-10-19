@@ -53,6 +53,8 @@ export const DiscoverScreen: React.FC = () => {
   const [channelId, setChannelId] = useState<string | null>(null);
   // A channel post's page (comments), opened from a feed, a channel or a pin on the map.
   const [postId, setPostId] = useState<string | null>(null);
+  // Place page in the Channels tab (a park, venue, trail… and everything said about it).
+  const [placeId, setPlaceId] = useState<string | null>(null);
   // Set when that post was opened from a pin on the map: Back returns to the map, at the pin.
   const [postFromMap, setPostFromMap] = useState<{ latitude: number; longitude: number } | null>(null);
   // "Show on map" for a pinned post: Explore Map opens centered there. New key = new request.
@@ -286,6 +288,7 @@ export const DiscoverScreen: React.FC = () => {
     setProfileView('main');
     setChannelId(null);
     setPostId(null);
+    setPlaceId(null);
     setPostFromMap(null);
     setMapFocus(null);
     setSearchRequest(null); // one-shot: Discover shouldn't refocus search on later visits
@@ -361,6 +364,14 @@ export const DiscoverScreen: React.FC = () => {
           onShowTagOnMap={showTagOnMap}
           searchRequest={searchRequest}
           onOpenProfile={openProfile}
+          onOpenPost={(id) => {
+            goTo('channels');
+            setPostId(id);
+          }}
+          onOpenPlace={(id) => {
+            goTo('channels');
+            setPlaceId(id);
+          }}
         />
       ) : null}
 
@@ -497,6 +508,19 @@ export const DiscoverScreen: React.FC = () => {
             if (!post.place) return;
             goTo('map');
             setMapFocus({ latitude: post.place.latitude, longitude: post.place.longitude, key: Date.now() });
+          }}
+          placeId={placeId}
+          onOpenPlace={(id) => {
+            setPlaceId(id);
+            // A place opened from a post page replaces it (Back then goes to where the post was opened from).
+            if (id) {
+              setPostId(null);
+              setPostFromMap(null);
+            }
+          }}
+          onShowSpotOnMap={(spot) => {
+            goTo('map');
+            setMapFocus({ ...spot, key: Date.now() });
           }}
           myHandle={profile.handle}
           unreadAlerts={unread}

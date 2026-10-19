@@ -7,6 +7,11 @@ import { canSeePoint, toggleMembership, useChannels, useVisibleComments, useVisi
 import { strongestSignals } from '../lib/signalScore';
 import { MEMBERSHIP_LABEL, accessOf, membershipAction } from '../lib/channelAccess';
 import { StrongestSignalCard } from '../components/profile/Signal';
+import { PLACE_ICON, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
+import { searchLocalPlaces, type LocalPlace } from '../lib/localPlaces';
+import { kindInfo, searchPosts } from '../lib/postKinds';
+import { timeAgo } from '../lib/activity';
+import type { ChannelPost } from '../lib/channels';
 import {
   DEFAULT_RANGE_METERS,
   SEARCH_RANGES,
@@ -50,6 +55,10 @@ interface DiscoverFeedScreenProps {
   searchRequest?: { key: number; text?: string } | null;
   /** Someone's @handle (Strongest Signal): their profile. */
   onOpenProfile: (handle: string) => void;
+  /** A post from search: its page (with comments) in Channels. */
+  onOpenPost: (id: string) => void;
+  /** A place from search: its page (everything said about it). */
+  onOpenPlace: (id: string) => void;
 }
 
 const tagKey = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
@@ -73,6 +82,8 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   onShowTagOnMap,
   searchRequest = null,
   onOpenProfile,
+  onOpenPost,
+  onOpenPlace,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -126,6 +137,21 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     [searching, nodes, query, headerTags],
   );
   const channelResults = useMemo(() => (searching ? searchChannels(channels, query) : []), [searching, channels, query]);
+  // Places and posts: the local knowledge (tips, answers, heads-ups) people left behind.
+  const places = usePlaceIndex();
+  const placeResults = useMemo(
+    () =>
+      searching
+        ? searchLocalPlaces(places, query, center, 12).filter((place) => inRange(center, place, rangeMeters)).slice(0, 4)
+        : [],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [searching, places, query, viewPlace.latitude, viewPlace.longitude, rangeMeters],
+  );
+  const postResults = useMemo(
+    () => (searching ? searchPosts(posts, query, { center, rangeMeters, limit: 10 }) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [searching, posts, query, viewPlace.latitude, viewPlace.longitude, rangeMeters],
+  );
   const channelSearch = isChannelQuery(query);
   // A one-word search that is exactly a #tag can be shown on the map with that tag's filter.
   const words = query.trim().split(/\s+/);
@@ -161,7 +187,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
           style={styles.searchInput}
           value={query}
           onChangeText={setQuery}
-          placeholder="Search #tags, c/channels or events"
+          placeholder="Search #tags, places, posts or c/channels"
           placeholderTextColor={c.textFaint}
           autoCapitalize="none"
           autoCorrect={false}
@@ -254,6 +280,18 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             <Text style={styles.emptyText}>No channels match “{query.trim()}”. Try a #tag or a word.</Text>
           ) : null}
 
+          {/* Places: parks, venues, trails, intersections. */}
+          {!channelSearch && placeResults.length ? (
+            <>
+              <SectionHeader label={placeResults.length === 1 ? 'PLACE' : 'PLACES'} />
+              <View style={styles.list}>
+                {placeResults.map((place) => (
+                  <PlaceResultRow key={place.id} place={place} from={center} onOpen={() => onOpenPlace(place.id)} />
+                ))}
+              </View>
+            </>
+          ) : null}
+
           {channelSearch ? null : (
             <>
             <SectionHeader
@@ -290,6 +328,24 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             )}
             </>
           )}
+
+          {/* Posts: tips and answers first, then the rest. */}
+          {!channelSearch && postResults.length ? (
+            <>
+              <SectionHeader label={`${postResults.length} ${postResults.length === 1 ? 'POST' : 'POSTS'}`} />
+              <View style={styles.list}>
+                {postResults.map((post) => (
+                  <PostResultRow
+                    key={post.id}
+                    post={post}
+                    channel={channels.find((channel) => channel.id === post.channelId) ?? null}
+                    now={now}
+                    onOpen={() => onOpenPost(post.id)}
+                  />
+                ))}
+              </View>
+            </>
+          ) : null}
         </>
       ) : (
         <>
@@ -421,6 +477,65 @@ const ChannelResultRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ 
           {MEMBERSHIP_LABEL[membershipAction(channel)]}
         </Text>
       </TouchableOpacity>
+    </TouchableOpacity>
+  );
+};
+
+const PlaceResultRow: React.FC<{ place: LocalPlace; from: { latitude: number; longitude: number }; onOpen: () => void }> = ({
+  place,
+  from,
+  onOpen,
+}) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  return (
+    <TouchableOpacity
+      style={styles.resultRow}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${place.name}, ${placeMeta(place, from)}. Open place`}
+      testID={`search-place-${place.id}`}
+    >
+      <View style={styles.placeResultIcon}>
+        {React.createElement(PLACE_ICON[place.kind], { size: 17, color: c.violet, strokeWidth: 2.25 })}
+      </View>
+      <View style={styles.resultCopy}>
+        <Text style={styles.resultTitle} numberOfLines={1}>
+          {place.name}
+        </Text>
+        <Text style={styles.resultMeta} numberOfLines={1}>
+          {placeMeta(place, from)}
+        </Text>
+      </View>
+      <ChevronRight size={16} color={c.iconFaint} strokeWidth={2.25} />
+    </TouchableOpacity>
+  );
+};
+
+const PostResultRow: React.FC<{ post: ChannelPost; channel: Channel | null; now: number; onOpen: () => void }> = ({
+  post,
+  channel,
+  now,
+  onOpen,
+}) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const kind = post.kind && post.kind !== 'chat' ? kindInfo(post.kind).label.toUpperCase() : null;
+  return (
+    <TouchableOpacity
+      style={styles.postResult}
+      onPress={onOpen}
+      accessibilityRole="button"
+      accessibilityLabel={`${kind ? `${kind}: ` : ''}${post.body}. Open post`}
+      testID={`search-post-${post.id}`}
+    >
+      <Text style={styles.postResultBody} numberOfLines={2}>
+        {kind ? <Text style={styles.postResultKind}>{kind} </Text> : null}
+        {post.body || 'Photo post'}
+      </Text>
+      <Text style={styles.resultMeta} numberOfLines={1}>
+        {[channel?.handle, post.place?.label, timeAgo(post.createdAt, now), `▲ ${post.upvotes}`].filter(Boolean).join(' · ')}
+      </Text>
     </TouchableOpacity>
   );
 };
@@ -630,6 +745,24 @@ const createStyles = (c: ThemeColors) =>
       marginBottom: 8,
     },
     sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
+    placeResultIcon: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.violetTint,
+    },
+    postResult: {
+      gap: 4,
+      padding: 12,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    postResultBody: { color: c.textBody, fontSize: 14, lineHeight: 19 },
+    postResultKind: { color: c.violetText, fontSize: 11, fontWeight: '900', letterSpacing: 0.6 },
     sectionAction: { flexDirection: 'row', alignItems: 'center', gap: 2 },
     sectionActionText: { color: c.accent, fontSize: 12, fontWeight: '700' },
     emptyText: { color: c.textFaint, fontSize: 13, lineHeight: 19 },
