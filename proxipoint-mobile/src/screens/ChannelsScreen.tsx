@@ -210,7 +210,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   const posts = useVisiblePosts();
   const comments = useVisibleComments();
   const now = useBoosts();
-  const [sort, setSort] = useState<PostSort>('hot');
+  const [sort, setSort] = useState<PostSort>('new');
   const commentCounts = useMemo(() => countComments(comments), [comments]);
   const joined = channels.filter((channel) => channel.joined);
   const joinedIds = new Set(joined.map((channel) => channel.id));
@@ -402,7 +402,7 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   const { colors: c } = useTheme();
   const comments = useVisibleComments();
   const commentCounts = useMemo(() => countComments(comments), [comments]);
-  const [sort, setSort] = useState<PostSort>('hot');
+  const [sort, setSort] = useState<PostSort>('new');
   const allPosts = useVisiblePosts();
   const now = useBoosts();
   const posts = sortPosts(

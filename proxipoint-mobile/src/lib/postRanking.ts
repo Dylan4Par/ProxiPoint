@@ -11,9 +11,10 @@ import type { ChannelPost, PostComment } from './channels';
 
 export type PostSort = 'hot' | 'new' | 'top' | 'near';
 
+/** Feeds open on New (newest first); the others are a tap away. */
 export const POST_SORTS: Array<{ id: PostSort; label: string }> = [
-  { id: 'hot', label: 'Hot' },
   { id: 'new', label: 'New' },
+  { id: 'hot', label: 'Hot' },
   { id: 'top', label: 'Top' },
   { id: 'near', label: 'Near' },
 ];
