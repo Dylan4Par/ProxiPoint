@@ -13,6 +13,7 @@ import { PointDetailSheet } from '../components/discovery/PointDetailSheet';
 import { PhotoPolicyHost } from '../components/safety/PhotoPolicyHost';
 import { CircleCropHost } from '../components/common/CircleCropHost';
 import { useDiscoveryStore } from '../stores/useDiscoveryStore';
+import { useAuthStore } from '../stores/useAuthStore';
 import { ProfileScreen } from './ProfileScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { HostProfileScreen } from './HostProfileScreen';
@@ -140,8 +141,18 @@ export const DiscoverScreen: React.FC = () => {
     else setHostHandle(handle);
   };
   const [settingsSection, setSettingsSection] = useState<'edit' | null>(null);
-  // In memory for now; load and save through the backend (GET/PATCH /me) once sign-in exists.
-  const [profile, setProfile] = useState<MyProfile>(DEFAULT_PROFILE);
+  // Starts from the signed-in account and what onboarding chose; edits stay in memory until the
+  // backend has GET/PATCH /me.
+  const [profile, setProfile] = useState<MyProfile>(() => {
+    const { session, seed } = useAuthStore.getState();
+    const account = session?.account;
+    return {
+      ...DEFAULT_PROFILE,
+      ...(seed?.profile ?? {}),
+      ...(account?.displayName ? { displayName: account.displayName } : {}),
+      ...(account?.handle ? { handle: `@${account.handle}` } : {}),
+    };
+  });
 
   // ---- Where Discover is looking -------------------------------------------------------------
   // The app's default area (where the sample Points are) until a home city is chosen.
@@ -236,7 +247,10 @@ export const DiscoverScreen: React.FC = () => {
     if (profile.trackLocation && gpsPlace) setViewPlace({ ...gpsPlace, kind: 'gps' });
     else setViewPlace({ ...home, kind: 'home' });
   };
-  const [settings, setSettings] = useState<MySettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] = useState<MySettings>(() => {
+    const seed = useAuthStore.getState().seed;
+    return seed ? { ...DEFAULT_SETTINGS, notifications: seed.notifications } : DEFAULT_SETTINGS;
+  });
   // Point recaps posted from the Profile page (in memory until the backend has them).
   const [recaps, setRecaps] = useState<PointRecap[]>([]);
 

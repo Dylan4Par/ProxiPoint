@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Alert,
   Image,
   LayoutAnimation,
   Platform,
@@ -18,6 +19,7 @@ import {
   ChevronRight,
   CreditCard,
   HelpCircle,
+  LogOut,
   Minus,
   Pencil,
   Plug,
@@ -32,6 +34,8 @@ import { getPhotoPolicyState, openPhotoPolicy, PHOTO_POLICY_VERSION, subscribePh
 import { getBlockedHandles, unblockUser, useModeration } from '../lib/moderation';
 import { useTheme, useThemedStyles, type ThemeColors, type ThemePreference } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../components/common/KeyboardAwareScrollView';
+import { CallSignMark } from '../components/brand/CallSignMark';
+import { useAuthStore } from '../stores/useAuthStore';
 
 /**
  * Fills the parent edge to edge. Written out by hand because StyleSheet.absoluteFillObject
@@ -103,6 +107,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     setOpen((current) => (current === id ? null : id));
   };
+
+  const accountEmail = useAuthStore((s) => s.session?.account.email ?? null);
+  const signOut = useAuthStore((s) => s.signOut);
+  const confirmSignOut = () =>
+    Alert.alert('Sign out?', 'You can sign back in any time with your email and password.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => void signOut() },
+    ]);
 
   const set = <K extends keyof MySettings>(key: K, value: MySettings[K]) =>
     onChangeSettings({ ...settings, [key]: value });
@@ -255,6 +267,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             </View>
           );
         })}
+
+        <View style={styles.account}>
+          {accountEmail ? <Text style={styles.accountEmail}>Signed in as {accountEmail}</Text> : null}
+          <TouchableOpacity
+            style={styles.signOut}
+            onPress={confirmSignOut}
+            accessibilityRole="button"
+            testID="settings-sign-out"
+          >
+            <LogOut size={18} color={c.red} strokeWidth={2.2} />
+            <Text style={styles.signOutText}>Sign out</Text>
+          </TouchableOpacity>
+          <CallSignMark />
+        </View>
       </KeyboardAwareScrollView>
     </View>
   );
@@ -548,6 +574,19 @@ const createStyles = (c: ThemeColors) =>
     paddingBottom: 2,
   },
   section: { borderBottomWidth: 1, borderBottomColor: c.border },
+  account: { alignItems: 'center', gap: 12, paddingTop: 28, paddingHorizontal: 16 },
+  accountEmail: { color: c.textMuted, fontSize: 13 },
+  signOut: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 11,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: c.border,
+  },
+  signOutText: { color: c.red, fontSize: 15, fontWeight: '700' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 18 },
   rowLabel: { flex: 1, color: c.text, fontSize: 16, fontWeight: '500' },
   chevronOpen: { transform: [{ rotate: '90deg' }] },
