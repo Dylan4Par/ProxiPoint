@@ -21,11 +21,14 @@ import { ActivityScreen } from './ActivityScreen';
 import { CalendarScreen } from './CalendarScreen';
 import { DiscoverFeedScreen } from './DiscoverFeedScreen';
 import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
-import { setTimeWindow, useTimeWindow } from '../lib/timeWindow';
+import { setTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
+import { DEFAULT_POST_FILTER, activePostFilterCount, isDefaultPostFilter, setMapPostFilter, useMapPostFilter } from '../lib/mapFilters';
+import { areaName } from '../lib/mapArea';
+import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
 import { formatRange } from '../lib/calendarRange';
 import { CalendarDays, ChevronLeft, X } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
-import { cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
+import { CITY_LIST, cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
 import { addPost, getChannel, getChannels, getPost, syncAutoChannels } from '../lib/channels';
 import { formatPointWhen, publicWhere } from '../lib/droppedPoint';
@@ -81,6 +84,8 @@ export const DiscoverScreen: React.FC = () => {
   const [cardsFull, setCardsFull] = useState(false);
   // Dates the map shows: the next 3 days, or what was picked in the Calendar.
   const timeWindow = useTimeWindow();
+  const postFilter = useMapPostFilter();
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const discoverNodes = useDiscoveryStore((state) => state.nodes);
   const toggleRsvp = useDiscoveryStore((state) => state.toggleRsvp);
   const setSelectedNodeId = useDiscoveryStore((state) => state.setSelectedNodeId);
@@ -404,6 +409,16 @@ export const DiscoverScreen: React.FC = () => {
                 setPostFromMap(place ? { latitude: place.latitude, longitude: place.longitude } : null);
               }}
               focusRequest={mapFocus}
+              // Panned or zoomed away: make what's on screen the area (Discover follows).
+              onSearchArea={(area) => {
+                setDetailId(null);
+                setViewPlace({
+                  name: areaName(area, CITY_LIST),
+                  latitude: area.latitude,
+                  longitude: area.longitude,
+                  kind: 'search',
+                });
+              }}
               // "+" next to the recenter button. Hidden while a sheet is up so it never covers the sheet.
               onDropPoint={
                 detailId || dropOpen || managing
@@ -427,32 +442,54 @@ export const DiscoverScreen: React.FC = () => {
               onReturn={returnHome}
             />
             )}
-            {/* Calendar dates on the map: chip to go back to the next 3 days. */}
-            {timeWindow.custom && !cardsFull ? (
+            {/* When (and post filters): opens the map filters; ✕ puts everything back. */}
+            {!cardsFull ? (
               <View style={styles.datePillRow} pointerEvents="box-none">
                 <TouchableOpacity
-                  style={styles.datePill}
-                  onPress={() => setOverlay('calendar')}
+                  style={[styles.datePill, !timeWindow.custom && isDefaultPostFilter(postFilter) && styles.datePillQuiet]}
+                  onPress={() => setFiltersOpen(true)}
                   accessibilityRole="button"
-                  accessibilityLabel="Showing Calendar dates. Change dates"
+                  accessibilityLabel={`Showing ${timeWindowLabel(timeWindow) ?? 'Calendar dates'}. Change map filters`}
                   testID="discover-date-window"
                 >
                   <CalendarDays size={13} color={c.accent} strokeWidth={2.5} />
                   <Text style={styles.datePillText}>
-                    {formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
+                    {timeWindowLabel(timeWindow) ??
+                      formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
                   </Text>
+                  {activePostFilterCount(postFilter) ? (
+                    <View style={styles.filterBadge}>
+                      <Text style={styles.filterBadgeText}>+{activePostFilterCount(postFilter)}</Text>
+                    </View>
+                  ) : null}
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.datePillClose}
-                  onPress={() => setTimeWindow(null)}
-                  accessibilityRole="button"
-                  accessibilityLabel="Back to the next 3 days"
-                  testID="discover-date-window-reset"
-                >
-                  <X size={13} color={c.text} strokeWidth={2.5} />
-                </TouchableOpacity>
+                {timeWindow.custom || !isDefaultPostFilter(postFilter) ? (
+                  <TouchableOpacity
+                    style={styles.datePillClose}
+                    onPress={() => {
+                      setTimeWindow(null);
+                      setMapPostFilter(DEFAULT_POST_FILTER);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Reset map filters"
+                    testID="discover-date-window-reset"
+                  >
+                    <X size={13} color={c.text} strokeWidth={2.5} />
+                  </TouchableOpacity>
+                ) : null}
               </View>
             ) : null}
+            <MapFilterSheet
+              visible={filtersOpen}
+              window={timeWindow}
+              postFilter={postFilter}
+              onClose={() => setFiltersOpen(false)}
+              onPickDates={() => {
+                setFiltersOpen(false);
+                setDetailId(null);
+                setOverlay('calendar');
+              }}
+            />
             <EventCardList
               liveOnly={liveOnly}
               // Cards always open the Point's details (even if it's inside a map bubble).
@@ -723,6 +760,9 @@ const createStyles = (c: ThemeColors) =>
     borderColor: c.accent,
   },
   datePillText: { color: c.text, fontSize: 12, fontWeight: '800' },
+  datePillQuiet: { borderColor: c.border, borderWidth: 1 },
+  filterBadge: { paddingHorizontal: 5, borderRadius: 8, backgroundColor: c.violet },
+  filterBadgeText: { color: c.white, fontSize: 10, fontWeight: '900' },
   datePillClose: {
     width: 26,
     height: 26,

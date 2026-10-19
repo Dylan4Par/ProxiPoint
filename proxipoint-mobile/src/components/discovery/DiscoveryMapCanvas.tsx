@@ -14,7 +14,7 @@ import { toCanvasCoordinates, useDiscoveryStore } from '../../stores/useDiscover
 import { matchesDiscoverFilters } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
-import { MessageCircle, Plus, Zap } from 'lucide-react-native';
+import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
@@ -23,6 +23,8 @@ import { useChannels, useVisiblePosts, type ChannelPost } from '../../lib/channe
 import { isPinLive } from '../../lib/postRanking';
 import { absorbIntoMarkers, clusterPins, nudgeOffMarkers } from '../../lib/postPins';
 import { PostPickSheet } from './PostPickSheet';
+import { postMatchesMapFilter, useMapPostFilter } from '../../lib/mapFilters';
+import { fromCanvasCoordinates, shouldOfferAreaSearch, visibleRadiusMeters } from '../../lib/mapArea';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
@@ -58,6 +60,8 @@ const PIN_HEAD_CENTER = 17;
  * something more important are hidden instead (they come back when there's room).
  */
 const FOOTPRINT_W = 50;
+/** About how far around the area's center Points are loaded (for "Search this area" on zoom-out). */
+const AREA_RANGE_METERS = 1500;
 const FOOTPRINT_H = 50;
 /** Where a #tag label sits below a pin / bubble, in screen points. */
 const LABEL_TOP = 24;
@@ -102,6 +106,11 @@ export const DiscoveryMapCanvas: React.FC<{
   onOpenPost?: (id: string) => void;
   /** Slide the map to this spot (e.g. "Show on map" from a post). New key = new request. */
   focusRequest?: { latitude: number; longitude: number; key: number } | null;
+  /**
+   * "Search this area": make the middle of what's on screen the new area (Points load around it,
+   * Discover follows). Shown once you've panned or zoomed out well away; leave out to hide it.
+   */
+  onSearchArea?: (area: { latitude: number; longitude: number; radiusMeters: number }) => void;
 }> = ({
   liveOnly = false,
   onMapTouch,
@@ -111,6 +120,7 @@ export const DiscoveryMapCanvas: React.FC<{
   onDropPoint,
   onOpenPost,
   focusRequest = null,
+  onSearchArea,
 }) => {
   const { colors: c, mode } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -147,11 +157,14 @@ export const DiscoveryMapCanvas: React.FC<{
   const posts = useVisiblePosts();
   const channelsById = new Map(useChannels().map((channel) => [channel.id, channel]));
   const tagKey = (tag: string) => tag.replace(/^#+/, '').toLowerCase();
+  // The When sheet's post filters: which kinds, and how recent.
+  const postFilter = useMapPostFilter();
   const postPins =
     activeTab === 'RSVPd'
       ? []
       : posts
           .filter((post) => isPinLive(post, boostClock))
+          .filter((post) => postMatchesMapFilter(post, postFilter, boostClock))
           .filter((post) => channelsById.get(post.channelId)?.followed === true)
           .filter(
             (post) =>
@@ -392,6 +405,33 @@ export const DiscoveryMapCanvas: React.FC<{
     const minY = top - 40;
     const maxY = top + viewSize.current.height / z + 40;
     setViewportBounds({ minX, maxX, minY, maxY });
+    // Far from the area's center (or zoomed well out)? Offer "Search this area".
+    const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, AREA_RANGE_METERS);
+    if (offer !== offerAreaRef.current) {
+      offerAreaRef.current = offer;
+      setOfferArea(offer);
+    }
+  };
+
+  /** The world point in the middle of the visible map. */
+  const screenCenterWorld = (offsetX = currentPan.current.x, offsetY = currentPan.current.y, z = currentZoom.current) => ({
+    x: (viewSize.current.width / 2 + WORLD_OFFSET - offsetX) / z,
+    y: (visibleMapHeight() / 2 + WORLD_OFFSET - offsetY) / z,
+  });
+
+  const [offerArea, setOfferArea] = useState(false);
+  const offerAreaRef = useRef(false);
+  // Set while the area moves to where you're looking, so the map stays put instead of gliding.
+  const keepViewOnPlaceChange = useRef(false);
+  const searchThisArea = () => {
+    if (!onSearchArea) return;
+    const z = currentZoom.current;
+    const center = screenCenterWorld();
+    const spot = fromCanvasCoordinates(center.x, center.y, viewPlace.latitude, viewPlace.longitude);
+    keepViewOnPlaceChange.current = true;
+    offerAreaRef.current = false;
+    setOfferArea(false);
+    onSearchArea({ ...spot, radiusMeters: visibleRadiusMeters(viewSize.current.width / z, visibleMapHeight() / z) });
   };
 
   /** Moves and zooms the map (animated), keeping the refs in step. */
@@ -568,6 +608,17 @@ export const DiscoveryMapCanvas: React.FC<{
     const placeKey = `${viewPlace.latitude},${viewPlace.longitude}`;
     if (placeKey === lastPlace.current) return;
     lastPlace.current = placeKey;
+    if (keepViewOnPlaceChange.current) {
+      // "Search this area": the new area's center is where the middle of the screen already is,
+      // so keep the zoom and jump (no glide) to the same view around it.
+      keepViewOnPlaceChange.current = false;
+      const target = homeTarget(currentZoom.current, visibleMapHeight());
+      pan.stopAnimation();
+      pan.setValue(target);
+      currentPan.current = target;
+      calculateBounds(target.x, target.y);
+      return;
+    }
     userMoved.current = false;
     handleRecenter();
   }, [viewPlace.latitude, viewPlace.longitude]);
@@ -909,6 +960,21 @@ export const DiscoveryMapCanvas: React.FC<{
           <View style={styles.crosshairLineH} />
         </View>
       </TouchableOpacity>
+
+      {/* Search this area: once you've panned or zoomed out away from the area. */}
+      {onSearchArea && offerArea ? (
+        <TouchableOpacity
+          style={styles.searchAreaBtn}
+          activeOpacity={0.8}
+          onPress={searchThisArea}
+          accessibilityRole="button"
+          accessibilityLabel="Search this area"
+          testID="map-search-area"
+        >
+          <Search size={14} color={c.base} strokeWidth={2.75} />
+          <Text style={styles.searchAreaText}>Search this area</Text>
+        </TouchableOpacity>
+      ) : null}
 
       {/* Drop Point: same size and look as the recenter button, just left of it. */}
       {onDropPoint ? (
@@ -1253,6 +1319,25 @@ const createStyles = (c: ThemeColors) =>
   },
   /* Sits left of the recenter button: its 14px inset + 38px width + an 8px gap. */
   dropBtn: { right: 60 },
+  searchAreaBtn: {
+    position: 'absolute',
+    top: 60,
+    right: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 13,
+    minHeight: 32,
+    borderRadius: 16,
+    backgroundColor: c.accent,
+    zIndex: 20,
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+  },
+  searchAreaText: { color: c.base, fontSize: 13, fontWeight: '800' },
   crosshairCircleOuter: {
     width: 20,
     height: 20,
