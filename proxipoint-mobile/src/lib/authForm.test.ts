@@ -10,6 +10,7 @@ import {
   passwordStrength,
   suggestHandle,
   toggleInterest,
+  STARTER_INTERESTS,
 } from './authForm';
 
 test('emails: loose shape check, trimmed and lower-cased', () => {
@@ -60,4 +61,13 @@ test('interests toggle and stop at the limit', () => {
 
 test('sign-in errors never say whether the email exists', () => {
   assert.equal(authErrorMessage('invalid_credentials'), 'That email and password don’t match.');
+});
+
+test('the interests step offers the requested tags first, with no repeats', () => {
+  assert.deepEqual(STARTER_INTERESTS.slice(0, 13), [
+    '#KidFriendly', '#Faith', '#Brewery', '#Crafts', '#Entertainment', '#Events', '#Fitness',
+    '#BoardGames', '#HappyHour', '#Music', '#OpenHouse', '#TechMeetup', '#Trivia',
+  ]);
+  const keys = STARTER_INTERESTS.map((tag) => tag.toLowerCase());
+  assert.equal(new Set(keys).size, keys.length);
 });

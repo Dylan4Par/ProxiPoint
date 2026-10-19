@@ -132,21 +132,34 @@ export const ONBOARDING_STEPS: Array<{ id: OnboardingStep; title: string; option
   { id: 'privacy', title: 'Your privacy', optional: false },
 ];
 
-/** #tags offered on the interests step (any can be skipped; more can be added later). */
+/**
+ * #tags offered on the interests step ("What are you into?"), in this order. Any can be skipped,
+ * and more can be added later from the profile.
+ */
 export const STARTER_INTERESTS = [
-  '#LiveMusic',
+  '#KidFriendly',
+  '#Faith',
+  '#Brewery',
+  '#Crafts',
+  '#Entertainment',
+  '#Events',
+  '#Fitness',
+  '#BoardGames',
+  '#HappyHour',
+  '#Music',
+  '#OpenHouse',
+  '#TechMeetup',
+  '#Trivia',
   '#FoodTrucks',
   '#FarmersMarket',
   '#Hiking',
   '#RunClub',
   '#Cycling',
   '#Coffee',
-  '#TriviaNight',
   '#Comedy',
   '#Art',
   '#Yoga',
   '#Dogs',
-  '#Family',
   '#Sports',
   '#Volunteering',
   '#Nightlife',
