@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { ArrowBigUp, ChevronDown, ChevronUp, Crown, MessageCircle, Radio } from 'lucide-react-native';
+import { ChevronDown, ChevronUp, Crown, Heart, MessageCircle, Radio } from 'lucide-react-native';
 import { useChannels } from '../../lib/channels';
 import { timeAgo } from '../../lib/activity';
 import { nextBarIn, type Contribution, type Signal, type SignalRank } from '../../lib/signalScore';
@@ -102,7 +102,7 @@ export const SignalTile: React.FC<{
       ) : null}
 
       <View style={styles.breakdown}>
-        <Part value={signal.postUpvotes + signal.commentUpvotes} label="Upvotes" />
+        <Part value={signal.postUpvotes + signal.commentUpvotes} label="Likes" />
         <Part value={signal.cheers} label="Recap cheers" />
         <Part value={signal.pointsHosted} label="Points hosted" />
       </View>
@@ -123,7 +123,7 @@ export const SignalTile: React.FC<{
       </TouchableOpacity>
       {explain ? (
         <Text style={styles.explain}>
-          Signal is earned from the community: upvotes on your posts and comments, and cheers on recaps of Points you
+          Signal is earned from the community: likes on your posts and replies, and cheers on recaps of Points you
           hosted. Posting, commenting and hosting add to it too, but only a little past what you’ve earned, so
           quality beats volume. Paid Boosts never count.
         </Text>
@@ -179,7 +179,7 @@ export const SignalTile: React.FC<{
                 </Text>
               </View>
               <View style={styles.votes}>
-                <ArrowBigUp size={14} color={c.textMuted} strokeWidth={2.25} />
+                <Heart size={13} color={c.textMuted} strokeWidth={2.25} />
                 <Text style={styles.votesText}>{item.upvotes}</Text>
               </View>
             </TouchableOpacity>
@@ -250,7 +250,7 @@ export const StrongestSignalCard: React.FC<{
             {top.handle}
           </Text>
           <Text style={styles.strongMeta} numberOfLines={1}>
-            {scopeLabel} · {top.upvotes} upvotes
+            {scopeLabel} · {top.upvotes} likes
           </Text>
         </View>
         <View style={styles.strongScore}>

@@ -15,7 +15,7 @@ export type PostSort = 'hot' | 'new' | 'top' | 'near';
 export const POST_SORTS: Array<{ id: PostSort; label: string }> = [
   { id: 'new', label: 'New' },
   { id: 'hot', label: 'Hot' },
-  { id: 'top', label: 'Top' },
+  { id: 'top', label: 'Most liked' },
   { id: 'near', label: 'Near' },
 ];
 

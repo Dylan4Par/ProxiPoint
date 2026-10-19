@@ -6,18 +6,18 @@ import type { PointRecap, Reactions } from './pointRecap';
  * Pure (no React) so it's testable and can move to the server as-is.
  *
  * It bundles two halves:
- * - Earned: what other people gave you. Upvotes on your posts and comments, and cheers
- *   (reactions) on the recaps of Points you hosted. Your own starting upvote never counts.
+ * - Earned: what other people gave you. Likes (reactions) on your posts and comments, and cheers
+ *   (reactions) on the recaps of Points you hosted. People can't like their own posts.
  * - Contributed: what you put in. Posts, comments, Points hosted and recaps.
  *   Contribution can only run CONTRIBUTION_HEADROOM ahead of what you've earned, so posting a lot
- *   of things nobody upvotes can't buy a strong signal.
+ *   of things nobody likes can't buy a strong signal.
  *
  * Paid Boosts never feed in (businesses pay to be seen, never to be ranked). Callers pass only
  * posts and comments you're allowed to see (reported and blocked ones left out).
  */
 
 export const EARN = {
-  /** Per upvote on a post or comment (beyond the author's own). */
+  /** Per like on a post or comment (from someone else). */
   upvote: 1,
   /** Per reaction on a recap or its photos. */
   cheer: 1,
@@ -70,8 +70,8 @@ export interface SignalSources {
 export const sameHandle = (a: string, b: string) =>
   a.replace(/^@+/, '').trim().toLowerCase() === b.replace(/^@+/, '').trim().toLowerCase();
 
-/** Upvotes from other people (every post and comment starts with its author's own). */
-const othersVotes = (upvotes: number) => Math.max(0, upvotes - 1);
+/** Likes from other people (authors can't react to their own posts or comments). */
+const othersVotes = (likes: number) => Math.max(0, likes);
 
 const reactionCount = (reactions: Reactions) =>
   Object.values(reactions).reduce((sum, entry) => sum + (entry?.count ?? 0), 0);

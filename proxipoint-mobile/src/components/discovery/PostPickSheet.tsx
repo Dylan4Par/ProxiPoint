@@ -1,7 +1,7 @@
 import React from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowBigUp, ChevronRight, MapPin } from 'lucide-react-native';
+import { ChevronRight, Heart, MapPin } from 'lucide-react-native';
 import { timeAgo } from '../../lib/activity';
 import { getChannel, type ChannelPost } from '../../lib/channels';
 import { pinTimeLeft } from '../../lib/postRanking';
@@ -59,7 +59,7 @@ export const PostPickSheet: React.FC<{
                   </Text>
                   <View style={styles.footer}>
                     <View style={styles.footerItem}>
-                      <ArrowBigUp size={14} color={c.textMuted} strokeWidth={2} />
+                      <Heart size={12} color={c.textMuted} strokeWidth={2} />
                       <Text style={styles.footerText}>{post.upvotes}</Text>
                     </View>
                     {post.place ? (

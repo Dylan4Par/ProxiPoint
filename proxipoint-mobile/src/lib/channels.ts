@@ -10,6 +10,8 @@ import {
 } from './channelAccess';
 import { SAMPLE_PLACES, placeRef, type PlaceKind } from './localPlaces';
 import { answerStillHappening, type PostKind } from './postKinds';
+import { reactTo, sampleReactions, type ChannelReplies, type ReactionCounts } from './postReactions';
+import type { ReactionEmoji } from './pointRecap';
 
 /**
  * Channels: groups people join, like subreddits for a local scene. Each channel has its own
@@ -26,9 +28,10 @@ import { answerStillHappening, type PostKind } from './postKinds';
  *   GET    /channels/:id/posts?sort=…   one channel's posts
  *   POST   /channels/:id/posts          { body, place?: { lat, lon, label, pointId? }, pinHours? }
  *   GET    /posts/pinned?bbox=…         live pins inside the map view, from channels you follow
- *   PUT    /posts/:id/vote              { value: 1 | 0 }
+ *   PUT    /posts/:id/reaction          { emoji } (one per person; DELETE to take it back)
  *   GET    /posts/:id/comments          POST /posts/:id/comments { body, parentId? }
- *   PUT    /comments/:id/vote           { value: 1 | 0 }
+ *   PUT    /comments/:id/like           (DELETE to take it back)
+ *   PATCH  /channels/:id                { replies: 'on' | 'questions' | 'off' } (moderator)
  *   POST   /channels                    create { name, description, tags, access }
  *   PATCH  /channels/:id                { access?, description?, tags? } (moderator)
  *   POST   /channels/:id/requests       ask to join (private) or to post (restricted)
@@ -75,6 +78,8 @@ export interface Channel {
   requests?: ChannelRequest[];
   /** Moderator only: who's approved (besides the moderator). */
   approvedUsers?: string[];
+  /** Replies on every post (the poster chooses), on Questions only, or off. Default 'on'. */
+  replies?: ChannelReplies;
 }
 
 export interface ChannelRequest {
@@ -102,9 +107,16 @@ export interface ChannelPost {
   author: string;
   body: string;
   createdAt: string;
+  /** Likes: how many people reacted (one reaction each, never the author's). */
   upvotes: number;
-  /** Whether you upvoted it. */
+  /** Whether you reacted (kept in step with myReaction). */
   voted: boolean;
+  /** Reactions by emoji (they add up to `upvotes`). */
+  reactions?: ReactionCounts;
+  /** Your reaction, if any. */
+  myReaction?: ReactionEmoji | null;
+  /** The poster's "Allow replies" choice. Unset = the kind's default (see postReactions.ts). */
+  repliesOn?: boolean;
   /** Pinned to the map at this place, until pinnedUntil. The post itself stays in the feed. */
   place?: PostPlace | null;
   pinnedUntil?: string | null;
@@ -130,7 +142,9 @@ export interface PostComment {
   author: string;
   body: string;
   createdAt: string;
+  /** Likes (a heart; never the author's own). */
   upvotes: number;
+  /** Whether you liked it. */
   voted: boolean;
 }
 
@@ -443,6 +457,21 @@ let comments: PostComment[] = [
   { id: 'c12', postId: 'p12', parentId: null, author: '@flowwithmaya', body: 'Can confirm, the church lot is fine on Saturdays too.', createdAt: daysAgo(18), upvotes: 6, voted: false },
 ];
 
+// Sample likes: the counts above become a spread of reactions, and the authors' own starting
+// votes are taken out (people can't react to their own posts). Posts that already have comments
+// keep replies on.
+posts = posts.map((post) => {
+  const likes = Math.max(0, post.upvotes - 1);
+  return {
+    ...post,
+    upvotes: likes,
+    reactions: sampleReactions(post.id, likes),
+    myReaction: null,
+    repliesOn: comments.some((comment) => comment.postId === post.id) ? true : post.repliesOn,
+  };
+});
+comments = comments.map((comment) => ({ ...comment, upvotes: Math.max(0, comment.upvotes - 1) }));
+
 const listeners = new Set<() => void>();
 function changed() {
   listeners.forEach((listener) => listener());
@@ -639,16 +668,27 @@ export function removeApproved(id: string, handle: string) {
   changed();
 }
 
-/** Upvote, or take the upvote back. */
-export function toggleVote(postId: string) {
-  posts = posts.map((post) =>
-    post.id === postId ? { ...post, voted: !post.voted, upvotes: post.upvotes + (post.voted ? -1 : 1) } : post,
-  );
+/**
+ * React to a post (one reaction each): add, swap to another emoji, or tap yours again to take it
+ * back. The screen doesn't offer it on your own posts.
+ */
+export function reactToPost(postId: string, emoji: ReactionEmoji) {
+  posts = posts.map((post) => {
+    if (post.id !== postId) return post;
+    const next = reactTo(post, emoji);
+    return { ...next, voted: Boolean(next.myReaction) };
+  });
+  changed();
+}
+
+/** Moderator: replies on every post, Questions only, or off. */
+export function setChannelReplies(id: string, replies: ChannelReplies) {
+  channels = channels.map((channel) => (channel.id === id && channel.moderator ? { ...channel, replies } : channel));
   changed();
 }
 
 /**
- * New post, starting with your own upvote. Pass `pin` to tie it to a place (block-level or a
+ * New post (no likes yet). Pass `pin` to tie it to a place (block-level or a
  * known place, never an exact GPS fix) and show it on the map for `hours` (0: place only).
  */
 export function addPost(
@@ -658,6 +698,7 @@ export function addPost(
   pin: { place: PostPlace; hours: number } | null = null,
   photos: string[] = [],
   kind: PostKind = 'chat',
+  repliesOn?: boolean,
 ): ChannelPost {
   const post: ChannelPost = {
     id: `p-${Date.now()}`,
@@ -665,8 +706,11 @@ export function addPost(
     author,
     body: body.trim(),
     createdAt: new Date().toISOString(),
-    upvotes: 1,
-    voted: true,
+    upvotes: 0,
+    voted: false,
+    reactions: {},
+    myReaction: null,
+    repliesOn,
     place: pin ? pin.place : null,
     // A place with 0 hours: on the place's page only, not on the map.
     pinnedUntil: pin && pin.hours > 0 ? new Date(Date.now() + pin.hours * 3600000).toISOString() : null,
@@ -701,15 +745,16 @@ export function addComment(postId: string, author: string, body: string, parentI
     author,
     body: body.trim(),
     createdAt: new Date().toISOString(),
-    upvotes: 1,
-    voted: true,
+    upvotes: 0,
+    voted: false,
   };
   comments = [...comments, comment];
   changed();
   return comment;
 }
 
-export function toggleCommentVote(commentId: string) {
+/** Like a comment, or take the like back. */
+export function toggleCommentLike(commentId: string) {
   comments = comments.map((comment) =>
     comment.id === commentId
       ? { ...comment, voted: !comment.voted, upvotes: comment.upvotes + (comment.voted ? -1 : 1) }

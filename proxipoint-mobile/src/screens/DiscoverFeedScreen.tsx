@@ -656,7 +656,7 @@ const PostResultRow: React.FC<{ post: ChannelPost; channel: Channel | null; now:
         {post.body || 'Photo post'}
       </Text>
       <Text style={styles.resultMeta} numberOfLines={1}>
-        {[channel?.handle, post.place?.label, timeAgo(post.createdAt, now), `▲ ${post.upvotes}`].filter(Boolean).join(' · ')}
+        {[channel?.handle, post.place?.label, timeAgo(post.createdAt, now), post.upvotes ? `♥ ${post.upvotes}` : null].filter(Boolean).join(' · ')}
       </Text>
     </TouchableOpacity>
   );

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ArrowBigUp, BadgeCheck, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, ImagePlus, Lock, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
+import { BadgeCheck, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, Heart, ImagePlus, Lock, SmilePlus, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
 import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
 import { ReportSheet, type ReportTarget } from '../components/safety/ReportSheet';
 import { pickRecapPhotos } from '../lib/profilePhotos';
@@ -23,8 +23,9 @@ import {
   setFollowed,
   setRequested,
   toggleMembership,
-  toggleCommentVote,
-  toggleVote,
+  reactToPost,
+  setChannelReplies,
+  toggleCommentLike,
   useChannels,
   useVisibleComments,
   useVisiblePosts,
@@ -62,6 +63,14 @@ import { ACCESS_ICON, CreateChannelSheet } from '../components/channels/CreateCh
 import { PLACE_ICON, PlacePicker, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
 import { PLACE_KIND_LABEL, bestTips, placeRef, pointsAtPlace, postsAtPlace, type LocalPlace } from '../lib/localPlaces';
 import { interestLine, topInterest, useInterestMembers } from '../lib/nearbyInterest';
+import {
+  CHANNEL_REPLY_OPTIONS,
+  channelAllowsReplies,
+  defaultRepliesOn,
+  repliesAllowed,
+  topEmojis,
+} from '../lib/postReactions';
+import { REACTION_EMOJIS } from '../lib/pointRecap';
 import { POST_KINDS, asksStillHappening, defaultPinHours, kindInfo, pinChoices, type PostKind } from '../lib/postKinds';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
@@ -524,10 +533,15 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
   const [pickingPlace, setPickingPlace] = useState(false);
   const [pinHours, setPinHours] = useState(defaultPinHours('chat'));
   const places = usePlaceIndex();
+  // Allow replies: on by default for Questions and Chat, off for Heads-ups and Tips; the channel's
+  // setting (moderator) can rule it out.
+  const [repliesOn, setRepliesOn] = useState(defaultRepliesOn('chat'));
   const chooseKind = (next: PostKind) => {
     setKind(next);
     setPinHours(defaultPinHours(next));
+    setRepliesOn(defaultRepliesOn(next));
   };
+  const repliesPossible = channelAllowsReplies(kind, channel.replies);
   // Photos: same picker as recaps (photo rules first, multi-select, shrunk for upload).
   const [photos, setPhotos] = useState<string[]>([]);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -552,7 +566,15 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
     if (!canSend || !canPost) return;
     // Server side: upload the photos first, then POST the post with their URLs.
     const pointId = place?.id.startsWith('venue-') ? place.id.slice('venue-'.length) : undefined;
-    addPost(channel.id, myHandle, draft, place ? { place: placeRef(place, pointId), hours: pinHours } : null, photos, kind);
+    addPost(
+      channel.id,
+      myHandle,
+      draft,
+      place ? { place: placeRef(place, pointId), hours: pinHours } : null,
+      photos,
+      kind,
+      repliesPossible && repliesOn,
+    );
     setDraft('');
     setPlace(null);
     chooseKind('chat');
@@ -810,6 +832,25 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
               setPickingPlace(false);
             }}
           />
+          <TouchableOpacity
+            style={styles.repliesToggle}
+            onPress={() => setRepliesOn((on) => !on)}
+            disabled={!repliesPossible}
+            accessibilityRole="switch"
+            accessibilityState={{ checked: repliesPossible && repliesOn, disabled: !repliesPossible }}
+            testID="channel-allow-replies"
+          >
+            <View style={[styles.checkbox, repliesPossible && repliesOn && styles.checkboxOn]}>
+              {repliesPossible && repliesOn ? <Check size={12} color={c.white} strokeWidth={3} /> : null}
+            </View>
+            <Text style={[styles.repliesToggleText, !repliesPossible && styles.repliesToggleOff]}>
+              {repliesPossible
+                ? 'Allow replies'
+                : channel.replies === 'questions'
+                  ? 'Replies are for Questions only in this channel'
+                  : 'Replies are off in this channel'}
+            </Text>
+          </TouchableOpacity>
           <View style={styles.composerActions}>
             <TouchableOpacity
               style={[styles.photoBtn, photos.length >= POST_PHOTO_LIMIT && styles.postBtnDisabled]}
@@ -1123,6 +1164,26 @@ const ModerationPanel: React.FC<{ channel: Channel; onOpenProfile: (handle: stri
       </View>
       <Text style={styles.modHint}>{CHANNEL_ACCESS.find((option) => option.id === access)?.summary}</Text>
 
+      <Text style={styles.modLabel}>REPLIES</Text>
+      <View style={styles.pinChipRow}>
+        {CHANNEL_REPLY_OPTIONS.map((option) => {
+          const active = (channel.replies ?? 'on') === option.id;
+          return (
+            <TouchableOpacity
+              key={option.id}
+              style={[styles.pinChip, active && styles.pinChipActive]}
+              onPress={() => setChannelReplies(channel.id, option.id)}
+              accessibilityRole="radio"
+              accessibilityState={{ checked: active }}
+              testID={`channel-replies-${option.id}`}
+            >
+              <Text style={[styles.pinChipText, active && styles.pinChipTextActive]}>{option.label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={styles.modHint}>{CHANNEL_REPLY_OPTIONS.find((o) => o.id === (channel.replies ?? 'on'))?.summary}</Text>
+
       {access !== 'public' || requests.length ? (
         <>
           <Text style={styles.modLabel}>
@@ -1239,6 +1300,8 @@ const PostCard: React.FC<{
   const { colors: c } = useTheme();
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const mine = sameHandle(post.author, myHandle);
+  const postChannel = useChannels().find((item) => item.id === post.channelId);
+  const canReply = repliesAllowed(post, postChannel?.replies);
   const pinLeft = pinTimeLeft(post, now);
   const distance = formatDistance(distanceMeters ?? undefined);
   return (
@@ -1375,27 +1438,88 @@ const PostCard: React.FC<{
         </View>
       ) : null}
       <View style={styles.postFooter}>
-        <TouchableOpacity
-          style={[styles.voteBtn, post.voted && styles.voteBtnOn]}
-          onPress={() => toggleVote(post.id)}
-          accessibilityRole="button"
-          accessibilityState={{ selected: post.voted }}
-          accessibilityLabel={`${post.voted ? 'Remove upvote' : 'Upvote'}, ${post.upvotes} votes`}
-        >
-          <ArrowBigUp size={18} color={post.voted ? c.accent : c.textMuted} fill={post.voted ? c.accent : 'transparent'} strokeWidth={2} />
-          <Text style={[styles.footerText, post.voted && styles.footerTextOn]}>{post.upvotes}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.voteBtn}
-          onPress={onOpen}
-          disabled={!onOpen}
-          accessibilityRole="button"
-          accessibilityLabel={`${commentCount} comments`}
-        >
-          <MessageCircle size={15} color={c.textMuted} strokeWidth={2} />
-          <Text style={styles.footerText}>{commentCount}</Text>
-        </TouchableOpacity>
+        <PostReactions post={post} mine={mine} />
+        {/* Replies: only where the poster and the channel allow them (old replies still count). */}
+        {canReply || commentCount > 0 ? (
+          <TouchableOpacity
+            style={styles.voteBtn}
+            onPress={onOpen}
+            disabled={!onOpen}
+            accessibilityRole="button"
+            accessibilityLabel={`${commentCount} replies`}
+          >
+            <MessageCircle size={15} color={c.textMuted} strokeWidth={2} />
+            <Text style={styles.footerText}>{commentCount}</Text>
+          </TouchableOpacity>
+        ) : null}
       </View>
+    </View>
+  );
+};
+
+// ---- Reactions ------------------------------------------------------------------------------
+
+/**
+ * Likes as emoji reactions: one per person from the six used on recaps. The summary shows the
+ * most-used emojis and the total; the smiley (or your emoji) opens the six to pick from. Picking
+ * yours again takes it back. Your own posts show the summary only.
+ */
+const PostReactions: React.FC<{ post: ChannelPost; mine: boolean }> = ({ post, mine }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const [picking, setPicking] = useState(false);
+  const shown = topEmojis(post.reactions);
+  const total = post.upvotes;
+  return (
+    <View style={styles.reactWrap}>
+      <View style={styles.reactRow}>
+        {total ? (
+          <TouchableOpacity
+            style={styles.reactSummary}
+            onPress={() => !mine && setPicking((open) => !open)}
+            disabled={mine}
+            accessibilityRole={mine ? 'text' : 'button'}
+            accessibilityLabel={`${total} ${total === 1 ? 'like' : 'likes'}: ${shown.join(' ')}`}
+          >
+            <Text style={styles.reactEmojis}>{shown.join('')}</Text>
+            <Text style={styles.footerText}>{total}</Text>
+          </TouchableOpacity>
+        ) : null}
+        {mine ? null : (
+          <TouchableOpacity
+            style={[styles.reactBtn, (picking || post.myReaction) && styles.reactBtnOn]}
+            onPress={() => setPicking((open) => !open)}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityLabel={post.myReaction ? `You reacted ${post.myReaction}. Change` : 'React'}
+            testID={`post-react-${post.id}`}
+          >
+            {post.myReaction ? (
+              <Text style={styles.reactMine}>{post.myReaction}</Text>
+            ) : (
+              <SmilePlus size={16} color={picking ? c.accent : c.textMuted} strokeWidth={2} />
+            )}
+          </TouchableOpacity>
+        )}
+      </View>
+      {picking && !mine ? (
+        <View style={styles.reactPicker}>
+          {REACTION_EMOJIS.map((emoji) => (
+            <TouchableOpacity
+              key={emoji}
+              style={[styles.reactPick, post.myReaction === emoji && styles.reactPickOn]}
+              onPress={() => {
+                reactToPost(post.id, emoji);
+                setPicking(false);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={post.myReaction === emoji ? `Remove ${emoji}` : `React ${emoji}`}
+            >
+              <Text style={styles.reactPickEmoji}>{emoji}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : null}
     </View>
   );
 };
@@ -1519,6 +1643,7 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
   const comments = useVisibleComments();
   const now = useBoosts();
   const threads = useMemo(() => buildThreads(comments, post.id), [comments, post.id]);
+  const canReplyHere = repliesAllowed(post, channel?.replies) && canCommentIn(channel);
   const count = threads.reduce((sum, thread) => sum + 1 + thread.replies.length, 0);
   const [draft, setDraft] = useState('');
   const [replyTo, setReplyTo] = useState<PostComment | null>(null);
@@ -1558,17 +1683,17 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
         />
 
         <Text style={[styles.sectionLabel, styles.sectionSpaced]}>
-          {count} {count === 1 ? 'COMMENT' : 'COMMENTS'}
+          {count} {count === 1 ? 'REPLY' : 'REPLIES'}
         </Text>
         {threads.length ? (
           <View style={styles.thread}>
             {threads.map(({ comment, replies }) => (
               <View key={comment.id} style={styles.threadItem}>
-                <CommentRow myHandle={myHandle} onOpenProfile={onOpenProfile} comment={comment} now={now} onReply={() => setReplyTo(comment)} />
+                <CommentRow myHandle={myHandle} onOpenProfile={onOpenProfile} comment={comment} now={now} onReply={canReplyHere ? () => setReplyTo(comment) : null} />
                 {replies.length ? (
                   <View style={styles.replies}>
                     {replies.map((reply) => (
-                      <CommentRow key={reply.id} myHandle={myHandle} onOpenProfile={onOpenProfile} comment={reply} now={now} onReply={() => setReplyTo(comment)} />
+                      <CommentRow key={reply.id} myHandle={myHandle} onOpenProfile={onOpenProfile} comment={reply} now={now} onReply={canReplyHere ? () => setReplyTo(comment) : null} />
                     ))}
                   </View>
                 ) : null}
@@ -1576,12 +1701,16 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
             ))}
           </View>
         ) : (
-          <Text style={styles.emptyText}>No comments yet. Say something.</Text>
+          <Text style={styles.emptyText}>{canReplyHere ? 'No replies yet. Say something.' : 'No replies.'}</Text>
         )}
       </ScrollView>
 
-      {/* Comment box, pinned under the thread (only where you're allowed to comment). */}
-      {canCommentIn(channel) ? (
+      {/* Reply box, pinned under the thread: only where you can comment and replies are on. */}
+      {!repliesAllowed(post, channel?.replies) ? (
+        <View style={styles.repliesOffBar} testID="replies-off">
+          <Text style={styles.repliesOffText}>Replies are off for this post. React to it instead.</Text>
+        </View>
+      ) : canCommentIn(channel) ? (
       <View style={styles.commentBar}>
         {replyTo ? (
           <View style={styles.replyingRow}>
@@ -1626,7 +1755,8 @@ const PostPage: React.FC<ChannelsScreenProps & { post: ChannelPost; channel: Cha
 const CommentRow: React.FC<{
   comment: PostComment;
   now: number;
-  onReply: () => void;
+  /** Null when the post takes no replies. */
+  onReply: (() => void) | null;
   myHandle: string;
   onOpenProfile: (handle: string) => void;
 }> = ({ comment, now, onReply, myHandle, onOpenProfile }) => {
@@ -1651,19 +1781,24 @@ const CommentRow: React.FC<{
       <View style={styles.commentActions}>
         <TouchableOpacity
           style={styles.commentAction}
-          onPress={() => toggleCommentVote(comment.id)}
+          onPress={() => toggleCommentLike(comment.id)}
+          disabled={mine}
           accessibilityRole="button"
-          accessibilityState={{ selected: comment.voted }}
-          accessibilityLabel={`${comment.voted ? 'Remove upvote' : 'Upvote'}, ${comment.upvotes} votes`}
+          accessibilityState={{ selected: comment.voted, disabled: mine }}
+          accessibilityLabel={`${comment.voted ? 'Unlike' : 'Like'}, ${comment.upvotes} likes`}
           hitSlop={6}
         >
-          <ArrowBigUp size={16} color={comment.voted ? c.accent : c.textMuted} fill={comment.voted ? c.accent : 'transparent'} strokeWidth={2} />
-          <Text style={[styles.footerText, comment.voted && styles.footerTextOn]}>{comment.upvotes}</Text>
+          <Heart size={14} color={comment.voted ? c.red : c.textMuted} fill={comment.voted ? c.red : 'transparent'} strokeWidth={2} />
+          {comment.upvotes ? (
+            <Text style={[styles.footerText, comment.voted && styles.footerTextOn]}>{comment.upvotes}</Text>
+          ) : null}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.commentAction} onPress={onReply} accessibilityRole="button" hitSlop={6}>
-          <CornerDownRight size={14} color={c.textMuted} strokeWidth={2.25} />
-          <Text style={styles.footerText}>Reply</Text>
-        </TouchableOpacity>
+        {onReply ? (
+          <TouchableOpacity style={styles.commentAction} onPress={onReply} accessibilityRole="button" hitSlop={6}>
+            <CornerDownRight size={14} color={c.textMuted} strokeWidth={2.25} />
+            <Text style={styles.footerText}>Reply</Text>
+          </TouchableOpacity>
+        ) : null}
         {mine ? null : (
           <TouchableOpacity
             style={styles.commentAction}
@@ -1937,6 +2072,58 @@ const createStyles = (c: ThemeColors) =>
       borderColor: c.violet,
     },
     interestRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+    reactWrap: { gap: 6 },
+    reactRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+    reactSummary: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 14,
+      backgroundColor: c.surfaceDim,
+    },
+    reactEmojis: { fontSize: 14 },
+    reactBtn: {
+      minWidth: 32,
+      height: 30,
+      paddingHorizontal: 7,
+      borderRadius: 15,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    reactBtnOn: { borderColor: c.accent, backgroundColor: c.accentTint },
+    reactMine: { fontSize: 15 },
+    reactPicker: {
+      flexDirection: 'row',
+      alignSelf: 'flex-start',
+      gap: 2,
+      padding: 4,
+      borderRadius: 18,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+    },
+    reactPick: { width: 36, height: 36, borderRadius: 18, alignItems: 'center', justifyContent: 'center' },
+    reactPickOn: { backgroundColor: c.accentTint },
+    reactPickEmoji: { fontSize: 20 },
+    repliesToggle: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 8 },
+    checkbox: {
+      width: 18,
+      height: 18,
+      borderRadius: 5,
+      borderWidth: 1.5,
+      borderColor: c.borderStrong,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    checkboxOn: { backgroundColor: c.violet, borderColor: c.violet },
+    repliesToggleText: { color: c.textSecondary, fontSize: 13, fontWeight: '700' },
+    repliesToggleOff: { color: c.textFaint, fontWeight: '600' },
+    repliesOffBar: { paddingHorizontal: 16, paddingVertical: 14, borderTopWidth: 1, borderTopColor: c.border, backgroundColor: c.base },
+    repliesOffText: { color: c.textMuted, fontSize: 13, textAlign: 'center' },
     interestText: { color: c.textMuted, fontSize: 12, fontWeight: '700' },
     kindRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 8 },
     kindChip: {
