@@ -445,11 +445,11 @@ export const DiscoverScreen: React.FC = () => {
           <TopFilterHeader
             liveOnly={liveOnly}
             onToggleLiveOnly={() => setLiveOnly((on) => !on)}
-            // Top row: Drop Point · city · dates (Next 3 days by default; ⌄ opens When → Calendar).
+            // Top row: Create Event · city · dates (Next 3 days by default; ⌄ opens When → Calendar).
             topRow={
               <>
                 <TouchableOpacity
-                  style={styles.headerRound}
+                  style={styles.createEventBtn}
                   onPress={() => {
                     setDetailId(null);
                     setHostHandle(null);
@@ -459,10 +459,13 @@ export const DiscoverScreen: React.FC = () => {
                     setDropOpen(true);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="Drop a Point"
+                  accessibilityLabel="Create event"
                   testID="map-drop-point"
                 >
-                  <Plus size={20} color={c.accent} strokeWidth={2.75} />
+                  <Plus size={16} color={c.onAccent} strokeWidth={3} />
+                  <Text style={styles.createEventText} numberOfLines={1}>
+                    Create Event
+                  </Text>
                 </TouchableOpacity>
                 <CityPill
                   inline
@@ -794,16 +797,16 @@ const createStyles = (c: ThemeColors) =>
   subBackText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
   datePillText: { color: c.text, fontSize: 12, fontWeight: '800', flexShrink: 1 },
   /* Explore Map top row */
-  headerRound: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  createEventBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: c.border,
-    borderWidth: 1,
-    borderColor: 'rgba(56, 189, 248, 0.25)',
+    gap: 4,
+    paddingHorizontal: 12,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: c.accent,
   },
+  createEventText: { color: c.onAccent, fontSize: 13, fontWeight: '800' },
   dateChip: {
     flexDirection: 'row',
     alignItems: 'center',

@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
-import { Clock, Globe, ImagePlus, MapPin, PenLine, X, Zap, type LucideIcon } from 'lucide-react-native';
+import { ImagePlus, PenLine, X } from 'lucide-react-native';
 import { formatBeaconDate } from '../../lib/beaconWindow';
 import { pointStatus, publicWhere, type DroppedPoint } from '../../lib/droppedPoint';
 import {
@@ -22,19 +22,11 @@ import { pickRecapPhotos } from '../../lib/profilePhotos';
 import { PhotoRulesNote } from '../safety/PhotoRulesNote';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
-/** The empty state's how-it-works steps (matches what the Drop Point sheet offers). */
-const EXPLAIN_STEPS: Array<{ Icon: LucideIcon; title: string; body: string }> = [
-  { Icon: Zap, title: 'Start it now', body: 'Drop it while it’s happening and it shows as LIVE NOW.' },
-  { Icon: Clock, title: 'Or schedule it', body: 'Pick a start and end time; it goes live on its own.' },
-  { Icon: Globe, title: 'Choose who sees it', body: 'Private (people you invite), one Channel, or Public.' },
-  { Icon: ImagePlus, title: 'Post a recap here', body: 'Once it has started, share photos and a few words.' },
-];
-
 interface RecapComposerProps {
   drops: DroppedPoint[];
   onPost: (recap: PointRecap) => void;
-  /** Shown when there's nothing to recap yet. */
-  onDropPoint: () => void;
+  /** Kept for callers; Profile's Create Event button covers this now. */
+  onDropPoint?: () => void;
 }
 
 /** "Post Point": a short recap of a live or ended Point, with up to 3 photos. */
@@ -102,35 +94,8 @@ export const RecapComposer: React.FC<RecapComposerProps> = ({ drops, onPost, onD
     reset();
   };
 
-  if (eligible.length === 0) {
-    return (
-      <View style={styles.emptyCard} testID="recap-empty">
-        <Text style={styles.explainTitle}>What’s a Point?</Text>
-        <Text style={styles.explainLead}>
-          A Point is an event you put on the map: a show, a pickup game, a meetup, a pop-up. People nearby
-          can find it and RSVP.
-        </Text>
-        <View style={styles.steps}>
-          {EXPLAIN_STEPS.map(({ Icon, title, body }) => (
-            <View key={title} style={styles.step}>
-              <View style={styles.stepIcon}>
-                <Icon size={16} color={c.accent} strokeWidth={2.25} />
-              </View>
-              <View style={styles.stepCopy}>
-                <Text style={styles.stepTitle}>{title}</Text>
-                <Text style={styles.stepBody}>{body}</Text>
-              </View>
-            </View>
-          ))}
-        </View>
-        <TouchableOpacity style={styles.primaryBtn} onPress={onDropPoint} accessibilityRole="button">
-          <MapPin size={15} color={c.base} strokeWidth={2.5} />
-          <Text style={styles.primaryText}>DROP A POINT</Text>
-        </TouchableOpacity>
-        <Text style={styles.explainNote}>You can also tap + on Explore Map.</Text>
-      </View>
-    );
-  }
+  // No event to recap yet: nothing here (Profile's Create Event button sits above).
+  if (eligible.length === 0) return null;
 
   if (!open) {
     return (
@@ -343,32 +308,4 @@ const createStyles = (c: ThemeColors) =>
     justifyContent: 'center',
   },
   primaryText: { color: c.base, fontSize: 13, fontWeight: '900', letterSpacing: 1.1 },
-  emptyCard: {
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: c.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: c.border,
-    padding: 18,
-  },
-  emptyText: { color: c.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 19 },
-  explainTitle: { color: c.text, fontSize: 16, fontWeight: '800', alignSelf: 'flex-start' },
-  explainLead: { color: c.textSecondary, fontSize: 13, lineHeight: 19, alignSelf: 'stretch' },
-  steps: { alignSelf: 'stretch', gap: 10, marginVertical: 4 },
-  step: { flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  stepIcon: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: c.accentTint,
-    borderWidth: 1,
-    borderColor: c.accentBorder,
-  },
-  stepCopy: { flex: 1, gap: 1 },
-  stepTitle: { color: c.text, fontSize: 14, fontWeight: '700' },
-  stepBody: { color: c.textMuted, fontSize: 12.5, lineHeight: 17 },
-  explainNote: { color: c.textFaint, fontSize: 12 },
 });
