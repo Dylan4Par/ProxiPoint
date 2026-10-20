@@ -447,9 +447,12 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         </>
       ) : (
         <>
-          {/* ---- Up next: your plan, only when it's close ---- */}
+          {/* ---- Your events: your plans, only when they're close (Up next cards) ---- */}
           {plans.length ? (
-            <UpNextCards plans={plans} now={now} onOpenPoint={onOpenPoint} onManagePoint={onManagePoint} />
+            <>
+              <SectionHeader label="YOUR EVENTS" />
+              <UpNextCards plans={plans} now={now} onOpenPoint={onOpenPoint} onManagePoint={onManagePoint} />
+            </>
           ) : null}
 
           {/* ---- Local spots: businesses with something on today ---- */}
