@@ -445,7 +445,7 @@ export const DiscoverScreen: React.FC = () => {
           <TopFilterHeader
             liveOnly={liveOnly}
             onToggleLiveOnly={() => setLiveOnly((on) => !on)}
-            // Top row: Create Event · city · dates (Next 3 days by default; ⌄ opens When → Calendar).
+            // Top row: + Event · city · dates (Next 3 days by default; ⌄ opens When → Calendar).
             topRow={
               <>
                 <TouchableOpacity
@@ -464,7 +464,7 @@ export const DiscoverScreen: React.FC = () => {
                 >
                   <Plus size={16} color={c.onAccent} strokeWidth={3} />
                   <Text style={styles.createEventText} numberOfLines={1}>
-                    Create Event
+                    Event
                   </Text>
                 </TouchableOpacity>
                 <CityPill
