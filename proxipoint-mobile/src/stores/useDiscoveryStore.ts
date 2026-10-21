@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { LOCALRADAR_HANDLE, type PointSource } from '../lib/aggregated';
+import { venuePageHandle } from '../lib/hostProfiles';
 import { describeBeaconTiming, normalizeVisibility, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
 import { calculateDistanceMeters } from '../lib/locationFilter';
 import type {
@@ -50,8 +52,15 @@ export interface DiscoveryNode {
   origin?: 'local';
   /** Up to 3 hashtags, main one first (e.g. ['#LiveMusic', '#Jazz']). `tag` is the main one. */
   tags?: string[];
-  /** Host handle, e.g. '@rustyanchor' (used by Report → Block). */
+  /** Host handle, e.g. '@rustyanchor' (used by Report → Block). @LocalRadar for aggregated events. */
   host?: string;
+  /**
+   * 'user': posted on ProxiPoint. 'external': gathered from a public source and listed by
+   * @LocalRadar (is_aggregated in PostgreSQL). Missing = 'user'. See lib/aggregated.ts.
+   */
+  source?: PointSource;
+  /** The venue's page (a ghost page until the venue claims it), e.g. '@rustyanchor'. */
+  venueHandle?: string;
   startsAt?: string;
   endsAt?: string;
   maxAttendance?: number | null;
@@ -571,7 +580,11 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
       title: point.title,
       description: point.description,
       venue: point.venue,
-      host: point.host,
+      // Development samples are aggregated events: listed by @LocalRadar, linked to the venue's
+      // page (unclaimed until the venue claims it), never shown as posted by the venue.
+      host: LOCALRADAR_HANDLE,
+      source: 'external',
+      venueHandle: venuePageHandle(point.venue),
       latitude,
       longitude,
       distanceMeters,

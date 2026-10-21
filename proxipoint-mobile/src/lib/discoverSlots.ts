@@ -75,6 +75,8 @@ export interface SpotNode extends SlotItem {
   title?: string;
   venue?: string;
   host?: string;
+  /** The venue's page (aggregated events are hosted by @LocalRadar, so this decides "business"). */
+  venueHandle?: string;
   startsAt?: string;
   endsAt?: string;
   origin?: string;
@@ -126,8 +128,11 @@ export function localSpots<T extends SpotNode>(
   const boosted = (node: T) => Boolean(options.isBoosted?.(node)) && !(options.hidden?.has(node.id) ?? false);
   const byVenue = new Map<string, { node: T; boosted: boolean; live: boolean; start: number }>();
   for (const node of nodes) {
-    if (!node.venue || node.locationPrivacy || !node.host || node.origin === 'local') continue;
-    if (!options.isBusiness(node.host) || !node.startsAt) continue;
+    // The business is the venue's page when there is one (aggregated events are listed by
+    // @LocalRadar), otherwise the host.
+    const business = node.venueHandle ?? node.host;
+    if (!node.venue || node.locationPrivacy || !business || node.origin === 'local') continue;
+    if (!options.isBusiness(business) || !node.startsAt) continue;
     const start = new Date(node.startsAt).getTime();
     const finish = node.endsAt ? new Date(node.endsAt).getTime() : start + 3600000;
     if (!(start <= end && finish > from)) continue;

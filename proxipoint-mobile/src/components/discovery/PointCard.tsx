@@ -4,6 +4,7 @@ import { Car, Check, Info, PersonStanding, User, Zap } from 'lucide-react-native
 import { CategoryBadge } from './CategoryBadge';
 import { distanceLabel, goingLabel, pointTiming, type TimingKind } from '../../lib/pointCard';
 import { useUnits } from '../../lib/units';
+import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -105,9 +106,11 @@ export const PointCard: React.FC<{
           <Text style={styles.title} numberOfLines={1}>
             {node.title}
           </Text>
-          {where ? (
+          {where || isAggregated(node) ? (
             <Text style={styles.venue} numberOfLines={1}>
               {where}
+              {/* Listed by @LocalRadar from a public source, not posted by the venue. */}
+              {isAggregated(node) ? <Text style={styles.via}>{where ? ' · ' : ''}{AGGREGATED_TAG}</Text> : null}
             </Text>
           ) : null}
         </View>
@@ -197,6 +200,7 @@ const createStyles = (c: ThemeColors) =>
     boostedText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
     title: { color: c.text, fontSize: 16, fontWeight: '800', lineHeight: 20 },
     venue: { color: c.textMuted, fontSize: 12 },
+    via: { color: c.textFaint, fontStyle: 'italic' },
     bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     pills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
     pill: {

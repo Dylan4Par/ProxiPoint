@@ -261,7 +261,7 @@ let channels: Channel[] = [
     memberCount: 14,
     joined: false,
     access: 'private',
-    owner: '@rustyanchor',
+    owner: '@sam.plays.bass',
   },
 ];
 
@@ -269,7 +269,7 @@ let posts: ChannelPost[] = [
   {
     id: 'p1',
     channelId: 'frontrange-live',
-    author: '@rustyanchor',
+    author: '@sam.plays.bass',
     body: 'Midnight Owls go on at 9:30 tonight. Patio is open, and the second set is all requests.',
     createdAt: minutesAgo(18),
     upvotes: 42,
@@ -350,7 +350,7 @@ let posts: ChannelPost[] = [
   {
     id: 'p8',
     channelId: 'frontrange-live',
-    author: '@laughinggoat',
+    author: '@openmicolly',
     body: 'Open mic sign-ups start at 7. Comedy first, acoustic sets after 8:30.',
     createdAt: minutesAgo(600),
     upvotes: 31,
@@ -433,7 +433,7 @@ let posts: ChannelPost[] = [
     // In a private channel: only its approved members ever see this.
     id: 'p11',
     channelId: 'owls-crew',
-    author: '@rustyanchor',
+    author: '@sam.plays.bass',
     body: 'Load-in at 7:45 tonight through the alley door. Second set list is in the shared folder.',
     createdAt: minutesAgo(90),
     upvotes: 6,
@@ -443,7 +443,7 @@ let posts: ChannelPost[] = [
 
 let comments: PostComment[] = [
   { id: 'c1', postId: 'p1', parentId: null, author: '@jazzcat', body: 'Is there a cover after 9?', createdAt: minutesAgo(14), upvotes: 6, voted: false },
-  { id: 'c2', postId: 'p1', parentId: 'c1', author: '@rustyanchor', body: '$5 after 9, free before.', createdAt: minutesAgo(12), upvotes: 9, voted: false },
+  { id: 'c2', postId: 'p1', parentId: 'c1', author: '@sam.plays.bass', body: '$5 after 9, free before.', createdAt: minutesAgo(12), upvotes: 9, voted: false },
   { id: 'c3', postId: 'p1', parentId: null, author: '@vinylvic', body: 'Requesting “Moanin’” for the second set.', createdAt: minutesAgo(6), upvotes: 3, voted: false },
   { id: 'c4', postId: 'p3', parentId: null, author: '@lena.keys', body: 'I’ve got two. I’ll bring one Thursday.', createdAt: minutesAgo(120), upvotes: 7, voted: false },
   { id: 'c5', postId: 'p3', parentId: 'c4', author: '@sam.plays.bass', body: 'Legend. Thank you!', createdAt: minutesAgo(115), upvotes: 2, voted: false },

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { PointRecap } from './pointRecap';
+import { LOCALRADAR_HANDLE, ghostVenueBio, venueHandleFor, type VenueTier } from './aggregated';
 
 /**
  * Public profiles for the sample hosts in useDiscoveryStore. Placeholder data until the backend
@@ -18,6 +19,12 @@ export interface HostProfile {
   verified?: boolean;
   /** A business (venue, shop, market): listed in Discover's "local spots". */
   business?: boolean;
+  /** 'venue': a place's page. 'system': ProxiPoint's own account (@LocalRadar). Default 'person'. */
+  kind?: 'person' | 'venue' | 'system';
+  /** Venue pages: false = ghost page nobody has claimed yet (Tier 1, unverified). */
+  claimed?: boolean;
+  /** Venue pages: 1 ghost, 2 claimed, 3 claimed and verified. */
+  tier?: VenueTier;
   avatarUri?: string | null;
   recaps: PointRecap[];
   contact: HostContact;
@@ -269,7 +276,71 @@ const PROFILES: HostProfile[] = [
   },
 ];
 
-const BY_HANDLE = new Map(PROFILES.map((profile) => [profile.handle.toLowerCase(), profile]));
+/**
+ * ProxiPoint's listings account: hosts every aggregated event (gathered from public sources),
+ * so no venue is ever shown as posting something it didn't.
+ */
+const LOCALRADAR: HostProfile = {
+  handle: LOCALRADAR_HANDLE,
+  kind: 'system',
+  displayName: 'LocalRadar',
+  bio: 'ProxiPoint’s listings account. Events gathered from venue websites and public calendars near you, each linked to its venue. Venues can claim their page to post their own.',
+  followers: 0,
+  following: 0,
+  pointsHosted: 0,
+  joined: 'October 2026',
+  verified: true,
+  recaps: [],
+  contact: { visibility: 'private' },
+};
+
+/**
+ * Venue pages nobody has claimed yet ("ghost" pages): Tier 1, unverified, a neutral description
+ * and no posts, recaps or contact details (the venue didn't write any of it).
+ */
+function ghostVenue(handle: string, venueName: string, followers = 0): HostProfile {
+  return {
+    handle,
+    kind: 'venue',
+    business: true,
+    claimed: false,
+    tier: 1,
+    verified: false,
+    displayName: venueName,
+    bio: ghostVenueBio(venueName),
+    followers,
+    following: 0,
+    pointsHosted: 0,
+    joined: '',
+    recaps: [],
+    contact: { visibility: 'private' },
+  };
+}
+
+/** Sample venues whose events are aggregated: their pages start unclaimed. */
+const GHOST_VENUE_HANDLES = new Set(['@rustyanchor', '@meeplecafe', '@laughinggoat']);
+
+const ALL_PROFILES: HostProfile[] = [
+  LOCALRADAR,
+  ...PROFILES.map((profile) =>
+    GHOST_VENUE_HANDLES.has(profile.handle) ? ghostVenue(profile.handle, profile.displayName, profile.followers) : profile,
+  ),
+];
+
+const BY_HANDLE = new Map(ALL_PROFILES.map((profile) => [profile.handle.toLowerCase(), profile]));
+
+/**
+ * The page for a venue, by name: an existing profile with that name, or a generated ghost page
+ * (e.g. "Avery Brewing" → @averybrewing, unclaimed). Registers the ghost page so it opens.
+ */
+export function venuePageHandle(venueName: string): string {
+  const name = venueName.trim().toLowerCase();
+  const existing = ALL_PROFILES.find((profile) => profile.kind === 'venue' && profile.displayName.toLowerCase() === name);
+  if (existing) return existing.handle;
+  const handle = venueHandleFor(venueName);
+  if (!BY_HANDLE.has(handle)) BY_HANDLE.set(handle, ghostVenue(handle, venueName.replace(/\s*\(.*?\)\s*/g, ' ').trim()));
+  return handle;
+}
 
 function normalizeHandle(handle: string): string {
   const clean = handle.trim().replace(/^@+/, '').toLowerCase();
@@ -279,6 +350,12 @@ function normalizeHandle(handle: string): string {
 /** Whether a host is a business (venue, shop, market), for Discover's local spots. */
 export function isBusinessHost(handle: string): boolean {
   return BY_HANDLE.get(normalizeHandle(handle))?.business === true;
+}
+
+/** A venue page nobody has claimed yet. */
+export function isGhostVenue(handle: string): boolean {
+  const profile = BY_HANDLE.get(normalizeHandle(handle));
+  return profile?.kind === 'venue' && profile.claimed === false;
 }
 
 /** Profile for a handle, or a simple stand-in for hosts we don't have details for yet. */

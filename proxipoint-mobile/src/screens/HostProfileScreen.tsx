@@ -167,7 +167,12 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
   const points = useMemo(
     () =>
       (Object.values(nodes || {}) as Array<Record<string, unknown> & { id: string }>)
-        .filter((node) => typeof node.host === 'string' && node.host.toLowerCase() === profile.handle.toLowerCase())
+        // Hosted by them, or (venue pages) listed at their venue by @LocalRadar.
+        .filter((node) =>
+          [node.host, node.venueHandle].some(
+            (handle) => typeof handle === 'string' && handle.toLowerCase() === profile.handle.toLowerCase(),
+          ),
+        )
         .filter((node) => isNodeAllowed(node))
         .sort((a, b) => {
           const live = Number(isLiveNode(b)) - Number(isLiveNode(a));
@@ -217,6 +222,16 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
   // Signal Score and Contributions (only what you're allowed to see counts).
   const channelPosts = useVisiblePosts();
   const channelComments = useVisibleComments();
+  // Venue page nobody has claimed yet (aggregated events link here), or ProxiPoint's @LocalRadar.
+  const ghost = profile.kind === 'venue' && profile.claimed === false;
+  const system = profile.kind === 'system';
+  const claimPage = () =>
+    Alert.alert(
+      `Claim ${profile.displayName}`,
+      `If you own or run ${profile.displayName}, you can claim this page to post your own events, reply as the venue and see who's interested. We'll confirm it's you (a code to the venue's public phone or a business email) before it switches over. Events listed by @LocalRadar here move to your page once it's claimed.`,
+      [{ text: 'OK' }],
+    );
+
   const signal = useMemo(
     () =>
       computeSignal(profile.handle, {
@@ -323,13 +338,28 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
             {profile.verified ? <BadgeCheck size={20} color={c.accent} strokeWidth={2.25} /> : null}
           </View>
           <Text style={styles.handle}>{profile.handle}</Text>
-          {profile.joined ? <Text style={styles.joined}>Hosting since {profile.joined}</Text> : null}
-          {blocked ? null : <SignalChip signal={signal} />}
+          {ghost ? (
+            <View style={styles.ghostChip} testID="host-profile-unclaimed">
+              <Text style={styles.ghostChipText}>UNCLAIMED VENUE · TIER 1</Text>
+            </View>
+          ) : system ? (
+            <View style={styles.ghostChip}>
+              <Text style={styles.ghostChipText}>PROXIPOINT LISTINGS</Text>
+            </View>
+          ) : profile.joined ? (
+            <Text style={styles.joined}>Hosting since {profile.joined}</Text>
+          ) : null}
+          {/* Signal is earned by people; venue pages nobody runs yet and @LocalRadar don't have one. */}
+          {blocked || ghost || system ? null : <SignalChip signal={signal} />}
 
           <View style={styles.statsRow}>
             <Stat label="Followers" value={formatCount(profile.followers + (followingNow ? 1 : 0))} />
             <Stat label="Following" value={formatCount(profile.following)} />
-            <Stat label="Points hosted" value={formatCount(profile.pointsHosted)} />
+            {ghost || system ? (
+              <Stat label="Listed now" value={formatCount(points.length)} />
+            ) : (
+              <Stat label="Points hosted" value={formatCount(profile.pointsHosted)} />
+            )}
           </View>
 
           {blocked ? null : (
@@ -350,6 +380,20 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
                   {followingNow ? 'FOLLOWING' : 'FOLLOW'}
                 </Text>
               </TouchableOpacity>
+              {ghost ? (
+                <TouchableOpacity
+                  style={styles.contactBtn}
+                  onPress={claimPage}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Claim ${profile.displayName}'s page`}
+                  testID="host-profile-claim"
+                >
+                  <BadgeCheck size={16} color={c.accent} strokeWidth={2.5} />
+                  <Text style={styles.contactText} numberOfLines={1} adjustsFontSizeToFit>
+                    CLAIM THIS PAGE
+                  </Text>
+                </TouchableOpacity>
+              ) : system ? null : (
               <TouchableOpacity
                 style={[styles.contactBtn, contactRequest?.status === 'pending' && !canContactDirectly && styles.contactBtnPending]}
                 onPress={onContactPress}
@@ -378,6 +422,7 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
                   {canContactDirectly ? 'CONTACT' : contactRequest ? 'REQUESTED' : 'REQUEST CONTACT'}
                 </Text>
               </TouchableOpacity>
+              )}
             </View>
           )}
         </View>
@@ -410,8 +455,12 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
                 </>
               ) : null}
 
-              <Text style={[styles.sectionLabel, profile.bio ? styles.sectionSpaced : null]}>SIGNAL</Text>
-              <SignalTile signal={signal} contributions={contributions} onOpenPost={onOpenPost} />
+              {ghost || system ? null : (
+                <>
+                  <Text style={[styles.sectionLabel, profile.bio ? styles.sectionSpaced : null]}>SIGNAL</Text>
+                  <SignalTile signal={signal} contributions={contributions} onOpenPost={onOpenPost} />
+                </>
+              )}
 
               <View style={[styles.sectionHeader, styles.sectionSpaced]}>
                 <Text style={[styles.sectionLabel, styles.sectionLabelInline]}>
@@ -859,6 +908,17 @@ const createStyles = (c: ThemeColors) =>
     name: { color: c.text, fontSize: 22, fontWeight: '800', flexShrink: 1 },
     handle: { color: c.accentSoft, fontSize: 13, fontWeight: '600', textAlign: 'center', marginTop: 2 },
     joined: { color: c.textMuted, fontSize: 12, textAlign: 'center', marginTop: 4 },
+    ghostChip: {
+      alignSelf: 'center',
+      marginTop: 6,
+      paddingHorizontal: 10,
+      paddingVertical: 3,
+      borderRadius: 10,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
+      borderStyle: 'dashed',
+    },
+    ghostChipText: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1 },
     statsRow: { flexDirection: 'row', justifyContent: 'space-evenly', marginTop: 18 },
     stat: { alignItems: 'center', gap: 2 },
     statLabel: { color: c.textSecondary, fontSize: 12, fontWeight: '700' },

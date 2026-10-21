@@ -22,6 +22,10 @@ import { isBoosted, useBoosts } from '../../lib/boost';
 import { useChannels, useVisiblePosts, type ChannelPost } from '../../lib/channels';
 import { isPinLive } from '../../lib/postRanking';
 import { absorbIntoMarkers, clusterPins, nudgeOffMarkers } from '../../lib/postPins';
+import { isAggregated } from '../../lib/aggregated';
+
+/** Pin color for aggregated events (listed by @LocalRadar), same in day and night. */
+const AGGREGATED_PIN = '#52708f';
 import { PostPickSheet } from './PostPickSheet';
 import { postMatchesMapFilter, useMapPostFilter } from '../../lib/mapFilters';
 import { fromCanvasCoordinates, shouldOfferAreaSearch, visibleRadiusMeters } from '../../lib/mapArea';
@@ -838,6 +842,8 @@ export const DiscoveryMapCanvas: React.FC<{
           const hashtag = mainHashtag(item);
           const live = isLiveNode(item);
           const boosted = isBoosted(item.id, boostClock);
+          // Listed by @LocalRadar from a public source: its own (slate) pin color.
+          const aggregated = isAggregated(item);
 
           return (
             <Animated.View
@@ -866,6 +872,7 @@ export const DiscoveryMapCanvas: React.FC<{
                 <View
                   style={[
                     styles.pinHead,
+                    aggregated && styles.pinHeadAggregated,
                     isSelected && styles.pinHeadSelected,
                     live && styles.pinHeadLive,
                     live && isSelected && styles.pinHeadLiveSelected,
@@ -883,6 +890,7 @@ export const DiscoveryMapCanvas: React.FC<{
                 <View
                   style={[
                     styles.pinTip,
+                    aggregated && styles.pinTipAggregated,
                     isSelected && styles.pinTipSelected,
                     live && styles.pinTipLive,
                     live && isSelected && styles.pinTipLiveSelected,
@@ -1230,6 +1238,8 @@ const createStyles = (c: ThemeColors) =>
     borderWidth: 2,
     borderColor: c.pinRim,
   },
+  // Aggregated (listed by @LocalRadar): slate blue instead of cyan. Live and Boosted still win.
+  pinHeadAggregated: { backgroundColor: AGGREGATED_PIN },
   // Ring centered on the pin head (head is 22px, 6px in from the wrapper's edge).
   selectedHalo: {
     position: 'absolute',
@@ -1273,6 +1283,7 @@ const createStyles = (c: ThemeColors) =>
     borderTopColor: c.accentDeep,
     marginTop: -1,
   },
+  pinTipAggregated: { borderTopColor: AGGREGATED_PIN },
   pinTipSelected: {
     borderTopColor: c.sky,
   },

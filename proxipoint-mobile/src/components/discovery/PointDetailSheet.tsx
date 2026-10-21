@@ -17,6 +17,7 @@ import {
   CalendarClock,
   Check,
   ChevronRight,
+  Radar,
   EyeOff,
   Footprints,
   MapPin,
@@ -43,6 +44,8 @@ import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 import { formatDistance } from '../../lib/discoverFeed';
 import { useUnits } from '../../lib/units';
+import { LOCALRADAR_HANDLE } from '../../lib/aggregated';
+import { isGhostVenue } from '../../lib/hostProfiles';
 
 const NAV_BAR_HEIGHT = 72;
 /** The sheet starts this far down the screen, so the map (and the beacon pulse) stays in view. */
@@ -84,6 +87,10 @@ interface NodeView {
   isRsvpd: boolean;
   description: string;
   host: string | null;
+  /** Gathered from a public source and listed by @LocalRadar (not posted by the venue). */
+  aggregated: boolean;
+  /** The venue's page handle, when known. */
+  venueHandle: string | null;
   photoUri: string | null;
   startsAt: Date | null;
   endsAt: Date | null;
@@ -126,6 +133,8 @@ function readNode(node: unknown): NodeView {
     isRsvpd: n.isRsvpd === true,
     description: str(n.description),
     host: hostValue || null,
+    aggregated: n.source === 'external',
+    venueHandle: str(n.venueHandle) || null,
     photoUri: str(n.coverPhotoUri) || str(n.photoUri) || str(n.imageUrl) || null,
     startsAt: date(n.startsAt),
     endsAt: date(n.endsAt),
@@ -185,6 +194,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const reportedRef = useRef(false);
   const view = node ? readNode(node) : null;
+  const venueGhost = Boolean(view?.venueHandle && isGhostVenue(view.venueHandle));
 
   useEffect(() => {
     setNotice('');
@@ -328,7 +338,37 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
               </View>
             ) : null}
             <Text style={styles.title}>{view.title}</Text>
-            {view.host ? (
+            {view.aggregated ? (
+              // Aggregated: say who listed it, and link the venue's page (never "Hosted by" the venue).
+              <View style={styles.listedBlock} testID="point-detail-listed">
+                <TouchableOpacity
+                  style={styles.hostRow}
+                  onPress={() => onOpenHost?.(LOCALRADAR_HANDLE)}
+                  disabled={!onOpenHost}
+                  accessibilityRole="link"
+                  accessibilityLabel={`Listed by ${LOCALRADAR_HANDLE}. View profile`}
+                >
+                  <Radar size={12} color={c.textMuted} strokeWidth={2.5} />
+                  <Text style={styles.host}> Listed by </Text>
+                  <Text style={styles.hostLink}>{LOCALRADAR_HANDLE}</Text>
+                </TouchableOpacity>
+                {view.venue ? (
+                  <TouchableOpacity
+                    style={styles.hostRow}
+                    onPress={() => view.venueHandle && onOpenHost?.(view.venueHandle)}
+                    disabled={!onOpenHost || !view.venueHandle}
+                    accessibilityRole="link"
+                    accessibilityLabel={`${view.venue}${venueGhost ? ', unclaimed venue page' : ''}. View venue`}
+                    testID="point-detail-venue-page"
+                  >
+                    <Text style={styles.host}>at </Text>
+                    <Text style={styles.hostLink}>{view.venue}</Text>
+                    {venueGhost ? <Text style={styles.unclaimed}> · Unclaimed</Text> : null}
+                    {view.venueHandle && onOpenHost ? <ChevronRight size={14} color={c.accent} strokeWidth={2.5} /> : null}
+                  </TouchableOpacity>
+                ) : null}
+              </View>
+            ) : view.host ? (
               onOpenHost ? (
                 <TouchableOpacity
                   style={styles.hostRow}
@@ -512,6 +552,8 @@ const createStyles = (c: ThemeColors) =>
   title: { color: c.text, fontSize: 18, fontWeight: '800' },
   host: { color: c.textMuted, fontSize: 12 },
   hostRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', marginTop: 2 },
+  listedBlock: { gap: 1 },
+  unclaimed: { color: c.textFaint, fontSize: 12, fontStyle: 'italic' },
   hostLink: { color: c.accent, fontSize: 12, fontWeight: '800' },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   soonChip: { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
