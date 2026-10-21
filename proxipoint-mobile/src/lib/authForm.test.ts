@@ -44,6 +44,7 @@ test('handles: cleaned, length, reserved', () => {
   assert.equal(handleProblem('sam__r'), 'No double _ or -');
   assert.equal(handleProblem('Call-Sign'), 'That one’s reserved');
   assert.equal(handleProblem('ProxiPoint'), 'That one’s reserved');
+  assert.equal(handleProblem('@LocalRadar'), 'That one’s reserved');
   assert.equal(handleProblem('sam_rivera'), null);
 });
 

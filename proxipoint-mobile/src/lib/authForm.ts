@@ -69,6 +69,7 @@ export const RESERVED_HANDLES = [
   'proxipoint',
   'callsign',
   'callsignsolutions',
+  'localradar',
   'moderator',
   'mod',
   'staff',
