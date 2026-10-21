@@ -1154,7 +1154,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
           <View style={styles.pullBar} />
           <View style={styles.headerRow}>
             <View style={styles.headerTitleRow}>
-              <Text style={styles.headerTitle}>DROP POINT</Text>
+              <Text style={styles.headerTitle}>CREATE EVENT</Text>
               {hasDraftContent ? (
                 <View style={styles.draftPill} testID="drop-draft-pill">
                   <Text style={styles.draftPillText}>DRAFT SAVED</Text>
@@ -2084,7 +2084,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             accessibilityState={{ disabled: submitting }}
           >
             {submitting ? <ActivityIndicator color={c.base} style={styles.dropSpinner} /> : null}
-            <Text style={styles.primaryDropText}>{submitting ? 'DROPPING' : 'DROP POINT'}</Text>
+            <Text style={styles.primaryDropText}>{submitting ? 'CREATING' : 'CREATE EVENT'}</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
