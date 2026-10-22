@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Check, ChevronLeft, ChevronRight, Sparkles, Zap } from 'lucide-react-native';
+import { AccessibilityInfo, Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Check, Sparkles, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../discovery/CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
@@ -112,6 +112,21 @@ export const RecommendationDeck: React.FC<{
     setTimerKey((k) => k + 1);
   };
 
+  // Swipe the card left / right to move through the picks (the dots show where you are).
+  // Only claims clearly sideways drags, so scrolling the page up and down still works.
+  const flipRef = useRef(flip);
+  flipRef.current = flip;
+  const swipe = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => Math.abs(g.dx) > 12 && Math.abs(g.dx) > Math.abs(g.dy) * 1.5,
+      onPanResponderRelease: (_, g) => {
+        if (g.dx <= -40) flipRef.current(1);
+        else if (g.dx >= 40) flipRef.current(-1);
+      },
+      onPanResponderTerminationRequest: () => true,
+    }),
+  ).current;
+
   if (count === 0) {
     return (
       <View style={[styles.card, styles.emptyCard]} testID="activity-recs-empty">
@@ -146,7 +161,7 @@ export const RecommendationDeck: React.FC<{
         {count > 2 ? <View style={[styles.card, styles.ghost, styles.ghostBack]} /> : null}
         {count > 1 ? <View style={[styles.card, styles.ghost, styles.ghostMid]} /> : null}
 
-        <Animated.View style={[styles.front, frontStyle]}>
+        <Animated.View style={[styles.front, frontStyle]} {...(count > 1 ? swipe.panHandlers : {})}>
           <TouchableOpacity
             activeOpacity={0.92}
             onPress={() => onOpenPoint(node.id)}
@@ -224,16 +239,15 @@ export const RecommendationDeck: React.FC<{
       </View>
 
       {count > 1 ? (
-        <View style={styles.controls}>
-          <TouchableOpacity
-            style={styles.arrow}
-            onPress={() => flip(-1)}
-            accessibilityRole="button"
-            accessibilityLabel="Previous recommendation"
-            testID="activity-recs-prev"
-          >
-            <ChevronLeft size={20} color={c.accent} strokeWidth={2.5} />
-          </TouchableOpacity>
+        <View
+          style={styles.controls}
+          accessible
+          accessibilityRole="adjustable"
+          accessibilityLabel={`Recommendation ${index + 1} of ${count}. Swipe the card for more.`}
+          accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+          onAccessibilityAction={(e) => flip(e.nativeEvent.actionName === 'increment' ? 1 : -1)}
+          testID="activity-recs-dots"
+        >
           <View style={styles.dots}>
             {cards.map((card, i) => (
               <View
@@ -242,15 +256,6 @@ export const RecommendationDeck: React.FC<{
               />
             ))}
           </View>
-          <TouchableOpacity
-            style={styles.arrow}
-            onPress={() => flip(1)}
-            accessibilityRole="button"
-            accessibilityLabel="Next recommendation"
-            testID="activity-recs-next"
-          >
-            <ChevronRight size={20} color={c.accent} strokeWidth={2.5} />
-          </TouchableOpacity>
         </View>
       ) : null}
     </View>
@@ -328,17 +333,7 @@ const createStyles = (c: ThemeColors) =>
     },
     rsvpBtnOn: { backgroundColor: c.accentTint },
     rsvpText: { color: c.accent, fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
-    controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
-    arrow: {
-      width: 38,
-      height: 38,
-      borderRadius: 19,
-      alignItems: 'center',
-      justifyContent: 'center',
-      borderWidth: 1,
-      borderColor: c.accentBorder,
-      backgroundColor: c.surface,
-    },
+    controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 8, minHeight: 20 },
     dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.borderStrong },
     dotOn: { width: 18, backgroundColor: c.accent },
