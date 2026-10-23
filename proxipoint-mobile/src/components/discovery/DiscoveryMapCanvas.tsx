@@ -455,32 +455,39 @@ export const DiscoveryMapCanvas: React.FC<{
   };
 
   // ---- Animated moves -----------------------------------------------------------------------
-  // One timeline drives both zoom and position. (Two separate springs drifted out of step and
-  // overshot; since the map scales from its top-left corner, that swung everything sideways.)
-  const moveProgress = useRef(new Animated.Value(0)).current;
-  const moveAnim = useRef<Animated.CompositeAnimation | null>(null);
-  // What's actually on screen while a move is running (the refs already hold the destination).
-  const liveView = useRef<{ pan: { x: number; y: number }; z: number } | null>(null);
-
-  useEffect(
-    () => () => {
-      moveAnim.current?.stop();
-      moveProgress.removeAllListeners();
-    },
-    [moveProgress],
-  );
+  // One path drives both zoom and position (two separate springs drifted out of step and swung
+  // the map sideways). It runs on the native driver: each value gets its own easing curve sampled
+  // from the shared path, so they stay in lockstep on the UI thread and the JS work a move kicks
+  // off (re-clustering pins, refreshing the card list) can't make it stutter.
+  type View2 = { pan: { x: number; y: number }; z: number };
+  const move = useRef<{
+    startedAt: number;
+    duration: number;
+    at: (t: number) => View2;
+    anim: Animated.CompositeAnimation;
+  } | null>(null);
 
   /** Stops a move where it is, so a drag or pinch carries on from what's on screen. */
   const stopMove = () => {
-    moveAnim.current?.stop();
-    moveAnim.current = null;
-    moveProgress.removeAllListeners();
-    if (liveView.current) {
-      currentPan.current = liveView.current.pan;
-      currentZoom.current = liveView.current.z;
-      liveView.current = null;
-    }
+    const m = move.current;
+    if (!m) return;
+    move.current = null;
+    m.anim.stop();
+    // Native values aren't read back synchronously, so work out where the path had got to.
+    const v = m.at(Math.min(1, (Date.now() - m.startedAt) / m.duration));
+    currentPan.current = v.pan;
+    currentZoom.current = v.z;
+    zoom.setValue(v.z);
+    pan.setValue(v.pan);
   };
+
+  useEffect(
+    () => () => {
+      move.current?.anim.stop();
+      move.current = null;
+    },
+    [],
+  );
 
   /** Moves and zooms the map (animated), keeping the refs in step. */
   const animateTo = (target: { x: number; y: number }, z = currentZoom.current) => {
@@ -502,29 +509,37 @@ export const DiscoveryMapCanvas: React.FC<{
     const w1 = { x: (sx - target.x) / z, y: (sy - target.y) / z };
     const logRatio = Math.log(z / z0);
     const sameZoom = Math.abs(logRatio) < 1e-6;
-    moveProgress.setValue(0);
-    moveProgress.addListener(({ value: t }) => {
-      const zt = sameZoom ? z : z0 * Math.exp(logRatio * t);
+    const ease = Easing.inOut(Easing.cubic);
+    const at = (t: number): View2 => {
+      const s = ease(t);
+      const zt = sameZoom ? z : z0 * Math.exp(logRatio * s);
       // Weighting by 1/zoom keeps the motion on screen even while zooming.
-      const u = sameZoom ? t : (1 / z0 - 1 / zt) / (1 / z0 - 1 / z);
-      const wt = { x: w0.x + (w1.x - w0.x) * u, y: w0.y + (w1.y - w0.y) * u };
-      const pt = { x: sx - zt * wt.x, y: sy - zt * wt.y };
-      zoom.setValue(zt);
-      pan.setValue(pt);
-      liveView.current = { pan: pt, z: zt };
-    });
-    const anim = Animated.timing(moveProgress, {
-      toValue: 1,
-      duration: sameZoom ? 320 : 420,
-      easing: Easing.inOut(Easing.cubic),
-      useNativeDriver: false,
-    });
-    moveAnim.current = anim;
+      const u = sameZoom ? s : (1 / z0 - 1 / zt) / (1 / z0 - 1 / z);
+      const wx = w0.x + (w1.x - w0.x) * u;
+      const wy = w0.y + (w1.y - w0.y) * u;
+      return { pan: { x: sx - zt * wx, y: sy - zt * wy }, z: zt };
+    };
+    const duration = sameZoom ? 320 : 420;
+    /** A native timing for one value, whose easing curve is that value's share of the path. */
+    const track = (value: Animated.Value, from: number, to: number, read: (v: View2) => number) => {
+      // No net change but the path may still bulge: animate over a 1-unit span instead.
+      const span = Math.abs(to - from) > 1e-3 ? to - from : 1;
+      return Animated.timing(value, {
+        toValue: from + span,
+        duration,
+        easing: (t) => (read(at(t)) - from) / span,
+        useNativeDriver: true,
+      });
+    };
+    const anims = [track(pan.x, p0.x, target.x, (v) => v.pan.x), track(pan.y, p0.y, target.y, (v) => v.pan.y)];
+    if (!sameZoom) anims.push(track(zoom, z0, z, (v) => v.z));
+    const anim = Animated.parallel(anims);
+    const m = { startedAt: Date.now(), duration, at, anim };
+    move.current = m;
     anim.start(({ finished }) => {
-      if (!finished || moveAnim.current !== anim) return;
-      moveProgress.removeAllListeners();
-      moveAnim.current = null;
-      liveView.current = null;
+      if (!finished || move.current !== m) return;
+      move.current = null;
+      // Land exactly on the destination.
       zoom.setValue(z);
       pan.setValue(target);
     });
