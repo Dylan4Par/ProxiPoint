@@ -81,6 +81,26 @@ export function recentEndedPoints(points: DroppedPoint[], now = new Date(), limi
     .slice(0, Math.max(0, limit));
 }
 
+/** Your events happening right now, the one ending soonest first (Profile → MY EVENTS → LIVE NOW). */
+export function liveDroppedPoints(points: DroppedPoint[], now = new Date()): DroppedPoint[] {
+  return points
+    .filter((point) => pointStatus(point, now) === 'live')
+    .sort((a, b) => new Date(a.endsAt).getTime() - new Date(b.endsAt).getTime());
+}
+
+/**
+ * "4 going", "4 / 20 going", "4 going · 2 waiting", or "No RSVPs yet"
+ * (also until the server sends RSVPs, matching the Manage sheet).
+ */
+export function attendeeSummary(point: DroppedPoint): string {
+  const rsvps = point.rsvps ?? [];
+  const going = rsvps.filter((rsvp) => rsvp.status === 'going').length;
+  const waiting = rsvps.length - going;
+  if (going === 0 && waiting === 0) return 'No RSVPs yet';
+  const count = point.maxAttendance != null ? `${going} / ${point.maxAttendance} going` : `${going} going`;
+  return waiting > 0 ? `${count} · ${waiting} waiting` : count;
+}
+
 /** "Ended Sat, Oct 18 · 3 went" (the count only once the server sends RSVPs). */
 export function endedSummary(point: DroppedPoint): string {
   const ended = `Ended ${formatBeaconDate(new Date(point.endsAt))}`;

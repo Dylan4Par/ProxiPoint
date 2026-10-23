@@ -6,7 +6,7 @@ import { RecapCard } from '../components/profile/RecapCard';
 import { RecapComposer } from '../components/profile/RecapComposer';
 import { MyTagsTile } from '../components/profile/MyTagsTile';
 import { MyChannelsTile } from '../components/profile/MyChannelsTile';
-import { MyRecentEventsTile } from '../components/profile/MyRecentEventsTile';
+import { MyEventsTile } from '../components/profile/MyEventsTile';
 import { LocationTile } from '../components/profile/LocationTile';
 import { SignalChip, SignalTile } from '../components/profile/Signal';
 import { useVisibleComments, useVisiblePosts } from '../lib/channels';
@@ -342,8 +342,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             testID="profile-bio"
           />
 
-          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY RECENT EVENTS</Text>
-          <MyRecentEventsTile drops={drops} onOpen={onOpenDrop} onDropAgain={onDropAgain} onSeeAll={onOpenMyDrops} />
+          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY EVENTS</Text>
+          <MyEventsTile drops={drops} onOpen={onOpenDrop} onDropAgain={onDropAgain} onSeeAll={onOpenMyDrops} />
 
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>SIGNAL</Text>
           <SignalTile signal={signal} contributions={contributions} isMe onOpenPost={onOpenPost} />

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { endedSummary, recentEndedPoints, type DroppedPoint } from './droppedPoint';
+import { attendeeSummary, endedSummary, liveDroppedPoints, recentEndedPoints, type DroppedPoint } from './droppedPoint';
 
 const now = new Date(2026, 9, 23, 12, 0);
 
@@ -60,4 +60,30 @@ test('ended summary adds the going count once RSVPs are known', () => {
     ],
   };
   assert.equal(endedSummary(withRsvps), 'Ended Sat, Oct 17 · 2 went');
+});
+
+test('live events are the ones happening now, ending soonest first', () => {
+  const drops = [
+    point('later', at(23, 10), at(23, 15)),
+    point('soon', at(23, 11), at(23, 13)),
+    point('ended', at(23, 9), at(23, 11)),
+    point('upcoming', at(23, 14), at(23, 16)),
+  ];
+  assert.deepEqual(
+    liveDroppedPoints(drops, now).map((d) => d.id),
+    ['soon', 'later'],
+  );
+});
+
+test('attendee summary counts going, cap and waiting', () => {
+  const live = point('a', at(23, 11), at(23, 13));
+  assert.equal(attendeeSummary(live), 'No RSVPs yet');
+  assert.equal(attendeeSummary({ ...live, rsvps: [] }), 'No RSVPs yet');
+  const rsvps = [
+    { id: '1', label: '@a', status: 'going' as const },
+    { id: '2', label: '@b', status: 'going' as const },
+    { id: '3', label: '@c', status: 'pending' as const },
+  ];
+  assert.equal(attendeeSummary({ ...live, rsvps }), '2 going · 1 waiting');
+  assert.equal(attendeeSummary({ ...live, rsvps: rsvps.slice(0, 2), maxAttendance: 20 }), '2 / 20 going');
 });
