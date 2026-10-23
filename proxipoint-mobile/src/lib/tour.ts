@@ -16,7 +16,7 @@ export type TourTargetId =
 
 export interface TourStep {
   id: 'map' | 'filters' | 'channels' | 'profile' | 'create';
-  /** Shown above the title, e.g. "STEP 1". */
+  /** Shown above the title, e.g. "MAP RADAR". */
   label: string;
   title: string;
   body: string;
@@ -37,7 +37,7 @@ export interface TourStep {
 export const MAP_TOUR: TourStep[] = [
   {
     id: 'map',
-    label: 'STEP 1',
+    label: 'MAP RADAR',
     title: 'See What’s Happening Nearby',
     body: 'Every pin on the map is a Point: a live hangout, pickup game, or gathering happening around you right now.',
     targets: ['map-area', 'map-cards'],
@@ -45,28 +45,28 @@ export const MAP_TOUR: TourStep[] = [
   },
   {
     id: 'filters',
-    label: 'STEP 2',
+    label: 'DISCOVER & TAGS',
     title: 'Tune to Your Interests',
     body: 'Filter by time or tap tags like #GarageSale or #FoodTrucks to immediately zero in on the activities and crowds you care about.',
     targets: ['map-filter-rail', 'map-date-chip'],
   },
   {
     id: 'channels',
-    label: 'STEP 3',
+    label: 'COMMUNITY CHANNELS',
     title: 'Join Local Channels',
     body: 'Connect with hyper-local groups, from running clubs and tech meetups to food truck trackers and town notices.',
     targets: ['nav-channels'],
   },
   {
     id: 'profile',
-    label: 'STEP 4',
+    label: 'YOUR ACTIVITY',
     title: 'Manage Your Activity',
     body: 'Keep track of your RSVPs, check your live attendee count, or easily re-drop past favorites with one tap.',
     targets: ['nav-profile'],
   },
   {
     id: 'create',
-    label: 'STEP 5',
+    label: 'HOSTING & DROPS',
     title: 'Drop Your Own Point',
     body: 'Tap here anytime to select location, add your tags, and notify nearby people to join you.',
     targets: ['create-event'],
