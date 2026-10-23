@@ -17,6 +17,7 @@ import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
+import { CARD_SHEET_RADIUS } from './EventCardList';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
 import { useChannels, useVisiblePosts, type ChannelPost } from '../../lib/channels';
@@ -1295,7 +1296,8 @@ const createStyles = (c: ThemeColors) =>
   attribution: {
     position: 'absolute',
     right: 8,
-    bottom: 6,
+    // Clear of the card sheet, which overlaps the map's bottom edge by its corner radius.
+    bottom: 6 + CARD_SHEET_RADIUS,
     zIndex: 20,
     fontSize: 9,
     color: c.textMuted,
@@ -1342,7 +1344,7 @@ const createStyles = (c: ThemeColors) =>
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: 22,
+    bottom: 22 + CARD_SHEET_RADIUS,
     alignItems: 'center',
     zIndex: 20,
   },

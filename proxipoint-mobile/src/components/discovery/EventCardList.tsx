@@ -20,6 +20,11 @@ import { isBoosted, useBoosts } from '../../lib/boost';
 import { useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const EXPANDED_HEIGHT = 360;
+/**
+ * The sheet's top corner radius. The sheet overlaps the map by this much so the map shows
+ * behind the rounded corners (instead of square patches of background).
+ */
+export const CARD_SHEET_RADIUS = 28;
 const COLLAPSED_HEIGHT = 64;
 
 /**
@@ -297,9 +302,11 @@ export const EventCardList: React.FC<{
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
   drawerContainer: {
+    marginTop: -CARD_SHEET_RADIUS,
+    zIndex: 2,
     backgroundColor: c.sheet,
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    borderTopLeftRadius: CARD_SHEET_RADIUS,
+    borderTopRightRadius: CARD_SHEET_RADIUS,
     borderTopWidth: 1,
     borderColor: c.border,
     overflow: 'hidden',
