@@ -451,17 +451,80 @@ export const DiscoveryMapCanvas: React.FC<{
     onSearchArea({ ...spot, radiusMeters: visibleRadiusMeters(viewSize.current.width / z, visibleMapHeight() / z) });
   };
 
+  // ---- Animated moves -----------------------------------------------------------------------
+  // One timeline drives both zoom and position. (Two separate springs drifted out of step and
+  // overshot; since the map scales from its top-left corner, that swung everything sideways.)
+  const moveProgress = useRef(new Animated.Value(0)).current;
+  const moveAnim = useRef<Animated.CompositeAnimation | null>(null);
+  // What's actually on screen while a move is running (the refs already hold the destination).
+  const liveView = useRef<{ pan: { x: number; y: number }; z: number } | null>(null);
+
+  useEffect(
+    () => () => {
+      moveAnim.current?.stop();
+      moveProgress.removeAllListeners();
+    },
+    [moveProgress],
+  );
+
+  /** Stops a move where it is, so a drag or pinch carries on from what's on screen. */
+  const stopMove = () => {
+    moveAnim.current?.stop();
+    moveAnim.current = null;
+    moveProgress.removeAllListeners();
+    if (liveView.current) {
+      currentPan.current = liveView.current.pan;
+      currentZoom.current = liveView.current.z;
+      liveView.current = null;
+    }
+  };
+
   /** Moves and zooms the map (animated), keeping the refs in step. */
   const animateTo = (target: { x: number; y: number }, z = currentZoom.current) => {
+    stopMove();
     pan.stopAnimation();
     zoom.stopAnimation();
-    Animated.parallel([
-      Animated.spring(pan, { toValue: target, useNativeDriver: false, friction: 8, tension: 45 }),
-      Animated.spring(zoom, { toValue: z, useNativeDriver: false, friction: 8, tension: 45 }),
-    ]).start();
+    const p0 = { ...currentPan.current };
+    const z0 = currentZoom.current;
     currentPan.current = target;
     currentZoom.current = z;
     calculateBounds(target.x, target.y, z);
+    if (Math.abs(p0.x - target.x) < 0.5 && Math.abs(p0.y - target.y) < 0.5 && Math.abs(z0 - z) < 1e-4) return;
+
+    // Follow the world point at the middle of the visible map: zoom changes evenly (on a log
+    // scale) and that point glides from where it is to where it ends up, without overshoot.
+    const sx = viewSize.current.width / 2 + WORLD_OFFSET;
+    const sy = visibleMapHeight() / 2 + WORLD_OFFSET;
+    const w0 = { x: (sx - p0.x) / z0, y: (sy - p0.y) / z0 };
+    const w1 = { x: (sx - target.x) / z, y: (sy - target.y) / z };
+    const logRatio = Math.log(z / z0);
+    const sameZoom = Math.abs(logRatio) < 1e-6;
+    moveProgress.setValue(0);
+    moveProgress.addListener(({ value: t }) => {
+      const zt = sameZoom ? z : z0 * Math.exp(logRatio * t);
+      // Weighting by 1/zoom keeps the motion on screen even while zooming.
+      const u = sameZoom ? t : (1 / z0 - 1 / zt) / (1 / z0 - 1 / z);
+      const wt = { x: w0.x + (w1.x - w0.x) * u, y: w0.y + (w1.y - w0.y) * u };
+      const pt = { x: sx - zt * wt.x, y: sy - zt * wt.y };
+      zoom.setValue(zt);
+      pan.setValue(pt);
+      liveView.current = { pan: pt, z: zt };
+    });
+    const anim = Animated.timing(moveProgress, {
+      toValue: 1,
+      duration: sameZoom ? 320 : 420,
+      easing: Easing.inOut(Easing.cubic),
+      useNativeDriver: false,
+    });
+    moveAnim.current = anim;
+    anim.start(({ finished }) => {
+      if (!finished || moveAnim.current !== anim) return;
+      moveProgress.removeAllListeners();
+      moveAnim.current = null;
+      liveView.current = null;
+      zoom.setValue(z);
+      pan.setValue(target);
+    });
   };
 
   useEffect(() => {
@@ -629,8 +692,10 @@ export const DiscoveryMapCanvas: React.FC<{
       // "Search this area": the new area's center is where the middle of the screen already is,
       // so keep the zoom and jump (no glide) to the same view around it.
       keepViewOnPlaceChange.current = false;
+      stopMove();
       const target = homeTarget(currentZoom.current, visibleMapHeight());
       pan.stopAnimation();
+      zoom.setValue(currentZoom.current);
       pan.setValue(target);
       currentPan.current = target;
       calculateBounds(target.x, target.y);
@@ -671,6 +736,7 @@ export const DiscoveryMapCanvas: React.FC<{
       onMoveShouldSetPanResponder: (evt, gestureState) =>
         evt.nativeEvent.touches.length >= 2 || Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
       onPanResponderGrant: () => {
+        stopMove();
         pan.stopAnimation();
         zoom.stopAnimation();
         gesture.current.mode = 'none';
