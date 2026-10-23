@@ -153,8 +153,8 @@ export function placeCard(
 
 /**
  * Spotlights around several targets: padded, rounded to follow the target (a pill stays a pill,
- * up to `maxRadius`), and kept `gap` apart where two would touch, splitting the space between
- * them evenly so neither outline runs into the other.
+ * up to `maxRadius`), and kept `gap` apart where two would touch. The upper one keeps its full,
+ * even padding (so its target stays centered in it) and the lower one starts below it.
  */
 export function spotlightHoles(
   targets: Rect[],
@@ -163,33 +163,25 @@ export function spotlightHoles(
   gap = 6,
   maxRadius = 24,
 ): Rect[] {
-  const holes = targets.map((t) => {
-    const p = padRect(t, pad, screen);
-    return { ...p, radius: Math.min(maxRadius, p.height / 2, p.width / 2) };
-  });
-  for (let i = 0; i < targets.length; i += 1) {
-    for (let j = 0; j < targets.length; j += 1) {
+  const holes = targets.map((t) => padRect(t, pad, screen));
+  const order = targets.map((_, i) => i).sort((a, b) => targets[a].y - targets[b].y);
+  for (const i of order) {
+    for (const j of order) {
       if (i === j) continue;
       const a = targets[i];
       const b = targets[j];
       const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0;
-      const aBottom = a.y + a.height;
-      // a sits above b and their padded spotlights would come closer than `gap`.
-      if (!overlapX || aBottom > b.y || b.y - aBottom >= 2 * pad + gap) continue;
-      const mid = (aBottom + b.y) / 2;
-      const ha = holes[i];
-      const hb = holes[j];
-      const newBottom = Math.max(aBottom, mid - gap / 2);
-      const newTop = Math.min(b.y, mid + gap / 2);
-      ha.height = Math.max(0, Math.min(ha.y + ha.height, newBottom) - ha.y);
-      const bBottom = hb.y + hb.height;
-      hb.y = Math.max(hb.y, newTop);
-      hb.height = Math.max(0, bBottom - hb.y);
-      ha.radius = Math.min(maxRadius, ha.height / 2, ha.width / 2);
-      hb.radius = Math.min(maxRadius, hb.height / 2, hb.width / 2);
+      if (!overlapX || a.y + a.height > b.y) continue; // only a directly above b
+      const above = holes[i];
+      const below = holes[j];
+      const minTop = above.y + above.height + gap;
+      if (below.y >= minTop) continue;
+      const bottom = below.y + below.height;
+      below.y = Math.min(minTop, bottom);
+      below.height = bottom - below.y;
     }
   }
-  return holes;
+  return holes.map((h) => ({ ...h, radius: Math.min(maxRadius, h.height / 2, h.width / 2) }));
 }
 
 /** SVG path of the whole screen with rounded holes cut out (draw with fillRule="evenodd"). */
