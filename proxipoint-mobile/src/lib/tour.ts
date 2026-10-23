@@ -11,11 +11,12 @@ export type TourTargetId =
   | 'map-date-chip'
   | 'map-area'
   | 'map-cards'
+  | 'nav-discover'
   | 'nav-channels'
   | 'nav-profile';
 
 export interface TourStep {
-  id: 'map' | 'filters' | 'channels' | 'profile' | 'create';
+  id: 'map' | 'filters' | 'discover' | 'channels' | 'profile' | 'create';
   /** Shown above the title, e.g. "MAP RADAR". */
   label: string;
   title: string;
@@ -49,6 +50,13 @@ export const MAP_TOUR: TourStep[] = [
     title: 'Tune to Your Interests',
     body: 'Filter by time or tap tags like #GarageSale or #FoodTrucks to immediately zero in on the activities and crowds you care about.',
     targets: ['map-filter-rail', 'map-date-chip'],
+  },
+  {
+    id: 'discover',
+    label: 'DISCOVER',
+    title: 'Prefer a List Over a Map?',
+    body: 'The Discover feed pulls together upcoming meetups you’ve joined, trending spots nearby, and live hangouts happening within walking distance.',
+    targets: ['nav-discover'],
   },
   {
     id: 'channels',

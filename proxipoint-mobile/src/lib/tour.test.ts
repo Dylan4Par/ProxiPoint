@@ -4,14 +4,14 @@ import { MAP_TOUR, centerSpot, maskPath, padRect, placeCard, spotlightHoles, uni
 
 const screen = { width: 400, height: 800 };
 
-test('the tour runs map, filters, channels, profile, create', () => {
+test('the tour runs map, filters, discover, channels, profile, create', () => {
   assert.deepEqual(
     MAP_TOUR.map((s) => s.id),
-    ['map', 'filters', 'channels', 'profile', 'create'],
+    ['map', 'filters', 'discover', 'channels', 'profile', 'create'],
   );
   assert.deepEqual(
     MAP_TOUR.map((s) => s.label),
-    ['MAP RADAR', 'FILTER & TAGS', 'COMMUNITY CHANNELS', 'YOUR ACTIVITY', 'HOSTING & DROPS'],
+    ['MAP RADAR', 'FILTER & TAGS', 'DISCOVER', 'COMMUNITY CHANNELS', 'YOUR ACTIVITY', 'HOSTING & DROPS'],
   );
   assert.equal(MAP_TOUR[MAP_TOUR.length - 1].cta, 'Start Exploring');
   assert.ok(MAP_TOUR.every((s) => s.targets.length > 0 && s.body.length > 40));
