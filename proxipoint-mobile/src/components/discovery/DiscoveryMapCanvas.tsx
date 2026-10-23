@@ -17,6 +17,7 @@ import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
+import { MapPinGlyph } from './MapPinGlyph';
 import { CARD_SHEET_RADIUS } from './EventCardList';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
@@ -27,6 +28,8 @@ import { isAggregated } from '../../lib/aggregated';
 
 /** Pin color for aggregated events (listed by @LocalRadar), same in day and night. */
 const AGGREGATED_PIN = '#52708f';
+/** Boost gold (same in day and night). */
+const BOOST_GOLD = '#f59e0b';
 import { PostPickSheet } from './PostPickSheet';
 import { postMatchesMapFilter, useMapPostFilter } from '../../lib/mapFilters';
 import { fromCanvasCoordinates, shouldOfferAreaSearch, visibleRadiusMeters } from '../../lib/mapArea';
@@ -875,33 +878,32 @@ export const DiscoveryMapCanvas: React.FC<{
                   <View pointerEvents="none" style={[styles.selectedHalo, live && styles.selectedHaloLive]} />
                 ) : null}
                 {live ? <Animated.View pointerEvents="none" style={[styles.liveRing, liveRingStyle]} /> : null}
-                <View
-                  style={[
-                    styles.pinHead,
-                    aggregated && styles.pinHeadAggregated,
-                    isSelected && styles.pinHeadSelected,
-                    live && styles.pinHeadLive,
-                    live && isSelected && styles.pinHeadLiveSelected,
-                    boosted && styles.pinHeadBoosted,
-                  ]}
-                >
-                  <View style={styles.pinDot} />
-                </View>
+                {/* One vector teardrop with an even rim (View borders went thin and lopsided
+                    under the map's zoom scaling, and the tip used to cover the rim). */}
+                <MapPinGlyph
+                  fill={
+                    live && isSelected
+                      ? c.greenBright
+                      : live
+                        ? c.greenDeep
+                        : isSelected
+                          ? c.sky
+                          : aggregated
+                            ? AGGREGATED_PIN
+                            : c.accentDeep
+                  }
+                  rim={boosted ? BOOST_GOLD : isSelected ? c.white : live ? c.greenRim : c.pinRim}
+                  rimWidth={boosted ? 3 : 2.5}
+                  glow={boosted ? BOOST_GOLD : null}
+                  enlarged={isSelected}
+                  dotColor={c.white}
+                />
                 {/* Boosted: gold rim plus a bolt badge on the pin head */}
                 {boosted ? (
                   <View pointerEvents="none" style={styles.boostBadge}>
                     <Zap size={9} color="#1f1300" fill="#1f1300" strokeWidth={2} />
                   </View>
                 ) : null}
-                <View
-                  style={[
-                    styles.pinTip,
-                    aggregated && styles.pinTipAggregated,
-                    isSelected && styles.pinTipSelected,
-                    live && styles.pinTipLive,
-                    live && isSelected && styles.pinTipLiveSelected,
-                  ]}
-                />
               </TouchableOpacity>
               {hashtag && !hiddenLabels.has(item.id) ? (
                 <TouchableOpacity
