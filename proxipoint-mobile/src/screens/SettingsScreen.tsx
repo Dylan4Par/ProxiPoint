@@ -3,6 +3,7 @@ import {
   Alert,
   Image,
   LayoutAnimation,
+  Linking,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,12 +15,16 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import Constants from 'expo-constants';
 import {
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   CreditCard,
   HelpCircle,
+  LifeBuoy,
   LogOut,
+  Mail,
   Minus,
   Pencil,
   Plug,
@@ -30,7 +35,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { profileInitial, type MyProfile, type MySettings } from '../lib/myProfile';
-import { getPhotoPolicyState, openPhotoPolicy, PHOTO_POLICY_VERSION, subscribePhotoPolicy } from '../lib/photoPolicy';
+import { getPhotoPolicyState, openPhotoPolicy, PHOTO_POLICY_VERSION, subscribePhotoPolicy, SUPPORT_EMAIL } from '../lib/photoPolicy';
 import { getBlockedHandles, unblockUser, useModeration } from '../lib/moderation';
 import { useTheme, useThemedStyles, type ThemeColors, type ThemePreference } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../components/common/KeyboardAwareScrollView';
@@ -49,7 +54,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
   UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-type SectionId = 'friends' | 'edit' | 'app' | 'privacy' | 'plans' | 'integrations' | 'faqs';
+type SectionId = 'friends' | 'edit' | 'app' | 'privacy' | 'plans' | 'integrations' | 'faqs' | 'help';
 
 interface SettingsScreenProps {
   profile: MyProfile;
@@ -60,7 +65,7 @@ interface SettingsScreenProps {
   onChangeSettings: (settings: MySettings) => void;
   /** Open straight to a section, e.g. 'edit' from the Profile page's Edit button. */
   initialSection?: SectionId | null;
-  /** FAQs → "Replay app tour": closes Settings and runs the Explore Map tour again. */
+  /** Help → App guide: closes Settings and runs the Explore Map tour again. */
   onReplayTour?: () => void;
 }
 
@@ -72,6 +77,7 @@ const ROWS: Array<{ id: SectionId; label: string; Icon: LucideIcon; kind: 'page'
   { id: 'plans', label: 'Plans & Purchases', Icon: CreditCard, kind: 'expand' },
   { id: 'integrations', label: 'Integrations', Icon: Plug, kind: 'expand' },
   { id: 'faqs', label: 'FAQs', Icon: HelpCircle, kind: 'page' },
+  { id: 'help', label: 'Help', Icon: LifeBuoy, kind: 'expand' },
 ];
 
 const FAQS: Array<{ q: string; a: string }> = [
@@ -260,15 +266,25 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       />
                     </>
                   ) : null}
-                  {id === 'faqs' && onReplayTour ? (
-                    <TouchableOpacity
-                      style={styles.tourBtn}
-                      onPress={onReplayTour}
-                      accessibilityRole="button"
-                      testID="settings-replay-tour"
-                    >
-                      <Text style={styles.tourBtnText}>Replay app tour</Text>
-                    </TouchableOpacity>
+                  {id === 'help' ? (
+                    <>
+                      {onReplayTour ? (
+                        <HelpRow
+                          Icon={BookOpen}
+                          title="App guide"
+                          body="A quick walk through Explore Map: creating a Point, tags, the map and your Profile."
+                          onPress={onReplayTour}
+                          testID="settings-app-guide"
+                        />
+                      ) : null}
+                      <HelpRow
+                        Icon={Mail}
+                        title="Contact support"
+                        body={`Email ${SUPPORT_EMAIL}. We usually reply within a couple of days.`}
+                        onPress={() => void contactSupport(accountEmail)}
+                        testID="settings-contact-support"
+                      />
+                    </>
                   ) : null}
                   {id === 'faqs'
                     ? FAQS.map((item) => (
@@ -561,6 +577,53 @@ const InfoRow: React.FC<{ title: string; body: string; status: 'Ready' | 'Coming
   );
 };
 
+/**
+ * Opens an email to support with the app version and device filled in.
+ * Without a mail app, shows the address so it can be copied.
+ */
+async function contactSupport(accountEmail: string | null): Promise<void> {
+  const version = Constants.expoConfig?.version ?? 'unknown';
+  const body = [
+    '',
+    '',
+    '— Please keep the details below, they help us look into it —',
+    `App version: ${version}`,
+    `Device: ${Platform.OS} ${String(Platform.Version)}`,
+    accountEmail ? `Account: ${accountEmail}` : null,
+  ]
+    .filter((line) => line != null)
+    .join('\n');
+  const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent('ProxiPoint support')}&body=${encodeURIComponent(body)}`;
+  try {
+    await Linking.openURL(url);
+  } catch {
+    Alert.alert('Contact support', `Email us at ${SUPPORT_EMAIL}`);
+  }
+}
+
+const HelpRow: React.FC<{
+  Icon: LucideIcon;
+  title: string;
+  body: string;
+  onPress: () => void;
+  testID: string;
+}> = ({ Icon, title, body, onPress, testID }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  return (
+    <TouchableOpacity style={styles.helpRow} onPress={onPress} accessibilityRole="button" testID={testID}>
+      <View style={styles.helpIcon}>
+        <Icon size={18} color={c.accent} strokeWidth={2.25} />
+      </View>
+      <View style={styles.helpCopy}>
+        <Text style={styles.faqQ}>{title}</Text>
+        <Text style={styles.note}>{body}</Text>
+      </View>
+      <ChevronRight size={18} color={c.textMuted} strokeWidth={2.25} />
+    </TouchableOpacity>
+  );
+};
+
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
   overlay: {
@@ -679,17 +742,16 @@ const createStyles = (c: ThemeColors) =>
   statusSoon: { backgroundColor: 'rgba(148, 163, 184, 0.12)' },
   statusPillText: { fontSize: 10, fontWeight: '800' },
   faq: { gap: 3 },
-  tourBtn: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: c.accent,
+  helpRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 },
+  helpIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: c.accentTint,
+    alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 6,
   },
-  tourBtnText: { color: c.accent, fontSize: 14, fontWeight: '800' },
+  helpCopy: { flex: 1, gap: 2 },
   faqQ: { color: c.text, fontSize: 14, fontWeight: '700' },
   error: { color: c.amber, fontSize: 12, fontWeight: '600' },
   saveBtn: {
