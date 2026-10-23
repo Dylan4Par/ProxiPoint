@@ -52,6 +52,11 @@ const MAX_ZOOM = 3;
 // Live Points: green pins with a ripple, matching the LIVE badges.
 const LIVE_PULSE_MS = 1400;
 const ZOOM_STEP = 1.5;
+/**
+ * Where the map opens and where Recenter returns: five + / − steps out from the closest zoom
+ * (3 / 1.5^5 ≈ 0.4), so you see the neighborhood around you, not just the block.
+ */
+const DEFAULT_ZOOM = MAX_ZOOM / ZOOM_STEP ** 5;
 /** Box for a pinned post's bubble + tail (the tail tip sits at the bottom middle). */
 const POST_PIN_SIZE = 32;
 const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
@@ -392,8 +397,8 @@ export const DiscoveryMapCanvas: React.FC<{
   const userMoved = useRef(false);
 
   // Zoom level, as an Animated value for drawing and a plain number for maths.
-  const zoom = useRef(new Animated.Value(1)).current;
-  const currentZoom = useRef(1);
+  const zoom = useRef(new Animated.Value(DEFAULT_ZOOM)).current;
+  const currentZoom = useRef(DEFAULT_ZOOM);
   const counterZoom = useRef(Animated.divide(1, zoom)).current;
 
   /** Visible area in world coordinates, so the card list matches the pins on screen. */
@@ -463,7 +468,7 @@ export const DiscoveryMapCanvas: React.FC<{
   const frameOrigin = useRef({ left: 0, top: 0 });
 
   /** Pan that puts your position in the middle of the map (or of its visible part). */
-  const homeTarget = (z = 1, visibleHeight = viewSize.current.height) => ({
+  const homeTarget = (z = DEFAULT_ZOOM, visibleHeight = viewSize.current.height) => ({
     x: viewSize.current.width / 2 + WORLD_OFFSET - z * BEACON_WORLD_X,
     y: visibleHeight / 2 + WORLD_OFFSET - z * BEACON_WORLD_Y,
   });
@@ -569,8 +574,8 @@ export const DiscoveryMapCanvas: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, coveredFromY]);
 
-  // Recenter: back on you, at normal zoom.
-  const handleRecenter = () => animateTo(homeTarget(1, visibleMapHeight()), 1);
+  // Recenter: back on you, at the default zoom.
+  const handleRecenter = () => animateTo(homeTarget(DEFAULT_ZOOM, visibleMapHeight()), DEFAULT_ZOOM);
 
   /** Bubble tapped: same spot → pick list; just close together → zoom in until they split. */
   const openCluster = (cluster: MapClusterData) => {
