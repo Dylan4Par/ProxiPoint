@@ -11,7 +11,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { centerSpot, maskPath, padRect, placeCard, type Rect, type TourStep } from '../../lib/tour';
+import { centerSpot, maskPath, visibleArea, padRect, placeCard, type Rect, type TourStep } from '../../lib/tour';
 import { measureTourTarget } from './tourTargets';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -82,10 +82,15 @@ export const TourOverlay: React.FC<{
       const spot = step.centerSpot;
       const within = spot ? byId.get(spot.within) : null;
       if (spot && within) {
-        // One round spotlight in the middle of the visible map (above the event cards).
+        // The visible map (above the event cards): all of it, or a round spot in its middle.
         const cover = spot.above ? byId.get(spot.above) ?? null : null;
-        const circle = centerSpot(local(within), cover ? local(cover) : null, spot.size);
-        setHoles([padRect(circle, SPOT_PAD, screen)]);
+        const area = local(within);
+        const coverRect = cover ? local(cover) : null;
+        setHoles([
+          spot.size
+            ? padRect(centerSpot(area, coverRect, spot.size), SPOT_PAD, screen)
+            : { ...visibleArea(area, coverRect), radius: 14 },
+        ]);
       } else {
         setHoles(found.map((r) => padRect(local(r), SPOT_PAD, screen)));
       }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAP_TOUR, centerSpot, maskPath, padRect, placeCard, unionRect } from './tour';
+import { MAP_TOUR, centerSpot, maskPath, padRect, placeCard, unionRect, visibleArea } from './tour';
 
 const screen = { width: 400, height: 800 };
 
@@ -54,4 +54,11 @@ test('mask path has the screen plus one closed shape per hole', () => {
   ]);
   assert.equal((path.match(/Z/g) ?? []).length, 2);
   assert.ok(path.startsWith('M0 0H400V800H0Z'));
+});
+
+test('step 1 spotlights the whole map above the event cards', () => {
+  assert.equal(MAP_TOUR[0].centerSpot?.size, undefined);
+  const map = { x: 0, y: 100, width: 400, height: 700 };
+  assert.deepEqual(visibleArea(map, { x: 0, y: 500, width: 400, height: 300 }), { x: 0, y: 100, width: 400, height: 400 });
+  assert.deepEqual(visibleArea(map, null), map);
 });

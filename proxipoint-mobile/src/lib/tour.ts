@@ -22,10 +22,11 @@ export interface TourStep {
   /** Spotlighted together; the card sits clear of them where there's room. */
   targets: TourTargetId[];
   /**
-   * Instead of the targets themselves, a round spotlight of `size` in the middle of `within`,
-   * counting only the part above `above` (the map between the header and the event cards).
+   * Instead of the targets themselves, spotlight the part of `within` above `above` (the map
+   * between the header and the event cards): all of it, or with `size`, a round spot of that
+   * size in its middle.
    */
-  centerSpot?: { within: TourTargetId; above?: TourTargetId; size: number };
+  centerSpot?: { within: TourTargetId; above?: TourTargetId; size?: number };
   /** The Create Event sheet has to be open for this step. */
   needsCreateSheet?: boolean;
   /** Button text; "Next" when left out. */
@@ -37,9 +38,9 @@ export const MAP_TOUR: TourStep[] = [
     id: 'map',
     label: 'STEP 1',
     title: 'See What’s Happening Nearby',
-    body: 'Every pin on the map is a Point: a live hangout, pickup game, or local gathering happening around you right now.',
+    body: 'Every pin on the map is a Point: a live hangout, pickup game, or gathering happening around you right now.',
     targets: ['map-area', 'map-cards'],
-    centerSpot: { within: 'map-area', above: 'map-cards', size: 170 },
+    centerSpot: { within: 'map-area', above: 'map-cards' },
   },
   {
     id: 'filters',
@@ -82,6 +83,13 @@ export interface Rect {
   height: number;
   /** Corner radius of the spotlight; half the size makes a circle. */
   radius?: number;
+}
+
+/** The part of `area` above `cover` (e.g. the map above the event cards), or all of it. */
+export function visibleArea(area: Rect, cover: Rect | null): Rect {
+  let bottom = area.y + area.height;
+  if (cover && cover.y > area.y && cover.y < bottom) bottom = cover.y;
+  return { x: area.x, y: area.y, width: area.width, height: Math.max(0, bottom - area.y) };
 }
 
 /**
