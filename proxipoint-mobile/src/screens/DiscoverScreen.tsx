@@ -503,12 +503,12 @@ export const DiscoverScreen: React.FC = () => {
                     setDropOpen(true);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="Create event"
+                  accessibilityLabel="Drop a Point"
                   testID="map-drop-point"
                 >
                   <Plus size={16} color={c.onAccent} strokeWidth={3} />
                   <Text style={styles.createEventText} numberOfLines={1}>
-                    Event
+                    Drop
                   </Text>
                 </TouchableOpacity>
                 <CityPill

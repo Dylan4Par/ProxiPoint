@@ -375,10 +375,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             onChangeTracking={onChangeTracking}
           />
 
-          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>CREATE EVENT</Text>
+          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>CREATE DROP</Text>
           <TouchableOpacity style={styles.createEventBtn} onPress={onDropPoint} accessibilityRole="button" testID="profile-create-event">
             <Plus size={18} color={c.onAccent} strokeWidth={2.75} />
-            <Text style={styles.createEventText}>Create Event</Text>
+            <Text style={styles.createEventText}>Drop Point</Text>
           </TouchableOpacity>
           <Text style={styles.createEventNote}>Put a show, game, meetup or pop-up on the map for people nearby.</Text>
           {/* Once one of your events has started: post a recap of it. */}
