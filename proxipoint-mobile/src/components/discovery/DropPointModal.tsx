@@ -1215,7 +1215,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
           <View style={styles.pullBar} />
           <View style={styles.headerRow}>
             <View style={styles.headerTitleRow}>
-              <Text style={styles.headerTitle}>DROP POINT</Text>
+              <Text style={styles.headerTitle}>CREATE DROP</Text>
               {hasDraftContent ? (
                 <View style={styles.draftPill} testID="drop-draft-pill">
                   <Text style={styles.draftPillText}>DRAFT SAVED</Text>
