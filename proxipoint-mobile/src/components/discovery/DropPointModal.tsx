@@ -24,7 +24,9 @@ import {
   EyeOff,
   Map as MapIcon,
   Calendar,
+  ChevronDown,
   Crosshair,
+  Repeat,
   Globe,
   Landmark,
   Lock,
@@ -97,6 +99,20 @@ import {
   presetForHours,
   windowDurationHours,
 } from '../../lib/beaconWindow';
+import {
+  NO_REPEAT,
+  REPEAT_OPTIONS,
+  describeRepeat,
+  followStart,
+  previewNextDates,
+  ruleForFrequency,
+  toRepeatPayload,
+  toggleRepeatWeekday,
+  validateRepeat,
+  weekdayLetter,
+  weekdayShort,
+  type RepeatRule,
+} from '../../lib/recurrence';
 import {
   type BeaconVisibility,
   type BoundaryTierLevel,
@@ -278,6 +294,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [isLiveNow, setIsLiveNow] = useState(true);
   const [startsAt, setStartsAt] = useState(initialWindow.current.startsAt);
   const [endsAt, setEndsAt] = useState(initialWindow.current.endsAt);
+  // Repeat only applies to scheduled events; Live Now is always a one-off.
+  const [repeat, setRepeat] = useState<RepeatRule>(NO_REPEAT);
+  const [repeatOpen, setRepeatOpen] = useState(false);
   const durationRef = useRef(initialWindow.current.endsAt.getTime() - initialWindow.current.startsAt.getTime());
   const clockHold = useRef(0);
   const [title, setTitle] = useState('');
@@ -427,6 +446,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setIsLiveNow(true);
     setStartsAt(window.startsAt);
     setEndsAt(window.endsAt);
+    setRepeat(NO_REPEAT);
+    setRepeatOpen(false);
     setTitle('');
     setDescription('');
     setTags('');
@@ -739,6 +760,13 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       setFormError('Scheduled start is in the past. Pick a later start or use Live Now.');
       return;
     }
+    const repeatError = isLiveNow ? null : validateRepeat(repeat, startsAt, endsAt);
+    if (repeatError) {
+      setFormError(repeatError);
+      setRepeatOpen(true);
+      return;
+    }
+    const recurrence = isLiveNow ? null : toRepeatPayload(repeat, startsAt);
 
     const durationHours = windowDurationHours(effectiveStart, endsAt);
     const draft = createBeaconDraft({
@@ -764,6 +792,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     const payload = Object.assign(toBeaconCreatePayload(draft), {
       requiresRsvpApproval: requiresApproval,
       maxAttendance, // null = no limit
+      // Repeating event, or null for a one-time one. `rrule` is RFC 5545 (UNTIL in UTC);
+      // the server should expand it in `timezone`, keeping each event's length the same as the first.
+      recurrence,
       // Link invite: the server returns a share link that opens the Point (for a Private Point,
       // the link itself grants access, like an invite).
       shareLink: shareAfterDrop,
@@ -803,6 +834,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       isLiveNow,
       startsAt: effectiveStart.toISOString(),
       endsAt: endsAt.toISOString(),
+      recurrence,
       coverPhotoUri: coverPhoto?.uri ?? null,
       requiresApproval,
       maxAttendance,
@@ -1032,6 +1064,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     if (!next) return;
     const updated = changeWindowStart(startsAt, endsAt, next);
     durationRef.current = updated.endsAt.getTime() - updated.startsAt.getTime();
+    setRepeat((rule) => followStart(rule, startsAt, updated.startsAt));
     setStartsAt(updated.startsAt);
     setEndsAt(updated.endsAt);
     setFormError(null);
@@ -1859,6 +1892,142 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     />
                   </View>
                 </View>
+
+                {/* ---- Repeat: one rule under the window, expanded in place ---- */}
+                <View style={styles.whenBridge}>
+                  <View style={styles.whenRail} />
+                  <View style={styles.whenRule} />
+                </View>
+                <TouchableOpacity
+                  style={styles.whenRow}
+                  onPress={() => setRepeatOpen((openPanel) => !openPanel)}
+                  accessibilityRole="button"
+                  accessibilityState={{ expanded: repeatOpen }}
+                  accessibilityLabel={`Repeat: ${describeRepeat(repeat, startsAt)}`}
+                  testID="drop-repeat"
+                >
+                  <View style={styles.whenRail}>
+                    <Repeat
+                      size={14}
+                      color={repeat.frequency === 'none' ? c.textFaint : c.accent}
+                      strokeWidth={2.25}
+                    />
+                  </View>
+                  <Text style={[styles.whenLabel, styles.repeatLabel]}>Repeat</Text>
+                  <View style={styles.whenChips}>
+                    <View style={[styles.whenChip, styles.repeatChip]}>
+                      <Text style={styles.whenChipText} numberOfLines={1} testID="drop-repeat-label">
+                        {REPEAT_OPTIONS.find((option) => option.value === repeat.frequency)?.label ?? 'Never'}
+                      </Text>
+                      <ChevronDown size={14} color={c.textMuted} strokeWidth={2.25} />
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                {repeatOpen ? (
+                  <View style={styles.repeatPanel} testID="drop-repeat-panel">
+                    <View style={styles.repeatOptions} accessibilityRole="radiogroup">
+                      {REPEAT_OPTIONS.map((option) => {
+                        const selected = repeat.frequency === option.value;
+                        return (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[styles.repeatOption, selected && styles.repeatOptionActive]}
+                            onPress={() => {
+                              setRepeat((rule) => ruleForFrequency(option.value, startsAt, rule));
+                              setFormError(null);
+                            }}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected }}
+                            testID={`drop-repeat-${option.value}`}
+                          >
+                            <Text style={[styles.repeatOptionText, selected && styles.repeatOptionTextActive]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+
+                    {repeat.frequency === 'weekly' || repeat.frequency === 'biweekly' ? (
+                      <View style={styles.weekdayRow}>
+                        {[0, 1, 2, 3, 4, 5, 6].map((day) => {
+                          const on = repeat.weekdays.includes(day);
+                          const locked = day === startsAt.getDay();
+                          return (
+                            <TouchableOpacity
+                              key={day}
+                              style={[styles.weekdayDot, on && styles.weekdayDotOn, locked && styles.weekdayDotLocked]}
+                              disabled={locked}
+                              onPress={() => {
+                                setRepeat((rule) => toggleRepeatWeekday(rule, day, startsAt));
+                                setFormError(null);
+                              }}
+                              accessibilityRole="checkbox"
+                              accessibilityState={{ checked: on, disabled: locked }}
+                              accessibilityLabel={locked ? `${weekdayShort(day)}, the start day` : weekdayShort(day)}
+                              testID={`drop-repeat-day-${day}`}
+                            >
+                              <Text style={[styles.weekdayText, on && styles.weekdayTextOn]}>{weekdayLetter(day)}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    ) : null}
+
+                    {repeat.frequency !== 'none' ? (
+                      <View style={styles.whenRow}>
+                        <View style={styles.whenRail} />
+                        <Text style={styles.whenLabel}>Ends</Text>
+                        <View style={styles.whenChips}>
+                          <TouchableOpacity
+                            style={[styles.repeatOption, !repeat.until && styles.repeatOptionActive]}
+                            onPress={() => {
+                              setRepeat((rule) => ({ ...rule, until: null }));
+                              setFormError(null);
+                            }}
+                            accessibilityRole="radio"
+                            accessibilityState={{ selected: !repeat.until }}
+                            testID="drop-repeat-never-ends"
+                          >
+                            <Text style={[styles.repeatOptionText, !repeat.until && styles.repeatOptionTextActive]}>
+                              Never
+                            </Text>
+                          </TouchableOpacity>
+                          <WhenChip
+                            kind="date"
+                            date={
+                              (repeat.until ? applyDateInput(startsAt, repeat.until) : null) ??
+                              new Date(startsAt.getTime() + 8 * 7 * 86_400_000)
+                            }
+                            minimumDate={startsAt}
+                            display={
+                              repeat.until
+                                ? formatBeaconDate(applyDateInput(startsAt, repeat.until) ?? startsAt)
+                                : 'On date'
+                            }
+                            onCommit={(value) => {
+                              setRepeat((rule) => ({ ...rule, until: value }));
+                              setFormError(null);
+                            }}
+                            onFocus={holdClock}
+                            onBlur={releaseClock}
+                            testID="drop-repeat-until"
+                            label="Repeat end date"
+                          />
+                        </View>
+                      </View>
+                    ) : null}
+                  </View>
+                ) : null}
+
+                {repeat.frequency !== 'none' ? (
+                  <Text style={styles.repeatHint} testID="drop-repeat-summary">
+                    {describeRepeat(repeat, startsAt)}
+                    {previewNextDates(repeat, startsAt) ? ` · Next: ${previewNextDates(repeat, startsAt)}` : ''}
+                    {repeat.until ? '' : ' · Up to a year'}
+                  </Text>
+                ) : null}
               </View>
             )}
           </View>
@@ -3070,6 +3239,79 @@ const createStyles = (c: ThemeColors) =>
     color: c.text,
     fontSize: 14,
     fontWeight: '600',
+  },
+  repeatLabel: {
+    width: undefined,
+  },
+  repeatChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  repeatPanel: {
+    marginTop: 10,
+    gap: 10,
+  },
+  repeatOptions: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  repeatOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    backgroundColor: c.base,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  repeatOptionActive: {
+    backgroundColor: 'rgba(34, 211, 238, 0.12)',
+    borderColor: c.accent,
+  },
+  repeatOptionText: {
+    color: c.textFaint,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  repeatOptionTextActive: {
+    color: c.text,
+  },
+  weekdayRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  weekdayDot: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.base,
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+  weekdayDotOn: {
+    backgroundColor: 'rgba(34, 211, 238, 0.12)',
+    borderColor: c.accent,
+  },
+  weekdayDotLocked: {
+    borderWidth: 2,
+  },
+  weekdayText: {
+    color: c.textFaint,
+    fontSize: 13,
+    fontWeight: '700',
+  },
+  weekdayTextOn: {
+    color: c.text,
+  },
+  repeatHint: {
+    marginTop: 8,
+    marginLeft: 24,
+    color: c.textMuted,
+    fontSize: 12,
+    lineHeight: 17,
   },
   ctaDock: {
     paddingTop: 8,

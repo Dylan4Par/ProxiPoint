@@ -1,6 +1,7 @@
 import type { BeaconInvite } from './beaconInvite';
 import type { BeaconVisibility } from '../types/beacon';
 import { formatBeaconDate, formatBeaconTime } from './beaconWindow';
+import type { RepeatPayload } from './recurrence';
 
 /**
  * Everything the Manage sheet and My Drops need about a Point the user created.
@@ -21,6 +22,8 @@ export interface DroppedPoint {
   /** ISO strings so the object is easy to store or send later. */
   startsAt: string;
   endsAt: string;
+  /** Repeat rule for a repeating event (times above are the first one); null or missing = one-time. */
+  recurrence?: RepeatPayload | null;
   coverPhotoUri: string | null;
   requiresApproval: boolean;
   maxAttendance: number | null;
