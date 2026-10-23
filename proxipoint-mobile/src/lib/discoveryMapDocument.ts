@@ -328,6 +328,11 @@ export function buildPreviewGeofenceScript(): string {
       postToApp({ type: '${MAP_CENTER_MESSAGE}', latitude: middle.lat, longitude: middle.lng });
     });
     // Move the map so this spot is in the middle.
+    // + / − buttons outside the map (one Leaflet level each, keeping the middle where it is).
+    window.zoomMap = function(delta) {
+      if (!map) return;
+      if (delta > 0) map.zoomIn(delta); else map.zoomOut(-delta);
+    };
     window.focusSpot = function(lat, lon, zoom) {
       if (!map) return;
       map.setView([lat, lon], zoom || Math.max(map.getZoom(), 16), { animate: true });

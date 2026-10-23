@@ -18,6 +18,7 @@ import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
 import { MapTiles } from './MapTiles';
 import { MapPinGlyph } from './MapPinGlyph';
+import { MapRecenterButton, MapZoomStack, mapControlPositions } from './MapControls';
 import { CARD_SHEET_RADIUS } from './EventCardList';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
@@ -1051,23 +1052,17 @@ export const DiscoveryMapCanvas: React.FC<{
         © Esri
       </Text>
 
-      {/* Pure View-based Tactical Crosshair Recenter Button */}
-      <TouchableOpacity
-        style={styles.crosshairBtn}
-        activeOpacity={0.7}
+      {/* Recenter (shared with Create Drop's Select on map) */}
+      <MapRecenterButton
+        style={mapControlPositions().recenter}
         onPress={() => {
           // Exploring a searched area: the map is drawn around that spot, so "back on you" means
           // going home (the map then recenters on your area by itself).
           if (viewPlace.kind === 'search' && onReturnHome) onReturnHome();
           else handleRecenter();
         }}
-      >
-        <View style={styles.crosshairCircleOuter}>
-          <View style={styles.crosshairCircleInner} />
-          <View style={styles.crosshairLineV} />
-          <View style={styles.crosshairLineH} />
-        </View>
-      </TouchableOpacity>
+        testID="map-recenter"
+      />
 
       {/* Search this area: once you've panned or zoomed out away from the area. Centered along the
           bottom of the map, clear of the zoom buttons. */}
@@ -1102,29 +1097,11 @@ export const DiscoveryMapCanvas: React.FC<{
       ) : null}
 
       {/* Zoom buttons (also handy on the emulator, where pinching needs Ctrl + drag) */}
-      <View style={styles.zoomStack}>
-        <TouchableOpacity
-          style={styles.zoomBtn}
-          activeOpacity={0.7}
-          onPress={() => zoomBy(ZOOM_STEP)}
-          accessibilityRole="button"
-          accessibilityLabel="Zoom in"
-          testID="map-zoom-in"
-        >
-          <Text style={styles.zoomText}>+</Text>
-        </TouchableOpacity>
-        <View style={styles.zoomDivider} />
-        <TouchableOpacity
-          style={styles.zoomBtn}
-          activeOpacity={0.7}
-          onPress={() => zoomBy(1 / ZOOM_STEP)}
-          accessibilityRole="button"
-          accessibilityLabel="Zoom out"
-          testID="map-zoom-out"
-        >
-          <Text style={styles.zoomText}>−</Text>
-        </TouchableOpacity>
-      </View>
+      <MapZoomStack
+        style={mapControlPositions().zoom}
+        onZoomIn={() => zoomBy(ZOOM_STEP)}
+        onZoomOut={() => zoomBy(1 / ZOOM_STEP)}
+      />
     </View>
   );
 };
@@ -1375,21 +1352,6 @@ const createStyles = (c: ThemeColors) =>
     color: c.textMuted,
     opacity: 0.8,
   },
-  zoomStack: {
-    position: 'absolute',
-    top: 62,
-    right: 14,
-    width: 38,
-    borderRadius: 19,
-    backgroundColor: c.glassStrong,
-    borderWidth: 1.5,
-    borderColor: 'rgba(56, 189, 248, 0.4)',
-    zIndex: 20,
-    overflow: 'hidden',
-  },
-  zoomBtn: { height: 38, alignItems: 'center', justifyContent: 'center' },
-  zoomText: { color: c.sky, fontSize: 20, fontWeight: '700', lineHeight: 22 },
-  zoomDivider: { height: 1, marginHorizontal: 8, backgroundColor: 'rgba(56, 189, 248, 0.25)' },
   crosshairBtn: {
     position: 'absolute',
     top: 14,
@@ -1436,34 +1398,4 @@ const createStyles = (c: ThemeColors) =>
     shadowRadius: 4,
   },
   searchAreaText: { color: c.base, fontSize: 13, fontWeight: '800' },
-  crosshairCircleOuter: {
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    borderWidth: 2,
-    borderColor: c.sky,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  crosshairCircleInner: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    backgroundColor: c.sky,
-  },
-  crosshairLineV: {
-    position: 'absolute',
-    width: 2,
-    height: 24,
-    backgroundColor: c.sky,
-    borderRadius: 1,
-  },
-  crosshairLineH: {
-    position: 'absolute',
-    width: 24,
-    height: 2,
-    backgroundColor: c.sky,
-    borderRadius: 1,
-  },
 });

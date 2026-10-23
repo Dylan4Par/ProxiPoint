@@ -62,6 +62,8 @@ interface DiscoveryLeafletMapProps {
   onCenterChange?: (latitude: number, longitude: number) => void;
   /** Move the map so this spot is in the middle (once per key). */
   focus?: { key: number; latitude: number; longitude: number; zoom?: number } | null;
+  /** + / − buttons: zoom by `delta` levels, once per key. */
+  zoomRequest?: { key: number; delta: number } | null;
   /** Where the map opens. Defaults to your own location. */
   center?: LatLon | null;
 }
@@ -92,6 +94,7 @@ export const DiscoveryLeafletMap: React.FC<DiscoveryLeafletMapProps> = ({
   dropAnimation = null,
   onCenterChange,
   focus = null,
+  zoomRequest = null,
   center = null,
 }) => {
   const storePreview = useDiscoveryStore((state) => state.previewGeofence);
@@ -180,6 +183,18 @@ export const DiscoveryLeafletMap: React.FC<DiscoveryLeafletMapProps> = ({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusKey, ready]);
+
+  // Zoom: once per key.
+  const zoomKey = zoomRequest?.key ?? 0;
+  useEffect(() => {
+    if (!zoomRequest || !ready) return;
+    if (Platform.OS === 'web') {
+      (frameRef.current?.contentWindow as { zoomMap?: (d: number) => void } | undefined)?.zoomMap?.(zoomRequest.delta);
+    } else {
+      webViewRef.current?.injectJavaScript(`window.zoomMap && window.zoomMap(${zoomRequest.delta}); true;`);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zoomKey, ready]);
 
   // Drop animation: play once per key, after the map has loaded. Cleared when it goes away.
   const dropKey = dropAnimation?.key ?? 0;

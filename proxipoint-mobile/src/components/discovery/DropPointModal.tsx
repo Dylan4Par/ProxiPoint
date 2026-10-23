@@ -73,6 +73,7 @@ import {
 import { captureCurrentFix, geocodePlaces } from '../../services/placeGeocoder';
 import { nearestPlace } from '../../lib/placeSearch';
 import { WhenChip } from './WhenChip';
+import { MapRecenterButton, MapZoomStack, mapControlPositions } from './MapControls';
 import { tourTarget } from '../tour/tourTargets';
 import { dropRangeError } from '../../lib/dropRange';
 import { useUnits } from '../../lib/units';
@@ -343,6 +344,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   );
   const [locatingPick, setLocatingPick] = useState(false);
   const [pickNotice, setPickNotice] = useState('');
+  // Select on map: + / − buttons (same as Explore Map's).
+  const [pickZoom, setPickZoom] = useState<{ key: number; delta: number } | null>(null);
   const [perimeterOn, setPerimeterOn] = useState(false);
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [maxAttendance, setMaxAttendance] = useState<number | null>(null);
@@ -1154,6 +1157,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               : undefined
           }
           focus={mapPicking ? pickFocus : null}
+          zoomRequest={mapPicking ? pickZoom : null}
           // Select on map: a single pin on the current spot instead of the perimeter circles.
           showGeofence={!privacyMoving && !revealing && !mapPicking}
           privacyPreview={privacyMoving ? movingSnapshot : null}
@@ -1182,9 +1186,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             <View style={styles.centerPinDot} />
           </View>
 
-          {/* Back to where you are */}
-          <TouchableOpacity
-            style={styles.locateBtn}
+          {/* Back to where you are, and zoom: same buttons and spots as on Explore Map */}
+          <MapRecenterButton
+            style={mapControlPositions(insets.top).recenter}
+            busy={locatingPick}
             onPress={async () => {
               if (locatingPick) return;
               setLocatingPick(true);
@@ -1197,16 +1202,14 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               if (!fix.ok) setPickNotice(fix.reason === 'denied' ? 'Location is off, so this is your home area.' : 'Couldn’t get your location; showing your home area.');
               setPickFocus({ key: Date.now(), ...spot, zoom: 17 });
             }}
-            accessibilityRole="button"
-            accessibilityLabel="Center on my location"
             testID="map-pick-locate"
-          >
-            {locatingPick ? (
-              <ActivityIndicator color={c.accent} />
-            ) : (
-              <Crosshair size={22} color={c.accent} strokeWidth={2.25} />
-            )}
-          </TouchableOpacity>
+          />
+          <MapZoomStack
+            style={mapControlPositions(insets.top).zoom}
+            onZoomIn={() => setPickZoom({ key: Date.now(), delta: 1 })}
+            onZoomOut={() => setPickZoom({ key: Date.now(), delta: -1 })}
+            testIDPrefix="map-pick-zoom"
+          />
 
           <View style={styles.mapPickPanel} testID="map-pick-bar">
             <View style={styles.mapPickRow}>
@@ -2831,20 +2834,6 @@ const createStyles = (c: ThemeColors) =>
     backgroundColor: c.accent,
     borderWidth: 1.5,
     borderColor: c.base,
-  },
-  locateBtn: {
-    position: 'absolute',
-    right: 16,
-    bottom: 150,
-    zIndex: 6,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: c.surface,
-    borderWidth: 1.5,
-    borderColor: c.accent,
   },
   mapPickPanel: {
     position: 'absolute',
