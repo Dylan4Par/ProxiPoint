@@ -227,7 +227,8 @@ export const DiscoveryMapCanvas: React.FC<{
   }, [reducedMotion, livePulse]);
   const liveRingStyle = {
     opacity: livePulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] }),
-    transform: [{ scale: livePulse.interpolate({ inputRange: [0, 1], outputRange: [1, 2.6] }) }],
+    // Starts small at the point and spreads out.
+    transform: [{ scale: livePulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 2.6] }) }],
   };
 
   // Zoom in coarse steps, so clusters are worked out again only when the zoom really changes.
@@ -1189,9 +1190,11 @@ const createStyles = (c: ThemeColors) =>
     fontWeight: '800',
   },
   tagHash: { fontSize: 8.5, fontWeight: '600', opacity: 0.55 },
+  // Ripple from the pin's point (where it touches the map): the tip is 17px below the head's
+  // center (17, 17), so this 22px ring is centered on (17, 34).
   liveRing: {
     position: 'absolute',
-    top: 6,
+    top: 23,
     left: 6,
     width: 22,
     height: 22,
