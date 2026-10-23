@@ -299,6 +299,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [repeatOpen, setRepeatOpen] = useState(false);
   const durationRef = useRef(initialWindow.current.endsAt.getTime() - initialWindow.current.startsAt.getTime());
   const clockHold = useRef(0);
+  // The sheet's scroll view and the Live Now / Schedule card, so newly shown options can be scrolled into view.
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollYRef = useRef(0);
+  const whenCardRef = useRef<View>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
@@ -764,6 +768,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     if (repeatError) {
       setFormError(repeatError);
       setRepeatOpen(true);
+      revealWhenCard();
       return;
     }
     const recurrence = isLiveNow ? null : toRepeatPayload(repeat, startsAt);
@@ -937,6 +942,26 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     });
   };
 
+  /**
+   * After the time card grows or changes (Live Now / Schedule, Repeat options), scroll just enough
+   * to show all of it above the Create Event button, without pushing its top off screen.
+   */
+  const revealWhenCard = () => {
+    setTimeout(() => {
+      const scroll = scrollRef.current;
+      const card = whenCardRef.current;
+      if (!scroll || !card) return;
+      scroll.measureInWindow((_sx, scrollTop, _sw, scrollHeight) => {
+        card.measureInWindow((_cx, cardTop, _cw, cardHeight) => {
+          const overlap = cardTop + cardHeight + 16 - (scrollTop + scrollHeight);
+          const room = cardTop - scrollTop - 8;
+          const shift = Math.min(overlap, Math.max(0, room));
+          if (shift > 0) scroll.scrollTo({ y: scrollYRef.current + shift, animated: true });
+        });
+      });
+    }, 60);
+  };
+
   const selectLiveNow = () => {
     const window = liveBeaconWindow();
     // Keep the End the user already chose if it's still in the future; otherwise use the default.
@@ -946,12 +971,14 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setStartsAt(window.startsAt);
     setEndsAt(nextEnd);
     setFormError(null);
+    revealWhenCard();
   };
 
   const selectSchedule = () => {
     // Start from the current window; both Start and End are now editable and stop auto-ticking.
     setIsLiveNow(false);
     setFormError(null);
+    revealWhenCard();
   };
 
   const guestReveal = requiresApproval
@@ -1211,6 +1238,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
         </View>
 
         <KeyboardAwareScrollView
+          ref={scrollRef}
+          onScroll={(event) => {
+            scrollYRef.current = event.nativeEvent.contentOffset.y;
+          }}
           style={styles.scroll}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
@@ -1770,7 +1801,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             </View>
           </View>
 
-          <View style={styles.groupedContainer}>
+          <View ref={whenCardRef} collapsable={false} style={styles.groupedContainer}>
             <View style={styles.timeToggleRow}>
               <TouchableOpacity
                 style={[styles.pillToggle, isLiveNow && styles.pillToggleActive]}
@@ -1900,7 +1931,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 </View>
                 <TouchableOpacity
                   style={styles.whenRow}
-                  onPress={() => setRepeatOpen((openPanel) => !openPanel)}
+                  onPress={() => {
+                    if (!repeatOpen) revealWhenCard();
+                    setRepeatOpen((openPanel) => !openPanel);
+                  }}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: repeatOpen }}
                   accessibilityLabel={`Repeat: ${describeRepeat(repeat, startsAt)}`}
@@ -1936,6 +1970,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                             onPress={() => {
                               setRepeat((rule) => ruleForFrequency(option.value, startsAt, rule));
                               setFormError(null);
+                              revealWhenCard();
                             }}
                             accessibilityRole="radio"
                             accessibilityState={{ selected }}
