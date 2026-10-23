@@ -45,7 +45,7 @@ export const MAP_TOUR: TourStep[] = [
   },
   {
     id: 'filters',
-    label: 'DISCOVER & TAGS',
+    label: 'FILTER & TAGS',
     title: 'Tune to Your Interests',
     body: 'Filter by time or tap tags like #GarageSale or #FoodTrucks to immediately zero in on the activities and crowds you care about.',
     targets: ['map-filter-rail', 'map-date-chip'],

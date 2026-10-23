@@ -11,7 +11,7 @@ test('the tour runs map, filters, channels, profile, create', () => {
   );
   assert.deepEqual(
     MAP_TOUR.map((s) => s.label),
-    ['MAP RADAR', 'DISCOVER & TAGS', 'COMMUNITY CHANNELS', 'YOUR ACTIVITY', 'HOSTING & DROPS'],
+    ['MAP RADAR', 'FILTER & TAGS', 'COMMUNITY CHANNELS', 'YOUR ACTIVITY', 'HOSTING & DROPS'],
   );
   assert.equal(MAP_TOUR[MAP_TOUR.length - 1].cta, 'Start Exploring');
   assert.ok(MAP_TOUR.every((s) => s.targets.length > 0 && s.body.length > 40));
