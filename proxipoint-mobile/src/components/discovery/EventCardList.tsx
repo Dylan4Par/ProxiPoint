@@ -149,12 +149,45 @@ export const EventCardList: React.FC<{
     return () => sub.remove();
   }, [isFull]);
 
+  // Picking a pin on the map scrolls its card to the middle of the list (opening the list if it's
+  // collapsed). The map also slides to the pin, which can reorder the list, so keep following the
+  // pick for a moment. A card tapped in the list stays where it is.
+  const listRef = useRef<FlatList<DiscoveryNode>>(null);
+  const pickedInList = useRef<string | null>(null);
+  const pickedAt = useRef(0);
+  const lastPick = useRef<string | null>(null);
+  const visibleKey = visibleNodes.map((node) => node.id).join(',');
+  useEffect(() => {
+    if (!selectedNodeId) {
+      lastPick.current = null;
+      return;
+    }
+    if (selectedNodeId !== lastPick.current) {
+      lastPick.current = selectedNodeId;
+      pickedAt.current = Date.now();
+      if (pickedInList.current === selectedNodeId) return;
+      pickedInList.current = null; // picked on the map
+    } else if (pickedInList.current === selectedNodeId || Date.now() - pickedAt.current > 1500) {
+      return;
+    }
+    const index = visibleNodes.findIndex((node) => node.id === selectedNodeId);
+    if (index < 0) return;
+    const wasCollapsed = modeRef.current === 'collapsed';
+    if (wasCollapsed) animateDrawer('half');
+    const timer = setTimeout(
+      () => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }),
+      wasCollapsed ? 260 : 60,
+    );
+    return () => clearTimeout(timer);
+  }, [selectedNodeId, visibleKey]);
+
   const renderCard = ({ item }: { item: DiscoveryNode }) => (
     <PointCard
       node={item}
       boosted={isBoosted(item.id, boostClock)}
       selected={item.id === selectedNodeId}
       onOpen={() => {
+        pickedInList.current = item.id;
         setSelectedNodeId(item.id);
         // From the full list, drop back to the map so the Point can be shown on it.
         if (modeRef.current === 'full') animateDrawer('half');
@@ -225,6 +258,12 @@ export const EventCardList: React.FC<{
 
       {isExpanded && (
         <FlatList
+          ref={listRef}
+          // Cards not drawn yet: jump near it by the average card height, then center it.
+          onScrollToIndexFailed={({ index, averageItemLength }) => {
+            listRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: false });
+            setTimeout(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), 80);
+          }}
           style={styles.list}
           data={visibleNodes}
           keyExtractor={(item) => item.id}
