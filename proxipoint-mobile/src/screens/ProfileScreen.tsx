@@ -6,6 +6,7 @@ import { RecapCard } from '../components/profile/RecapCard';
 import { RecapComposer } from '../components/profile/RecapComposer';
 import { MyTagsTile } from '../components/profile/MyTagsTile';
 import { MyChannelsTile } from '../components/profile/MyChannelsTile';
+import { MyRecentEventsTile } from '../components/profile/MyRecentEventsTile';
 import { LocationTile } from '../components/profile/LocationTile';
 import { SignalChip, SignalTile } from '../components/profile/Signal';
 import { useVisibleComments, useVisiblePosts } from '../lib/channels';
@@ -36,6 +37,10 @@ interface ProfileScreenProps {
   asTab?: boolean;
   onOpenSettings: () => void;
   onOpenMyDrops: () => void;
+  /** Opens one of your events (Manage sheet). */
+  onOpenDrop: (id: string) => void;
+  /** Opens Create Event filled in with an earlier event's details. */
+  onDropAgain: (id: string) => void;
   onOpenActivity: () => void;
   onDropPoint: () => void;
   /** Saves a new banner, or null to go back to the dot pattern. */
@@ -97,6 +102,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   asTab = false,
   onOpenSettings,
   onOpenMyDrops,
+  onOpenDrop,
+  onDropAgain,
   onOpenActivity,
   onDropPoint,
   onChangeAvatar,
@@ -334,6 +341,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             accessibilityLabel="Bio"
             testID="profile-bio"
           />
+
+          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY RECENT EVENTS</Text>
+          <MyRecentEventsTile drops={drops} onOpen={onOpenDrop} onDropAgain={onDropAgain} onSeeAll={onOpenMyDrops} />
 
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>SIGNAL</Text>
           <SignalTile signal={signal} contributions={contributions} isMe onOpenPost={onOpenPost} />

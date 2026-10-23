@@ -621,6 +621,11 @@ export const DiscoverScreen: React.FC = () => {
           asTab
           onOpenSettings={() => openSettings()}
           onOpenMyDrops={() => setProfileView('drops')}
+          onOpenDrop={(id) => {
+            setJustDroppedId(null);
+            setManagingId(id);
+          }}
+          onDropAgain={openDropAgain}
           onOpenActivity={() => {
             goTo('channels');
             setChannelsSegment('alerts');

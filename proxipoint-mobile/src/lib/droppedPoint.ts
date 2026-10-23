@@ -73,6 +73,22 @@ export function pointStatus(point: Pick<DroppedPoint, 'startsAt' | 'endsAt'>, no
   return 'upcoming';
 }
 
+/** Your events that have ended, the most recently ended first (Profile → MY RECENT EVENTS). */
+export function recentEndedPoints(points: DroppedPoint[], now = new Date(), limit = 3): DroppedPoint[] {
+  return points
+    .filter((point) => pointStatus(point, now) === 'past')
+    .sort((a, b) => new Date(b.endsAt).getTime() - new Date(a.endsAt).getTime())
+    .slice(0, Math.max(0, limit));
+}
+
+/** "Ended Sat, Oct 18 · 3 went" (the count only once the server sends RSVPs). */
+export function endedSummary(point: DroppedPoint): string {
+  const ended = `Ended ${formatBeaconDate(new Date(point.endsAt))}`;
+  if (!point.rsvps) return ended;
+  const going = point.rsvps.filter((rsvp) => rsvp.status === 'going').length;
+  return `${ended} · ${going} went`;
+}
+
 /** "Sun, Oct 12 · 7:00 PM – 9:00 PM", or "Live now · until 9:00 PM". */
 export function formatPointWhen(point: DroppedPoint, now = new Date()): string {
   const start = new Date(point.startsAt);
