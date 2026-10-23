@@ -153,15 +153,17 @@ export function placeCard(
 
 /**
  * Spotlights around several targets: padded, rounded to follow the target (a pill stays a pill,
- * up to `maxRadius`), and kept `gap` apart where two would touch. The upper one keeps its full,
- * even padding (so its target stays centered in it) and the lower one starts below it.
+ * up to `maxRadius`). Where one sits just below another (within `snap`), the upper one keeps its
+ * full, even padding (so its target stays centered in it) and the lower one's top edge moves to
+ * exactly `gap` below it (0 = the two outlines touch).
  */
 export function spotlightHoles(
   targets: Rect[],
   pad: number,
   screen: { width: number; height: number },
-  gap = 6,
+  gap = 0,
   maxRadius = 24,
+  snap = 16,
 ): Rect[] {
   const holes = targets.map((t) => padRect(t, pad, screen));
   const order = targets.map((_, i) => i).sort((a, b) => targets[a].y - targets[b].y);
@@ -175,7 +177,7 @@ export function spotlightHoles(
       const above = holes[i];
       const below = holes[j];
       const minTop = above.y + above.height + gap;
-      if (below.y >= minTop) continue;
+      if (below.y >= minTop + snap) continue; // far enough apart: leave it
       const bottom = below.y + below.height;
       below.y = Math.min(minTop, bottom);
       below.height = bottom - below.y;

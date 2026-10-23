@@ -63,16 +63,19 @@ test('step 1 spotlights the whole map above the event cards', () => {
   assert.deepEqual(visibleArea(map, null), map);
 });
 
-test('spotlights follow pill shapes; the upper one stays centered, the lower one moves down', () => {
+test('spotlights follow pill shapes; the upper one stays centered, the lower one meets it', () => {
   // Date chip (a 38px pill) sitting 8px above the filter rail.
   const chip = { x: 260, y: 10, width: 130, height: 38 };
   const rail = { x: 0, y: 56, width: 400, height: 40 };
   const [c, r] = spotlightHoles([chip, rail], 6, screen);
   // Chip: even 6px padding all round, so it sits centered in its pill.
   assert.deepEqual({ y: c.y, height: c.height, radius: c.radius }, { y: 4, height: 50, radius: 24 });
-  // Rail: starts 6px below the chip's spotlight and keeps its bottom padding.
-  assert.equal(r.y, 4 + 50 + 6);
+  // Rail: its top edge meets the chip's spotlight; it keeps its bottom padding.
+  assert.equal(r.y, 4 + 50);
   assert.equal(r.y + r.height, rail.y + rail.height + 6);
+  // A little lower: the rail's spotlight still rises to meet the chip's.
+  const [, lower] = spotlightHoles([chip, { ...rail, y: 66 }], 6, screen);
+  assert.equal(lower.y, 54);
   // Far apart: plain padding, untouched.
   const [, far] = spotlightHoles([chip, { ...rail, y: 300 }], 6, screen);
   assert.equal(far.y, 294);
