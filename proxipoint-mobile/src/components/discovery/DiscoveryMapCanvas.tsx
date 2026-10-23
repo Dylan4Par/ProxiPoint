@@ -874,10 +874,8 @@ export const DiscoveryMapCanvas: React.FC<{
                 accessibilityRole="button"
                 accessibilityLabel={`${hashtag ?? 'Point'}${live ? ', live now' : ''}${boosted ? ', boosted' : ''}`}
               >
-                {/* Selected: a solid glowing ring around the pin (no expanding beacon) */}
-                {isSelected ? (
-                  <View pointerEvents="none" style={[styles.selectedHalo, live && styles.selectedHaloLive]} />
-                ) : null}
+                {/* Selected: no ring around it; the pin itself shows it (larger, brighter, white rim)
+                    along with its highlighted #tag label. */}
                 {live ? <Animated.View pointerEvents="none" style={[styles.liveRing, liveRingStyle]} /> : null}
                 {/* One vector teardrop with an even rim (View borders went thin and lopsided
                     under the map's zoom scaling, and the tip used to cover the rim). */}
@@ -1251,27 +1249,6 @@ const createStyles = (c: ThemeColors) =>
   },
   // Aggregated (listed by @LocalRadar): slate blue instead of cyan. Live and Boosted still win.
   pinHeadAggregated: { backgroundColor: AGGREGATED_PIN },
-  // Ring centered on the pin head (head is 22px, 6px in from the wrapper's edge).
-  selectedHalo: {
-    position: 'absolute',
-    top: -5,
-    left: -5,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    borderWidth: 2.5,
-    borderColor: c.accent,
-    backgroundColor: 'rgba(34, 211, 238, 0.22)',
-    shadowColor: c.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 10,
-  },
-  selectedHaloLive: {
-    borderColor: c.green,
-    backgroundColor: 'rgba(52, 211, 153, 0.22)',
-    shadowColor: c.green,
-  },
   pinHeadSelected: {
     backgroundColor: c.sky,
     borderColor: c.white,
