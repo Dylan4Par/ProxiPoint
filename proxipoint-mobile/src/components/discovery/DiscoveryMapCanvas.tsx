@@ -124,6 +124,8 @@ export const DiscoveryMapCanvas: React.FC<{
    * Discover follows). Shown once you've panned or zoomed out well away; leave out to hide it.
    */
   onSearchArea?: (area: { latitude: number; longitude: number; radiusMeters: number }) => void;
+  /** ⌖ while exploring another area ("Search this area"): go back to your own area. */
+  onReturnHome?: () => void;
 }> = ({
   liveOnly = false,
   onMapTouch,
@@ -134,6 +136,7 @@ export const DiscoveryMapCanvas: React.FC<{
   onOpenPost,
   focusRequest = null,
   onSearchArea,
+  onReturnHome,
 }) => {
   const { colors: c, mode } = useTheme();
   const styles = useThemedStyles(createStyles);
@@ -1037,7 +1040,12 @@ export const DiscoveryMapCanvas: React.FC<{
       <TouchableOpacity
         style={styles.crosshairBtn}
         activeOpacity={0.7}
-        onPress={handleRecenter}
+        onPress={() => {
+          // Exploring a searched area: the map is drawn around that spot, so "back on you" means
+          // going home (the map then recenters on your area by itself).
+          if (viewPlace.kind === 'search' && onReturnHome) onReturnHome();
+          else handleRecenter();
+        }}
       >
         <View style={styles.crosshairCircleOuter}>
           <View style={styles.crosshairCircleInner} />

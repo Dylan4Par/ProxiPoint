@@ -559,6 +559,7 @@ export const DiscoverScreen: React.FC = () => {
               }}
               focusRequest={mapFocus}
               // Panned or zoomed away: make what's on screen the area (Discover follows).
+              onReturnHome={returnHome}
               onSearchArea={(area) => {
                 setDetailId(null);
                 setViewPlace({
