@@ -9,6 +9,7 @@ import {
   BackHandler,
   PanResponder,
 } from 'react-native';
+import { tourTarget } from '../tour/tourTargets';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { PointCard } from './PointCard';
 import { sortPoints, usePointSort } from '../../lib/pointSort';
@@ -164,7 +165,7 @@ export const EventCardList: React.FC<{
   );
 
   return (
-    <Animated.View style={[styles.drawerContainer, { height: animatedHeight }]}>
+    <Animated.View ref={tourTarget('map-cards')} style={[styles.drawerContainer, { height: animatedHeight }]}>
       <View {...panResponder.panHandlers} style={styles.headerDraggable}>
         <View style={styles.pullBar} />
 

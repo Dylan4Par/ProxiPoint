@@ -1,16 +1,33 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { MAP_TOUR, maskPath, padRect, placeCard, unionRect } from './tour';
+import { MAP_TOUR, centerSpot, maskPath, padRect, placeCard, unionRect } from './tour';
 
 const screen = { width: 400, height: 800 };
 
-test('the tour runs create, tags, explore, profile', () => {
+test('the tour runs map, filters, channels, profile, create', () => {
+  assert.deepEqual(
+    MAP_TOUR.map((s) => s.id),
+    ['map', 'filters', 'channels', 'profile', 'create'],
+  );
   assert.deepEqual(
     MAP_TOUR.map((s) => s.label),
-    ['STEP 1', 'STEP 1.1', 'STEP 2', 'STEP 3'],
+    ['STEP 1', 'STEP 2', 'STEP 3', 'STEP 4', 'STEP 5'],
   );
-  assert.equal(MAP_TOUR.filter((s) => s.needsCreateSheet).length, 1);
+  assert.equal(MAP_TOUR[MAP_TOUR.length - 1].cta, 'Start Exploring');
   assert.ok(MAP_TOUR.every((s) => s.targets.length > 0 && s.body.length > 40));
+});
+
+test('the map spotlight is a circle centered on the map above the cards', () => {
+  const map = { x: 0, y: 100, width: 400, height: 700 };
+  const cards = { x: 0, y: 500, width: 400, height: 300 };
+  const spot = centerSpot(map, cards, 170);
+  assert.deepEqual(spot, { x: 115, y: 215, width: 170, height: 170, radius: 85 });
+  // A short visible map shrinks the circle to fit.
+  const tight = centerSpot(map, { ...cards, y: 220 }, 170);
+  assert.equal(tight.width, 96);
+  assert.equal(tight.y, 112);
+  // Cards not over the map: the whole area counts.
+  assert.equal(centerSpot(map, null, 170).y, 100 + (700 - 170) / 2);
 });
 
 test('union and padding of spotlight rects', () => {

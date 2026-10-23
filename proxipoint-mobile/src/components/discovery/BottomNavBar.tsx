@@ -79,7 +79,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         return (
           <TouchableOpacity
             key={id}
-            ref={id === 'profile' ? tourTarget('nav-profile') : undefined}
+            ref={id === 'profile' ? tourTarget('nav-profile') : id === 'channels' ? tourTarget('nav-channels') : undefined}
             style={styles.navItem}
             activeOpacity={0.7}
             onPress={handlers[id]}

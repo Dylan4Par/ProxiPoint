@@ -11,7 +11,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { maskPath, padRect, placeCard, type Rect, type TourStep } from '../../lib/tour';
+import { centerSpot, maskPath, padRect, placeCard, type Rect, type TourStep } from '../../lib/tour';
 import { measureTourTarget } from './tourTargets';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -77,7 +77,18 @@ export const TourOverlay: React.FC<{
         setTimeout(() => void measure(attempt + 1), 150);
         return;
       }
-      setHoles(found.map((r) => padRect({ ...r, x: r.x - origin.x, y: r.y - origin.y }, SPOT_PAD, screen)));
+      const local = (r: Rect): Rect => ({ ...r, x: r.x - origin.x, y: r.y - origin.y });
+      const byId = new Map(step.targets.map((id, i) => [id, rects[i]] as const));
+      const spot = step.centerSpot;
+      const within = spot ? byId.get(spot.within) : null;
+      if (spot && within) {
+        // One round spotlight in the middle of the visible map (above the event cards).
+        const cover = spot.above ? byId.get(spot.above) ?? null : null;
+        const circle = centerSpot(local(within), cover ? local(cover) : null, spot.size);
+        setHoles([padRect(circle, SPOT_PAD, screen)]);
+      } else {
+        setHoles(found.map((r) => padRect(local(r), SPOT_PAD, screen)));
+      }
       Animated.timing(fade, {
         toValue: 1,
         duration: reduced ? 0 : 220,
@@ -168,7 +179,7 @@ export const TourOverlay: React.FC<{
               top: hole.y,
               width: hole.width,
               height: hole.height,
-              borderRadius: Math.min(14, hole.width / 2, hole.height / 2),
+              borderRadius: Math.min(hole.radius ?? 14, hole.width / 2, hole.height / 2),
               opacity: Animated.multiply(fade, ringOpacity),
             },
           ]}
@@ -206,7 +217,7 @@ export const TourOverlay: React.FC<{
               </TouchableOpacity>
             ) : null}
             <TouchableOpacity style={styles.nextBtn} onPress={onNext} accessibilityRole="button" testID="tour-next">
-              <Text style={[styles.nextText, { color: c.onAccent }]}>{isLast ? 'Let’s go' : 'Next'}</Text>
+              <Text style={[styles.nextText, { color: c.onAccent }]}>{step.cta ?? (isLast ? 'Got It!' : 'Next')}</Text>
             </TouchableOpacity>
           </View>
         </View>
