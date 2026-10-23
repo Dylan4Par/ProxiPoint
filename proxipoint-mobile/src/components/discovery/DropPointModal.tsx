@@ -74,6 +74,8 @@ import { captureCurrentFix, geocodePlaces } from '../../services/placeGeocoder';
 import { nearestPlace } from '../../lib/placeSearch';
 import { WhenChip } from './WhenChip';
 import { tourTarget } from '../tour/tourTargets';
+import { dropRangeError } from '../../lib/dropRange';
+import { useUnits } from '../../lib/units';
 import { ensurePhotoPolicyAccepted } from '../../lib/photoPolicy';
 import { cropToCircle } from '../../lib/coverPhoto';
 import { currentPosition } from '../../lib/places';
@@ -277,6 +279,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       : Math.max(insets.top, 24);
 
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
+  const units = useUnits();
+  /** Points can only be dropped within 100 mi of you; null when `spot` is in range. */
+  const rangeError = (spot: { latitude: number; longitude: number }) =>
+    dropRangeError({ latitude: selfCoordinates.latitude, longitude: selfCoordinates.longitude }, spot, units);
   const dropBeacon = useDiscoveryStore((state) => state.dropBeacon);
   const adoptPersistedBeacon = useDiscoveryStore((state) => state.adoptPersistedBeacon);
   const setPreviewGeofence = useDiscoveryStore((state) => state.setPreviewGeofence);
@@ -667,7 +673,13 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     };
   }, [locationSearch, visible]);
 
-  const applyPlace = (place: PlaceSuggestion) => {
+  /** Sets the Point's place. Refuses (with a message) a spot more than 100 mi from you. */
+  const applyPlace = (place: PlaceSuggestion): boolean => {
+    const tooFar = rangeError(place);
+    if (tooFar) {
+      setFormError(tooFar);
+      return false;
+    }
     skipSearch.current = true;
     selectedLabel.current = place.label;
     setLocationSearch(place.label);
@@ -680,9 +692,16 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setPlaceType(semantic);
     setSelectedTier(tier);
     setSelectedRadiusMeters(BOUNDARY_RADII[tier]);
+    return true;
   };
 
   const handleMapPick = (latitude: number, longitude: number) => {
+    // Too far away: say so on the map and stay there, so the pin can be moved closer.
+    const tooFar = rangeError({ latitude, longitude });
+    if (tooFar) {
+      setPickNotice(tooFar);
+      return;
+    }
     const nearby = nearestPlace(latitude, longitude);
     applyPlace(
       nearby ?? {
@@ -748,6 +767,13 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
     if (visibility === 'channel' && !channelId) {
       setFormError('Channel Points need a channel. Pick one under Tags, or switch to Public.');
+      return;
+    }
+
+    // Also catches a place kept from "Drop again" after you've moved far away.
+    const tooFar = rangeError({ latitude: coords.lat, longitude: coords.lon });
+    if (tooFar) {
+      setFormError(tooFar);
       return;
     }
 
