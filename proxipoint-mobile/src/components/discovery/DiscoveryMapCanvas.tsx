@@ -304,7 +304,7 @@ export const DiscoveryMapCanvas: React.FC<{
 
     // ---- Labels: show a #tag label only where it fits ------------------------------------------
     // Most important first (selected, boosted, live, bigger groups); a label is hidden if it
-    // would touch another shown label or anyone else's circle.
+    // would touch another shown label or anyone else's circle. The selected pin's label is never hidden.
     const z = clusterZoom;
     const circleHalf = FOOTPRINT_W / 2 / z;
     // (The "#" is drawn smaller, so it counts as about half a letter.)
@@ -348,7 +348,8 @@ export const DiscoveryMapCanvas: React.FC<{
           box.t < o.y + circleHalf &&
           box.b > o.y - circleHalf,
       );
-      if (hitsLabel || hitsCircle) hiddenLabels.add(spot.id);
+      // The selected pin's label always shows (it's placed first, so others make room for it).
+      if (spot.id !== selectedNodeId && (hitsLabel || hitsCircle)) hiddenLabels.add(spot.id);
       else shown.push(box);
     }
     return { singles: nodeList.filter((n) => singleIds.has(n.id)), clusters: groupsOut, hiddenLabels };
