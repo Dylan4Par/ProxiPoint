@@ -18,6 +18,11 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
 const SPOT_PAD = 6;
 /** Spelled out: StyleSheet.absoluteFill(Object) isn't reliable in newer React Native. */
 const ABS_FILL = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 } as const;
+/**
+ * Above the map header (zIndex 10) and the tab bar (zIndex 40). Android also needs elevation:
+ * it draws views with a higher elevation on top regardless of zIndex.
+ */
+const ON_TOP = { zIndex: 1000, elevation: 1000 } as const;
 const CARD_ESTIMATE = 220;
 
 /**
@@ -140,7 +145,7 @@ export const TourOverlay: React.FC<{
     <View
       ref={root}
       collapsable={false}
-      style={ABS_FILL}
+      style={[ABS_FILL, ON_TOP]}
       onLayout={onLayout}
       onStartShouldSetResponder={() => true}
       accessibilityViewIsModal
