@@ -521,6 +521,7 @@ export const DiscoverScreen: React.FC = () => {
                 {/* Dates, like Discover's: opens the When sheet, which has the quick
                     ranges and Pick dates (the Calendar). Next 3 days there puts it back. */}
                 <TouchableOpacity
+                  ref={tourTarget('map-date-chip')}
                   style={[styles.dateChip, timeWindow.custom && styles.dateChipOn]}
                   onPress={() => setFiltersOpen(true)}
                   accessibilityRole="button"

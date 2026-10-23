@@ -8,6 +8,7 @@ export type TourTargetId =
   | 'create-event'
   | 'drop-tags'
   | 'map-filter-rail'
+  | 'map-date-chip'
   | 'map-area'
   | 'map-cards'
   | 'nav-channels'
@@ -46,8 +47,8 @@ export const MAP_TOUR: TourStep[] = [
     id: 'filters',
     label: 'STEP 2',
     title: 'Tune to Your Interests',
-    body: 'Filter by time or tap tags like #GarageSale or #LiveMusic to immediately zero in on the crowds and activities you care about.',
-    targets: ['map-filter-rail'],
+    body: 'Filter by time or tap tags like #GarageSale or #FoodTrucks to immediately zero in on the activities and crowds you care about.',
+    targets: ['map-filter-rail', 'map-date-chip'],
   },
   {
     id: 'channels',
