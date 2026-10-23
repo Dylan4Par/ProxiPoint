@@ -66,7 +66,7 @@ export const MAP_TOUR: TourStep[] = [
     id: 'create',
     label: 'STEP 5',
     title: 'Drop Your Own Point',
-    body: 'Tap +Event anytime to set your spot, add your tags, and notify nearby people to join you.',
+    body: 'Tap here anytime to select location, add your tags, and notify nearby people to join you.',
     targets: ['create-event'],
     cta: 'Start Exploring',
   },
