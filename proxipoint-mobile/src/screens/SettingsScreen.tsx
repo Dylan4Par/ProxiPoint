@@ -60,8 +60,6 @@ interface SettingsScreenProps {
   onChangeSettings: (settings: MySettings) => void;
   /** Open straight to a section, e.g. 'edit' from the Profile page's Edit button. */
   initialSection?: SectionId | null;
-  /** FAQs → "Replay app tour": closes Settings and runs the Explore Map tour again. */
-  onReplayTour?: () => void;
 }
 
 const ROWS: Array<{ id: SectionId; label: string; Icon: LucideIcon; kind: 'page' | 'expand' }> = [
@@ -101,7 +99,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onSaveProfile,
   onChangeSettings,
   initialSection = null,
-  onReplayTour,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -259,16 +256,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         status="Coming soon"
                       />
                     </>
-                  ) : null}
-                  {id === 'faqs' && onReplayTour ? (
-                    <TouchableOpacity
-                      style={styles.tourBtn}
-                      onPress={onReplayTour}
-                      accessibilityRole="button"
-                      testID="settings-replay-tour"
-                    >
-                      <Text style={styles.tourBtnText}>Replay app tour</Text>
-                    </TouchableOpacity>
                   ) : null}
                   {id === 'faqs'
                     ? FAQS.map((item) => (
@@ -679,17 +666,6 @@ const createStyles = (c: ThemeColors) =>
   statusSoon: { backgroundColor: 'rgba(148, 163, 184, 0.12)' },
   statusPillText: { fontSize: 10, fontWeight: '800' },
   faq: { gap: 3 },
-  tourBtn: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: 16,
-    height: 38,
-    borderRadius: 19,
-    borderWidth: 1,
-    borderColor: c.accent,
-    justifyContent: 'center',
-    marginBottom: 6,
-  },
-  tourBtnText: { color: c.accent, fontSize: 14, fontWeight: '800' },
   faqQ: { color: c.text, fontSize: 14, fontWeight: '700' },
   error: { color: c.amber, fontSize: 12, fontWeight: '600' },
   saveBtn: {

@@ -73,7 +73,6 @@ import {
 import { captureCurrentFix, geocodePlaces } from '../../services/placeGeocoder';
 import { nearestPlace } from '../../lib/placeSearch';
 import { WhenChip } from './WhenChip';
-import { tourTarget } from '../tour/tourTargets';
 import { ensurePhotoPolicyAccepted } from '../../lib/photoPolicy';
 import { cropToCircle } from '../../lib/coverPhoto';
 import { currentPosition } from '../../lib/places';
@@ -1338,7 +1337,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               />
             </View>
             <View style={styles.hairline} />
-            <View style={styles.inputRow} ref={tourTarget('drop-tags')} collapsable={false}>
+            <View style={styles.inputRow}>
               <Text style={styles.inputLabel}>Tags</Text>
               <TextInput
                 placeholder="#TechMeetup, #PostGIS"

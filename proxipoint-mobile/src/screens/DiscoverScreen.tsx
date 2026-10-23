@@ -12,9 +12,6 @@ import { MyDropsScreen } from './MyDropsScreen';
 import { PointDetailSheet } from '../components/discovery/PointDetailSheet';
 import { PhotoPolicyHost } from '../components/safety/PhotoPolicyHost';
 import { CircleCropHost } from '../components/common/CircleCropHost';
-import { TourOverlay } from '../components/tour/TourOverlay';
-import { tourTarget } from '../components/tour/tourTargets';
-import { MAP_TOUR, MAP_TOUR_KEY } from '../lib/tour';
 import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -278,45 +275,6 @@ export const DiscoverScreen: React.FC = () => {
     setUnits(settings.units);
     AsyncStorage.setItem(UNITS_KEY, settings.units).catch(() => undefined);
   }, [settings.units]);
-  // First-run tour of Explore Map: the step showing, or null. Seen once per phone (Settings can replay it).
-  const [tourStep, setTourStep] = useState<number | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    AsyncStorage.getItem(MAP_TOUR_KEY)
-      .then((seen) => {
-        if (cancelled || seen) return;
-        // First open: land on Explore Map, give the map a moment to draw, then start.
-        setTab('map');
-        timer = setTimeout(() => !cancelled && setTourStep(0), 700);
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, []);
-  // Step 1.1 points at the Tags field, so the Create Event sheet is open for that step only.
-  useEffect(() => {
-    if (tourStep == null) return;
-    const needsSheet = Boolean(MAP_TOUR[tourStep]?.needsCreateSheet);
-    if (needsSheet) {
-      setDetailId(null);
-      setManagingId(null);
-      setDropPrefill(null);
-    }
-    setDropOpen(needsSheet);
-  }, [tourStep]);
-  const endTour = () => {
-    setTourStep(null);
-    setDropOpen(false);
-    AsyncStorage.setItem(MAP_TOUR_KEY, new Date().toISOString()).catch(() => undefined);
-  };
-  const startTour = () => {
-    goTo('map');
-    setTimeout(() => setTourStep(0), 400);
-  };
-
   // Point recaps posted from the Profile page (in memory until the backend has them).
   const [recaps, setRecaps] = useState<PointRecap[]>([]);
 
@@ -491,7 +449,6 @@ export const DiscoverScreen: React.FC = () => {
             topRow={
               <>
                 <TouchableOpacity
-                  ref={tourTarget('create-event')}
                   style={styles.createEventBtn}
                   onPress={() => {
                     setDetailId(null);
@@ -538,11 +495,7 @@ export const DiscoverScreen: React.FC = () => {
             }
           />
           {/* Map + cards share this area; the cards can grow to cover all of it (full list). */}
-          <View
-            ref={tourTarget('map-area')}
-            collapsable={false}
-            style={styles.mapAndCards}
-            onLayout={(event) => setCardsArea(event.nativeEvent.layout.height)}>
+          <View style={styles.mapAndCards} onLayout={(event) => setCardsArea(event.nativeEvent.layout.height)}>
             <DiscoveryMapCanvas
               liveOnly={liveOnly}
               // Touching the map closes the detail sheet (the Point stays selected).
@@ -818,10 +771,6 @@ export const DiscoverScreen: React.FC = () => {
           }}
           onSaveProfile={setProfile}
           onChangeSettings={setSettings}
-          onReplayTour={() => {
-            setOverlay(null);
-            startTour();
-          }}
         />
       ) : null}
 
@@ -831,15 +780,6 @@ export const DiscoverScreen: React.FC = () => {
         home={home}
         onPick={pickCity}
         onClose={() => setCityPickerOpen(false)}
-      />
-
-      {/* First-run tour, above everything else on this screen. */}
-      <TourOverlay
-        steps={MAP_TOUR}
-        index={tourStep}
-        onNext={() => (tourStep != null && tourStep < MAP_TOUR.length - 1 ? setTourStep(tourStep + 1) : endTour())}
-        onBack={() => setTourStep((current) => (current != null && current > 0 ? current - 1 : current))}
-        onSkip={endTour}
       />
 
       {/* Photo rules: the one-time agreement before a first upload, and the full rules page. */}

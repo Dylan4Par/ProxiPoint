@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
-import { tourTarget } from '../tour/tourTargets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CircleUser, Compass, Map as MapIcon, Users, type LucideIcon } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
@@ -79,7 +78,6 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
         return (
           <TouchableOpacity
             key={id}
-            ref={id === 'profile' ? tourTarget('nav-profile') : undefined}
             style={styles.navItem}
             activeOpacity={0.7}
             onPress={handlers[id]}
