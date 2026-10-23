@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Image, Linking, Platform, ScrollView, useWindowDimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Store, Users, X, Zap } from 'lucide-react-native';
+import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, MapPin, Search, Settings, Store, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { PointCard } from '../components/discovery/PointCard';
 import { defaultRangeMeters, searchRanges, useUnits } from '../lib/units';
@@ -54,6 +54,8 @@ interface DiscoverFeedScreenProps {
   /** Channels tab, on the list of channels to join. */
   onBrowseChannels: () => void;
   onOpenMap: () => void;
+  /** Gear at the top right: opens Settings. */
+  onOpenSettings: () => void;
   /** Explore Map filtered to this #tag. */
   onShowTagOnMap: (tag: string) => void;
   /** Open search from elsewhere (e.g. Channels' search button): focuses the box. New key = new request. */
@@ -88,6 +90,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   onOpenChannel,
   onBrowseChannels,
   onOpenMap,
+  onOpenSettings,
   onShowTagOnMap,
   searchRequest = null,
   onOpenProfile,
@@ -233,14 +236,13 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       <View style={styles.header}>
         <Text style={styles.title}>Discover</Text>
         <TouchableOpacity
-          style={styles.mapBtn}
-          onPress={onOpenMap}
+          style={styles.settingsBtn}
+          onPress={onOpenSettings}
           accessibilityRole="button"
-          accessibilityLabel="Open Explore Map"
-          testID="discover-open-map"
+          accessibilityLabel="Settings"
+          testID="discover-settings"
         >
-          <MapIcon size={14} color={c.accent} strokeWidth={2.5} />
-          <Text style={styles.mapBtnText}>Map</Text>
+          <Settings size={20} color={c.text} strokeWidth={2.25} />
         </TouchableOpacity>
       </View>
 
@@ -958,19 +960,17 @@ const createStyles = (c: ThemeColors) =>
       paddingBottom: 4,
     },
     title: { color: c.text, fontSize: 24, fontWeight: '800' },
-    mapBtn: {
-      flexDirection: 'row',
+    // Same round gear as the Profile page's.
+    settingsBtn: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
       alignItems: 'center',
-      gap: 5,
-      flexShrink: 1,
-      paddingHorizontal: 12,
-      paddingVertical: 7,
-      borderRadius: 16,
+      justifyContent: 'center',
+      backgroundColor: c.glass,
       borderWidth: 1,
-      borderColor: c.accentBorder,
-      backgroundColor: c.accentTint,
+      borderColor: c.border,
     },
-    mapBtnText: { color: c.accent, fontSize: 12, fontWeight: '800' },
     searchBox: {
       flexDirection: 'row',
       alignItems: 'center',

@@ -457,6 +457,7 @@ export const DiscoverScreen: React.FC = () => {
             setChannelsSegment('manage');
           }}
           onOpenMap={() => goTo('map')}
+          onOpenSettings={() => openSettings()}
           // Same area picker as the map's city pill, so Discover and the map stay on one place.
           onPickLocation={() => setCityPickerOpen(true)}
           onShowTagOnMap={showTagOnMap}
@@ -812,7 +813,7 @@ export const DiscoverScreen: React.FC = () => {
           profile={profile}
           settings={settings}
           initialSection={settingsSection}
-          // Settings opens over the Profile tab, so closing it lands back there.
+          // Settings opens over the current tab (Profile or Discover), so closing it lands back there.
           onBack={() => setOverlay(null)}
           onViewProfile={() => {
             setOverlay(null);
