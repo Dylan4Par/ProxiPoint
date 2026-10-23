@@ -151,6 +151,47 @@ export function placeCard(
   return pinnedBottom;
 }
 
+/**
+ * Spotlights around several targets: padded, rounded to follow the target (a pill stays a pill,
+ * up to `maxRadius`), and kept `gap` apart where two would touch, splitting the space between
+ * them evenly so neither outline runs into the other.
+ */
+export function spotlightHoles(
+  targets: Rect[],
+  pad: number,
+  screen: { width: number; height: number },
+  gap = 6,
+  maxRadius = 24,
+): Rect[] {
+  const holes = targets.map((t) => {
+    const p = padRect(t, pad, screen);
+    return { ...p, radius: Math.min(maxRadius, p.height / 2, p.width / 2) };
+  });
+  for (let i = 0; i < targets.length; i += 1) {
+    for (let j = 0; j < targets.length; j += 1) {
+      if (i === j) continue;
+      const a = targets[i];
+      const b = targets[j];
+      const overlapX = Math.min(a.x + a.width, b.x + b.width) - Math.max(a.x, b.x) > 0;
+      const aBottom = a.y + a.height;
+      // a sits above b and their padded spotlights would come closer than `gap`.
+      if (!overlapX || aBottom > b.y || b.y - aBottom >= 2 * pad + gap) continue;
+      const mid = (aBottom + b.y) / 2;
+      const ha = holes[i];
+      const hb = holes[j];
+      const newBottom = Math.max(aBottom, mid - gap / 2);
+      const newTop = Math.min(b.y, mid + gap / 2);
+      ha.height = Math.max(0, Math.min(ha.y + ha.height, newBottom) - ha.y);
+      const bBottom = hb.y + hb.height;
+      hb.y = Math.max(hb.y, newTop);
+      hb.height = Math.max(0, bBottom - hb.y);
+      ha.radius = Math.min(maxRadius, ha.height / 2, ha.width / 2);
+      hb.radius = Math.min(maxRadius, hb.height / 2, hb.width / 2);
+    }
+  }
+  return holes;
+}
+
 /** SVG path of the whole screen with rounded holes cut out (draw with fillRule="evenodd"). */
 export function maskPath(screen: { width: number; height: number }, holes: Rect[], radius = 14): string {
   const outer = `M0 0H${screen.width}V${screen.height}H0Z`;

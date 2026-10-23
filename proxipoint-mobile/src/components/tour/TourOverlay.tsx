@@ -11,7 +11,7 @@ import {
   type LayoutChangeEvent,
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
-import { centerSpot, maskPath, visibleArea, padRect, placeCard, type Rect, type TourStep } from '../../lib/tour';
+import { centerSpot, maskPath, spotlightHoles, visibleArea, padRect, placeCard, type Rect, type TourStep } from '../../lib/tour';
 import { measureTourTarget } from './tourTargets';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -92,7 +92,7 @@ export const TourOverlay: React.FC<{
             : { ...visibleArea(area, coverRect), radius: 14 },
         ]);
       } else {
-        setHoles(found.map((r) => padRect(local(r), SPOT_PAD, screen)));
+        setHoles(spotlightHoles(found.map(local), SPOT_PAD, screen));
       }
       Animated.timing(fade, {
         toValue: 1,
