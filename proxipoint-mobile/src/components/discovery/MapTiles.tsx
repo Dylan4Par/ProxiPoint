@@ -1,6 +1,7 @@
 import React, { memo, useMemo } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { toCanvasCoordinates } from '../../stores/useDiscoveryStore';
+import { MAP_TILE_URLS } from '../../lib/mapTileUrls';
 
 /**
  * Real street map under the Discover pins: Esri's grey "Canvas" basemap plus its street-name
@@ -10,16 +11,7 @@ import { toCanvasCoordinates } from '../../stores/useDiscoveryStore';
  * ArcGIS Location Platform key (append `?token=KEY` below) or swap TILE_URLS for another
  * provider you're licensed to use (Stadia, MapTiler, Mapbox raster tiles…).
  */
-const TILE_URLS = {
-  dark: {
-    base: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-    labels: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-  },
-  light: {
-    base: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}',
-    labels: 'https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Reference/MapServer/tile/{z}/{y}/{x}',
-  },
-} as const;
+const TILE_URLS = MAP_TILE_URLS;
 
 /** Zoom 16 is the sharpest these basemaps go (~1.8 m per pixel around Denver). */
 const TILE_ZOOM = 16;

@@ -1,7 +1,5 @@
 import { zoomForRadius } from './boundaryTiers';
-
-export const ESRI_STREET_TILE_URL =
-  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}';
+import { MAP_TILE_MAX_ZOOM, MAP_TILE_URLS } from './mapTileUrls';
 
 export const LEAFLET_STYLESHEET = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 export const LEAFLET_SCRIPT = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
@@ -12,11 +10,9 @@ export const PRIVACY_MOVE_MESSAGE = 'proxipoint-privacy-move';
 export const MAP_CENTER_MESSAGE = 'proxipoint-map-center';
 
 /**
- * Local vector tiles from `pmtiles serve` (dark Protomaps basemap).
- * Set EXPO_PUBLIC_OFFLINE_TILES_URL in .env to use them, e.g.
- *   Android emulator: http://10.0.2.2:8090/frontrange/{z}/{x}/{y}.mvt
- *   Web on your PC:   http://localhost:8090/frontrange/{z}/{x}/{y}.mvt
- * Leave it unset to fall back to the hosted Esri street map.
+ * Local vector tiles from `pmtiles serve` (Protomaps), from EXPO_PUBLIC_OFFLINE_TILES_URL.
+ * No longer used by default: the Leaflet maps use the same Esri tiles as Explore Map so every map
+ * looks the same. Pass it as `offlineTileUrl` to a map document to opt back in.
  */
 export const OFFLINE_TILE_URL: string = process.env.EXPO_PUBLIC_OFFLINE_TILES_URL ?? '';
 
@@ -26,7 +22,7 @@ export interface MapDocumentCenter {
 }
 
 export interface MapDocumentOptions {
-  /** z/x/y .mvt URL for offline vector tiles. Empty string = hosted Esri tiles. */
+  /** z/x/y .mvt URL for offline vector tiles. Left out = the app's shared Esri tiles. */
   offlineTileUrl?: string;
   /** Day or night map style. Default dark. */
   theme?: 'dark' | 'light';
@@ -35,20 +31,27 @@ export interface MapDocumentOptions {
 /** Page background behind the tiles, per theme (matches the app's map color). */
 export const MAP_BACKGROUND = { dark: '#0a1120', light: '#e9eef5' } as const;
 
+/** Leaflet code for the app's shared basemap (same tiles as Explore Map) in this theme. */
+function hostedTilesScript(theme: 'dark' | 'light', variable: string): string {
+  const urls = MAP_TILE_URLS[theme];
+  const opts = `{ attribution: 'Tiles &copy; Esri', maxNativeZoom: ${MAP_TILE_MAX_ZOOM}, maxZoom: 19 }`;
+  return `
+    ${variable} = L.layerGroup([
+      L.tileLayer('${urls.base}', ${opts}),
+      L.tileLayer('${urls.labels}', ${opts})
+    ]).addTo(map);`;
+}
+
 function buildBasemapScript(offlineTileUrl: string, theme: 'dark' | 'light'): string {
   if (offlineTileUrl) {
-    // Local vector tiles, with an automatic fallback to the hosted Esri street map when they
-    // can't be reached (e.g. a real phone can't see the emulator-only 10.0.2.2 address, iOS
-    // blocks plain http, or the tile server isn't running). Without this the map stays blank.
+    // Local vector tiles, with an automatic fallback to the shared hosted tiles when they can't
+    // be reached (e.g. a real phone can't see the emulator-only 10.0.2.2 address, iOS blocks
+    // plain http, or the tile server isn't running). Without this the map stays blank.
     return `
-    var esriFallback = null;
+    var hostedFallback = null;
     function useHostedTiles() {
-      if (esriFallback) return;
-      esriFallback = L.tileLayer('${ESRI_STREET_TILE_URL}', {
-        attribution: 'Tiles &copy; Esri',
-        maxZoom: 19
-      }).addTo(map);
-      esriFallback.bringToBack();
+      if (hostedFallback) return;
+      ${hostedTilesScript(theme, 'hostedFallback')}
     }
     var vectorLoaded = false;
     var vectorErrors = 0;
@@ -73,10 +76,7 @@ function buildBasemapScript(offlineTileUrl: string, theme: 'dark' | 'light'): st
     setTimeout(function () { if (!vectorLoaded) useHostedTiles(); }, 3500);`;
   }
   return `
-    L.tileLayer('${ESRI_STREET_TILE_URL}', {
-      attribution: 'Tiles &copy; Esri',
-      maxZoom: 19
-    }).addTo(map);`;
+    var hostedTiles = null;${hostedTilesScript(theme, 'hostedTiles')}`;
 }
 
 /**
@@ -355,7 +355,8 @@ export function buildDiscoveryMapDocument(
 ): string {
   const latitude = Number.isFinite(center.latitude) ? center.latitude : 0;
   const longitude = Number.isFinite(center.longitude) ? center.longitude : 0;
-  const offlineTileUrl = options.offlineTileUrl ?? OFFLINE_TILE_URL;
+  // Same tiles as Explore Map unless offline vector tiles are asked for explicitly.
+  const offlineTileUrl = options.offlineTileUrl ?? '';
   const script = buildPreviewGeofenceScript();
   const theme = options.theme ?? 'dark';
   const basemap = buildBasemapScript(offlineTileUrl, theme);
