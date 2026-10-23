@@ -10,6 +10,7 @@ import {
   TouchableWithoutFeedback,
   Image,
 } from 'react-native';
+import { tourTarget } from '../tour/tourTargets';
 import { CalendarDays, Check, ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react-native';
 import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort } from '../../lib/pointSort';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
@@ -154,7 +155,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
       )}
 
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
-      <View style={styles.chipArea}>
+      <View style={styles.chipArea} ref={tourTarget('map-filter-rail')} collapsable={false}>
       <ScrollView
         ref={chipScroll}
         horizontal
