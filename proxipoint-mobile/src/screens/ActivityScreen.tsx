@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Bell, ChevronRight, Hash, MapPin, Zap } from 'lucide-react-native';
+import { Bell, ChevronRight, MapPin, Zap } from 'lucide-react-native';
 import { markAllActivityRead, timeAgo, useActivity, type ActivityItem } from '../lib/activity';
 import { activeBoost, useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
@@ -67,7 +67,6 @@ export const ActivityScreen: React.FC<{
     <View style={[styles.header, embedded && styles.headerEmbedded]}>
       {embedded ? null : <Text style={styles.title}>Activity</Text>}
       <TouchableOpacity onPress={onEditTags} style={styles.tagsBtn} accessibilityRole="button" testID="activity-edit-tags">
-        <Hash size={14} color={c.accent} strokeWidth={2.5} />
         <Text style={styles.tagsBtnText} numberOfLines={1}>
           {interestTags.length ? `Following ${interestTags.length} #tag${interestTags.length === 1 ? '' : 's'}` : 'Add #tags'}
         </Text>
