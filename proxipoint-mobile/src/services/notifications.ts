@@ -1,5 +1,6 @@
 import { Platform } from 'react-native';
 import { claimNotificationSlot } from '../lib/notificationCooldown';
+import { formatDistanceIn, getUnits } from '../lib/units';
 import type { ProximityAlertEvent } from '../types/telemetry';
 
 const PROXIMITY_CHANNEL_ID = 'proximity';
@@ -58,7 +59,7 @@ export async function notifyProximityBreach(alert: ProximityAlertEvent) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: '⚠️ Proximity Alert',
-        body: `${alert.targetName || alert.targetEntityId} is within ${Math.round(alert.distanceMeters)}m!`,
+        body: `${alert.targetName || alert.targetEntityId} is within ${formatDistanceIn(alert.distanceMeters, getUnits())}!`,
         data: { targetEntityId: alert.targetEntityId, lat: alert.latitude, lon: alert.longitude },
         sound: 'default',
       },

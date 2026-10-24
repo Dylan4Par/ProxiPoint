@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -6,23 +6,85 @@ import {
   FlatList,
   StyleSheet,
   Animated,
+  BackHandler,
   PanResponder,
 } from 'react-native';
+import { tourTarget } from '../tour/tourTargets';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
+import { PointCard } from './PointCard';
+import { sortPoints, usePointSort } from '../../lib/pointSort';
+import { matchesDiscoverFilters } from '../../lib/discoverFilters';
+import { useTimeWindow } from '../../lib/timeWindow';
+import { useModeration } from '../../lib/moderation';
+import { isBoosted, useBoosts } from '../../lib/boost';
+import { useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const EXPANDED_HEIGHT = 360;
+/** Smallest default size: the header plus the top of the first card. */
+const MIN_HALF_HEIGHT = 120;
+/**
+ * The sheet's top corner radius. The sheet overlaps the map by this much so the map shows
+ * behind the rounded corners (instead of square patches of background).
+ */
+export const CARD_SHEET_RADIUS = 28;
 const COLLAPSED_HEIGHT = 64;
 
-export const EventCardList: React.FC = () => {
+/**
+ * collapsed: just the header bar. half: cards under the map (default).
+ * full: the list fills the whole area under the filter chips and shows every Point, not just
+ * the ones in view on the map.
+ */
+type DrawerMode = 'collapsed' | 'half' | 'full';
+
+export const EventCardList: React.FC<{
+  liveOnly?: boolean;
+  /** Tapping a card selects it and opens its public detail sheet. */
+  onOpenDetails?: (id: string) => void;
+  /** Height of the map + list area, so the list can grow to cover all of it. */
+  fullHeight?: number | null;
+  /** Change this number to send the list back to its default size (e.g. the Discover tab was tapped). */
+  resetSignal?: number;
+  /** Tells the screen when the list covers the whole map (so it can hide things on the map). */
+  onFullChange?: (full: boolean) => void;
+}> = ({ liveOnly = false, onOpenDetails, fullHeight = null, resetSignal = 0, onFullChange }) => {
+  const styles = useThemedStyles(createStyles);
   const getVisibleNodes = useDiscoveryStore((s) => s.getVisibleNodes);
+  const allNodes = useDiscoveryStore((s) => s.nodes);
   const toggleRsvp = useDiscoveryStore((s) => s.toggleRsvp);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
   const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
 
-  const visibleNodes = getVisibleNodes();
+  const selectedTag = useDiscoveryStore((s) => s.selectedTag);
+  const activeTab = useDiscoveryStore((s) => s.activeTab);
+  useModeration(); // re-filter when you report or block someone
+  const boostClock = useBoosts(); // re-render when a boost starts or runs out
+  useTimeWindow(); // re-filter when the date window changes (3 days, or Calendar dates)
+  const sort = usePointSort(); // Filter & sort sheet: closest, soonest or most going
+  const [mode, setMode] = useState<DrawerMode>('half');
+  const isExpanded = mode !== 'collapsed';
+  const isFull = mode === 'full';
 
-  const [isExpanded, setIsExpanded] = useState(true);
+  // Half: what's in view on the map (the store limits it). Full: every Point.
+  // Both use the order picked in Filter & sort (closest by default); Boosted Points lead.
+  const source: DiscoveryNode[] = isFull
+    ? (Object.values(allNodes || {}) as DiscoveryNode[]).sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0))
+    : getVisibleNodes();
+  const visibleNodes = sortPoints(
+    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab })),
+    sort,
+  )
+    .map((node, index) => ({ node, index, boosted: isBoosted(node.id, boostClock) }))
+    .sort((a, b) => Number(b.boosted) - Number(a.boosted) || a.index - b.index)
+    .map((entry) => entry.node);
+
   const animatedHeight = useRef(new Animated.Value(EXPANDED_HEIGHT)).current;
+  // Default size: up to 360, but never more than half the map + cards area (a phone held sideways
+  // has little height). The full list covers the whole area.
+  const halfHeight =
+    fullHeight != null ? Math.min(EXPANDED_HEIGHT, Math.max(MIN_HALF_HEIGHT, Math.round(fullHeight * 0.5))) : EXPANDED_HEIGHT;
+  const heights = useRef({ half: halfHeight, full: fullHeight ?? EXPANDED_HEIGHT });
+  heights.current.half = halfHeight;
+  heights.current.full = Math.max(halfHeight, fullHeight ?? EXPANDED_HEIGHT);
 
   const selectedNode =
     visibleNodes.find((e) => e.id === selectedNodeId) ||
@@ -38,106 +100,184 @@ export const EventCardList: React.FC = () => {
       isRsvpd: false,
     };
 
-  const animateDrawer = (toExpanded: boolean) => {
+  const modeRef = useRef<DrawerMode>('half');
+  const heightFor = (next: DrawerMode) =>
+    next === 'full' ? heights.current.full : next === 'half' ? heights.current.half : COLLAPSED_HEIGHT;
+
+  const animateDrawer = (next: DrawerMode) => {
+    modeRef.current = next;
+    setMode(next);
     Animated.spring(animatedHeight, {
-      toValue: toExpanded ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT,
+      toValue: heightFor(next),
       useNativeDriver: false,
-      friction: 8,
+      friction: 9,
       tension: 50,
     }).start();
-    setIsExpanded(toExpanded);
+  };
+
+  // Swipe up: collapsed → half → full. Swipe down: full → half → collapsed.
+  const step = (direction: 1 | -1) => {
+    const order: DrawerMode[] = ['collapsed', 'half', 'full'];
+    const i = order.indexOf(modeRef.current);
+    const next = order[Math.max(0, Math.min(order.length - 1, i + direction))];
+    if (next !== modeRef.current) animateDrawer(next);
   };
 
   const panResponder = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gestureState) => {
-        return Math.abs(gestureState.dy) > 8;
-      },
+      onMoveShouldSetPanResponder: (_, gestureState) => Math.abs(gestureState.dy) > 8,
       onPanResponderRelease: (_, gestureState) => {
-        if (gestureState.dy > 30) {
-          animateDrawer(false);
-        } else if (gestureState.dy < -30) {
-          animateDrawer(true);
-        }
+        if (gestureState.dy > 30) step(-1);
+        else if (gestureState.dy < -30) step(1);
       },
-    })
+    }),
   ).current;
 
-  const renderCard = ({ item }: { item: DiscoveryNode }) => {
-    const isSelected = item.id === selectedNodeId;
+  // Keep the list the right height when the screen size changes (e.g. rotating the phone).
+  useEffect(() => {
+    animatedHeight.setValue(heightFor(modeRef.current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fullHeight, animatedHeight]);
 
-    return (
-      <TouchableOpacity
-        activeOpacity={0.9}
-        onPress={() => setSelectedNodeId(item.id)}
-        style={[styles.card, isSelected && styles.cardSelected]}
-      >
-        <Text style={styles.tagText}>{item.tag}</Text>
-        <Text style={styles.titleText}>{item.title}</Text>
-        <Text style={styles.hostText}>{item.venue}</Text>
+  // Discover tab tapped again: back to the default size (cards under the map).
+  const lastReset = useRef(resetSignal);
+  useEffect(() => {
+    if (resetSignal === lastReset.current) return;
+    lastReset.current = resetSignal;
+    if (modeRef.current !== 'half') animateDrawer('half');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetSignal]);
 
-        <View style={styles.statusRow}>
-          <View style={styles.badgeRow}>
-            <View style={styles.distanceBadge}>
-              <View style={styles.greenDot} />
-              <Text style={styles.distanceText}>{item.distanceMeters}m away</Text>
-            </View>
-            <View style={styles.liveBadge}>
-              <Text style={styles.liveText}>{item.status}</Text>
-            </View>
-          </View>
+  useEffect(() => {
+    onFullChange?.(isFull);
+  }, [isFull, onFullChange]);
 
-          <View style={styles.actionRow}>
-            <View style={styles.avatarStack}>
-              <View style={[styles.avatar, { backgroundColor: '#f97316' }]} />
-              <View style={[styles.avatar, { backgroundColor: '#3b82f6', marginLeft: -8 }]} />
-              <View style={[styles.avatarCount, { marginLeft: -8 }]}>
-                <Text style={styles.avatarCountText}>{item.attendeeCount}+</Text>
-              </View>
-            </View>
+  // Android back: full list → back to the map.
+  useEffect(() => {
+    if (!isFull) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      animateDrawer('half');
+      return true;
+    });
+    return () => sub.remove();
+  }, [isFull]);
 
-            <TouchableOpacity
-              style={styles.rsvpBtn}
-              onPress={() => toggleRsvp(item.id)}
-            >
-              <Text style={[styles.rsvpIcon, item.isRsvpd && styles.rsvpIconActive]}>✓</Text>
-              <Text style={[styles.rsvpLabel, item.isRsvpd && styles.rsvpLabelActive]}>
-                RSVP
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={styles.cardFooter}>
-          <Text style={styles.etaText}>🚶 {item.eta}</Text>
-          <Text style={styles.activeReadout}>{item.attendeeCount} active</Text>
-        </View>
-      </TouchableOpacity>
+  // Picking a pin on the map scrolls its card to the middle of the list (opening the list if it's
+  // collapsed). The map also slides to the pin, which can reorder the list, so keep following the
+  // pick for a moment. A card tapped in the list stays where it is.
+  const listRef = useRef<FlatList<DiscoveryNode>>(null);
+  const pickedInList = useRef<string | null>(null);
+  const pickedAt = useRef(0);
+  const lastPick = useRef<string | null>(null);
+  const visibleKey = visibleNodes.map((node) => node.id).join(',');
+  useEffect(() => {
+    if (!selectedNodeId) {
+      lastPick.current = null;
+      return;
+    }
+    if (selectedNodeId !== lastPick.current) {
+      lastPick.current = selectedNodeId;
+      pickedAt.current = Date.now();
+      if (pickedInList.current === selectedNodeId) return;
+      pickedInList.current = null; // picked on the map
+    } else if (pickedInList.current === selectedNodeId || Date.now() - pickedAt.current > 1500) {
+      return;
+    }
+    const index = visibleNodes.findIndex((node) => node.id === selectedNodeId);
+    if (index < 0) return;
+    const wasCollapsed = modeRef.current === 'collapsed';
+    if (wasCollapsed) animateDrawer('half');
+    const timer = setTimeout(
+      () => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }),
+      wasCollapsed ? 260 : 60,
     );
-  };
+    return () => clearTimeout(timer);
+  }, [selectedNodeId, visibleKey]);
+
+  const renderCard = ({ item }: { item: DiscoveryNode }) => (
+    <PointCard
+      node={item}
+      boosted={isBoosted(item.id, boostClock)}
+      selected={item.id === selectedNodeId}
+      onOpen={() => {
+        pickedInList.current = item.id;
+        setSelectedNodeId(item.id);
+        // From the full list, drop back to the map so the Point can be shown on it.
+        if (modeRef.current === 'full') animateDrawer('half');
+        onOpenDetails?.(item.id);
+      }}
+      onToggleRsvp={() => toggleRsvp(item.id)}
+    />
+  );
 
   return (
-    <Animated.View style={[styles.drawerContainer, { height: animatedHeight }]}>
+    <Animated.View ref={tourTarget('map-cards')} style={[styles.drawerContainer, { height: animatedHeight }]}>
       <View {...panResponder.panHandlers} style={styles.headerDraggable}>
         <View style={styles.pullBar} />
 
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={() => animateDrawer(!isExpanded)}
-          style={styles.collapsedHeaderRow}
-        >
-          <View style={styles.collapsedMeta}>
-            <Text style={styles.collapsedTag}>{selectedNode.tag}</Text>
-            <Text numberOfLines={1} style={styles.collapsedTitle}>
-              {selectedNode.title}
-            </Text>
-          </View>
-          <Text style={styles.chevronToggle}>{isExpanded ? '▾' : '▴'}</Text>
-        </TouchableOpacity>
+        <View style={styles.collapsedHeaderRow}>
+          <TouchableOpacity
+            activeOpacity={0.8}
+            // Tap the header: collapsed → cards, cards → full list, full list → back to the map.
+            onPress={() => animateDrawer(mode === 'half' ? 'full' : 'half')}
+            style={styles.collapsedMeta}
+            accessibilityRole="button"
+            accessibilityLabel={isFull ? 'Show the map' : 'Show the full list'}
+            testID="cards-header"
+          >
+            {isFull ? (
+              <>
+                <Text style={styles.collapsedTag}>ALL POINTS</Text>
+                <Text numberOfLines={1} style={styles.collapsedTitle}>
+                  {visibleNodes.length} {visibleNodes.length === 1 ? 'Point' : 'Points'}
+                  {selectedTag && selectedTag !== 'All' ? ` · ${selectedTag}` : ''}
+                  {liveOnly ? ' · Live now' : ''}
+                </Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.collapsedTag}>{selectedNode.tag}</Text>
+                <Text numberOfLines={1} style={styles.collapsedTitle}>
+                  {selectedNode.title}
+                </Text>
+              </>
+            )}
+          </TouchableOpacity>
+          {/* Up: one step taller (to the full list). Down: one step shorter. */}
+          {mode !== 'full' ? (
+            <TouchableOpacity
+              onPress={() => step(1)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={mode === 'collapsed' ? 'Show cards' : 'Expand to full list'}
+              testID="cards-expand"
+            >
+              <Text style={styles.chevronToggle}>▴</Text>
+            </TouchableOpacity>
+          ) : null}
+          {mode !== 'collapsed' ? (
+            <TouchableOpacity
+              onPress={() => step(-1)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessibilityRole="button"
+              accessibilityLabel={mode === 'full' ? 'Show the map' : 'Collapse cards'}
+              testID="cards-collapse"
+            >
+              <Text style={styles.chevronToggle}>▾</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       {isExpanded && (
         <FlatList
+          ref={listRef}
+          // Cards not drawn yet: jump near it by the average card height, then center it.
+          onScrollToIndexFailed={({ index, averageItemLength }) => {
+            listRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: false });
+            setTimeout(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), 80);
+          }}
+          style={styles.list}
           data={visibleNodes}
           keyExtractor={(item) => item.id}
           renderItem={renderCard}
@@ -145,8 +285,20 @@ export const EventCardList: React.FC = () => {
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
-              <Text style={styles.emptyTitle}>NO VIEWABLE EVENTS IN SECTOR</Text>
-              <Text style={styles.emptySubtitle}>Drag the map to scan adjacent sectors</Text>
+              <Text style={styles.emptyTitle}>
+                {isFull
+                  ? 'NO POINTS MATCH THESE FILTERS'
+                  : liveOnly
+                    ? 'NOTHING LIVE IN SECTOR'
+                    : 'NO VIEWABLE EVENTS IN SECTOR'}
+              </Text>
+              <Text style={styles.emptySubtitle}>
+                {isFull
+                  ? 'Try another #tag, or turn off Live Now'
+                  : liveOnly
+                    ? 'Drag the map, or turn off Live Now to see upcoming Points'
+                    : 'Drag the map to scan adjacent sectors'}
+              </Text>
             </View>
           }
         />
@@ -155,26 +307,29 @@ export const EventCardList: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (c: ThemeColors) =>
+  StyleSheet.create({
   drawerContainer: {
-    backgroundColor: '#090f1d',
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
+    marginTop: -CARD_SHEET_RADIUS,
+    zIndex: 2,
+    backgroundColor: c.sheet,
+    borderTopLeftRadius: CARD_SHEET_RADIUS,
+    borderTopRightRadius: CARD_SHEET_RADIUS,
     borderTopWidth: 1,
-    borderColor: '#1e293b',
+    borderColor: c.border,
     overflow: 'hidden',
   },
   headerDraggable: {
     paddingTop: 8,
     paddingBottom: 6,
     paddingHorizontal: 16,
-    backgroundColor: '#090f1d',
+    backgroundColor: c.sheet,
   },
   pullBar: {
     width: 42,
     height: 4,
     borderRadius: 2,
-    backgroundColor: '#334155',
+    backgroundColor: c.borderStrong,
     alignSelf: 'center',
     marginBottom: 6,
   },
@@ -183,169 +338,35 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 2,
+    gap: 10,
   },
   collapsedMeta: {
     flex: 1,
     marginRight: 10,
   },
   collapsedTag: {
-    color: '#06b6d4',
+    color: c.accentDeep,
     fontSize: 10,
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   collapsedTitle: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 13,
     fontWeight: '700',
     marginTop: 1,
   },
   chevronToggle: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 18,
     fontWeight: '700',
     paddingHorizontal: 4,
   },
+  list: { flex: 1 },
   listContent: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingBottom: 24,
     gap: 12,
-  },
-  card: {
-    backgroundColor: '#0f172a',
-    borderRadius: 16,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#1e293b',
-  },
-  cardSelected: {
-    borderColor: '#06b6d4',
-    backgroundColor: '#0b1629',
-  },
-  tagText: {
-    color: '#06b6d4',
-    fontSize: 12,
-    fontWeight: '700',
-    marginBottom: 2,
-  },
-  titleText: {
-    color: '#f8fafc',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  hostText: {
-    color: '#64748b',
-    fontSize: 11,
-    marginTop: 2,
-    marginBottom: 8,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  distanceBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#172554',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-    gap: 4,
-  },
-  greenDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10b981',
-  },
-  distanceText: {
-    color: '#38bdf8',
-    fontSize: 10,
-    fontWeight: '700',
-  },
-  liveBadge: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  liveText: {
-    color: '#10b981',
-    fontSize: 9,
-    fontWeight: '800',
-  },
-  actionRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  avatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  avatar: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 1.5,
-    borderColor: '#0f172a',
-  },
-  avatarCount: {
-    width: 24,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: '#334155',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#0f172a',
-  },
-  avatarCountText: {
-    color: '#f8fafc',
-    fontSize: 8,
-    fontWeight: '700',
-  },
-  rsvpBtn: {
-    alignItems: 'center',
-    paddingHorizontal: 6,
-  },
-  rsvpIcon: {
-    color: '#94a3b8',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-  rsvpIconActive: {
-    color: '#06b6d4',
-  },
-  rsvpLabel: {
-    color: '#64748b',
-    fontSize: 9,
-    fontWeight: '700',
-  },
-  rsvpLabelActive: {
-    color: '#06b6d4',
-  },
-  cardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    borderTopWidth: 1,
-    borderTopColor: '#1e293b',
-    paddingTop: 6,
-  },
-  etaText: {
-    color: '#94a3b8',
-    fontSize: 10,
-  },
-  activeReadout: {
-    color: '#64748b',
-    fontSize: 10,
   },
   emptyContainer: {
     alignItems: 'center',
@@ -353,13 +374,13 @@ const styles = StyleSheet.create({
     paddingVertical: 36,
   },
   emptyTitle: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 11,
     fontWeight: '700',
     letterSpacing: 1,
   },
   emptySubtitle: {
-    color: '#475569',
+    color: c.iconFaint,
     fontSize: 11,
     marginTop: 4,
   },
