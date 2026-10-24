@@ -20,6 +20,8 @@ import { isBoosted, useBoosts } from '../../lib/boost';
 import { useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const EXPANDED_HEIGHT = 360;
+/** Smallest default size: the header plus the top of the first card. */
+const MIN_HALF_HEIGHT = 120;
 /**
  * The sheet's top corner radius. The sheet overlaps the map by this much so the map shows
  * behind the rounded corners (instead of square patches of background).
@@ -76,8 +78,13 @@ export const EventCardList: React.FC<{
     .map((entry) => entry.node);
 
   const animatedHeight = useRef(new Animated.Value(EXPANDED_HEIGHT)).current;
-  const heights = useRef({ full: fullHeight ?? EXPANDED_HEIGHT });
-  heights.current.full = Math.max(EXPANDED_HEIGHT, fullHeight ?? EXPANDED_HEIGHT);
+  // Default size: up to 360, but never more than half the map + cards area (a phone held sideways
+  // has little height). The full list covers the whole area.
+  const halfHeight =
+    fullHeight != null ? Math.min(EXPANDED_HEIGHT, Math.max(MIN_HALF_HEIGHT, Math.round(fullHeight * 0.5))) : EXPANDED_HEIGHT;
+  const heights = useRef({ half: halfHeight, full: fullHeight ?? EXPANDED_HEIGHT });
+  heights.current.half = halfHeight;
+  heights.current.full = Math.max(halfHeight, fullHeight ?? EXPANDED_HEIGHT);
 
   const selectedNode =
     visibleNodes.find((e) => e.id === selectedNodeId) ||
@@ -95,7 +102,7 @@ export const EventCardList: React.FC<{
 
   const modeRef = useRef<DrawerMode>('half');
   const heightFor = (next: DrawerMode) =>
-    next === 'full' ? heights.current.full : next === 'half' ? EXPANDED_HEIGHT : COLLAPSED_HEIGHT;
+    next === 'full' ? heights.current.full : next === 'half' ? heights.current.half : COLLAPSED_HEIGHT;
 
   const animateDrawer = (next: DrawerMode) => {
     modeRef.current = next;
@@ -126,9 +133,10 @@ export const EventCardList: React.FC<{
     }),
   ).current;
 
-  // Keep the full list the right height if the screen size changes (e.g. rotation).
+  // Keep the list the right height when the screen size changes (e.g. rotating the phone).
   useEffect(() => {
-    if (modeRef.current === 'full') animatedHeight.setValue(heights.current.full);
+    animatedHeight.setValue(heightFor(modeRef.current));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fullHeight, animatedHeight]);
 
   // Discover tab tapped again: back to the default size (cards under the map).

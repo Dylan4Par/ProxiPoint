@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Modal, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Animated, Modal, PanResponder, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 import { finishCrop, getCropRequest, subscribeCrop, type CropSource } from '../../lib/circleCrop';
@@ -21,8 +21,9 @@ export const CircleCropHost: React.FC = () => {
 
 const Cropper: React.FC<{ source: CropSource }> = ({ source }) => {
   const insets = useSafeAreaInsets();
-  const { width: screenW, height: screenH } = Dimensions.get('window');
-  const side = Math.min(screenW - 32, screenH - 260); // the crop square (circle inside it)
+  const { width: screenW, height: screenH } = useWindowDimensions();
+  // The crop square (circle inside it); still usable with the phone held sideways.
+  const side = Math.max(140, Math.min(screenW - 32, screenH - 260));
   const imgW = Math.max(1, source.width);
   const imgH = Math.max(1, source.height);
   // At zoom 1 the photo just covers the square.

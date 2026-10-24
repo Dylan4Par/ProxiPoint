@@ -614,6 +614,16 @@ export const DiscoveryMapCanvas: React.FC<{
         if (resized && selectedPosRef.current) {
           if (resizeTimer.current) clearTimeout(resizeTimer.current);
           resizeTimer.current = setTimeout(focusSelected, 180);
+        } else if (resized && userMoved.current && Math.abs(previous.width - w) > 2) {
+          // Rotated (the width changed): keep the same spot in the middle of the map.
+          stopMove();
+          const z = currentZoom.current;
+          const midX = (previous.width / 2 + WORLD_OFFSET - currentPan.current.x) / z;
+          const midY = (previous.height / 2 + WORLD_OFFSET - currentPan.current.y) / z;
+          const next = { x: w / 2 + WORLD_OFFSET - z * midX, y: h / 2 + WORLD_OFFSET - z * midY };
+          pan.setValue(next);
+          currentPan.current = next;
+          calculateBounds(next.x, next.y);
         }
         if (focusRequest && focusRequest.key !== lastFocusKey.current) {
           // Opened to show a spot (e.g. a pinned post): start there instead of on you.

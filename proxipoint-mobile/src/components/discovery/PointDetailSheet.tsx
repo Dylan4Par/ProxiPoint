@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
-  Dimensions,
+  useWindowDimensions,
   Easing,
   Image,
   Linking,
@@ -178,6 +178,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   onTopChange,
   onOpenHost,
 }) => {
+  // Follows rotation (Dimensions.get would keep the size from when it was first read).
+  const { height: screenHeight } = useWindowDimensions();
   useUnits(); // re-render when Settings switches km / miles
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -211,7 +213,6 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
 
   if (!view) return null;
 
-  const screenHeight = Dimensions.get('window').height;
   const full = view.maxAttendance != null && view.attendeeCount >= view.maxAttendance && !view.isRsvpd;
   const going =
     view.maxAttendance != null
