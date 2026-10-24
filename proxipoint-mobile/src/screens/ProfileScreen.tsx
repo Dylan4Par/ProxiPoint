@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Bell, ChevronLeft, ChevronRight, Image as ImageIcon, Layers, Plus, Radio, Settings, X, type LucideIcon } from 'lucide-react-native';
@@ -71,6 +71,8 @@ interface ProfileScreenProps {
   onOpenPost: (postId: string) => void;
   /** Your home area: where "nearby" counts are worked out from (never GPS). */
   homeArea: { latitude: number; longitude: number };
+  /** Scroll a section into the middle of the screen (e.g. "Following #tags" on Alerts). New key = new request. */
+  focusRequest?: { key: number; section: 'tags' } | null;
 }
 
 /** Same tints as the category badges, scattered behind the avatar. */
@@ -121,11 +123,30 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onChangeRecaps,
   onOpenPost,
   homeArea,
+  focusRequest = null,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [bioFocused, setBioFocused] = useState(false);
   const insets = useSafeAreaInsets();
+  // Where sections sit in the scroll content, for focusRequest (sheet y + section y inside it).
+  const scrollRef = useRef<ScrollView>(null);
+  const [layout, setLayout] = useState<{ viewport: number; sheetY: number | null; tags: { y: number; height: number } | null }>({
+    viewport: 0,
+    sheetY: null,
+    tags: null,
+  });
+  const handledFocus = useRef(0);
+  useEffect(() => {
+    if (!focusRequest || focusRequest.key === handledFocus.current) return;
+    if (!layout.viewport || layout.sheetY == null || !layout.tags) return; // wait for layout
+    handledFocus.current = focusRequest.key;
+    const { y, height } = layout.tags;
+    // Center the tile; if it's taller than the screen, show its top.
+    const target = layout.sheetY + y + Math.min(height, layout.viewport) / 2 - layout.viewport / 2;
+    const timer = setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, target), animated: true }), 60);
+    return () => clearTimeout(timer);
+  }, [focusRequest?.key, layout]);
   // As a tab, the screen around it already keeps clear of the status bar.
   const topInset = asTab ? 0 : insets.top;
   // Hosts you follow from their public profiles (until GET /me/following exists).
@@ -184,6 +205,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     // As a tab it takes the space above the nav bar like the other tabs; otherwise it covers everything.
     <View style={asTab ? styles.tab : styles.overlay} testID="profile-screen">
       <KeyboardAwareScrollView
+        ref={scrollRef}
+        onLayout={(e) => setLayout((l) => ({ ...l, viewport: e.nativeEvent.layout.height }))}
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: asTab ? 24 : insets.bottom + 24 }}
         bounces={false}
@@ -310,7 +333,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
 
         {/* Sheet */}
-        <View style={styles.sheet}>
+        <View style={styles.sheet} onLayout={(e) => setLayout((l) => ({ ...l, sheetY: e.nativeEvent.layout.y }))}>
           <View style={styles.pullBar} />
 
           {/* Bio: type straight into the tile; saved as you go. */}
@@ -348,13 +371,19 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>SIGNAL</Text>
           <SignalTile signal={signal} contributions={contributions} isMe collapsible onOpenPost={onOpenPost} />
 
-          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY #TAGS</Text>
-          <MyTagsTile
-            tags={profile.interestTags ?? []}
-            isPublic={profile.interestTagsPublic ?? false}
-            onChange={onChangeInterestTags}
-            nearbyCounts={nearbyCounts}
-          />
+          <View
+            onLayout={(e) =>
+              setLayout((l) => ({ ...l, tags: { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height } }))
+            }
+          >
+            <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY #TAGS</Text>
+            <MyTagsTile
+              tags={profile.interestTags ?? []}
+              isPublic={profile.interestTagsPublic ?? false}
+              onChange={onChangeInterestTags}
+              nearbyCounts={nearbyCounts}
+            />
+          </View>
 
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY CHANNELS</Text>
           <MyChannelsTile

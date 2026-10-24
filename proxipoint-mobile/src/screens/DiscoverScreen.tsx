@@ -65,6 +65,8 @@ export const DiscoverScreen: React.FC = () => {
   const [tab, setTab] = useState<ScreenTab>('discover');
   // Profile tab: the profile itself, or My Drops opened from it.
   const [profileView, setProfileView] = useState<'main' | 'drops'>('main');
+  // Profile opened to a section (e.g. MY #TAGS from Alerts' "Following #tags"). New key = new request.
+  const [profileFocus, setProfileFocus] = useState<{ key: number; section: 'tags' } | null>(null);
   // Channels tab: which view (Feed / Alerts / My Channels) and which channel page is open.
   const [channelsSegment, setChannelsSegment] = useState<ChannelsSegment>('feed');
   const [channelId, setChannelId] = useState<string | null>(null);
@@ -753,13 +755,17 @@ export const DiscoverScreen: React.FC = () => {
           interestTags={profile.interestTags ?? []}
           onOpenPoint={openHostPoint}
           onToggleRsvp={(id) => toggleRsvp(id)}
-          onEditTags={() => goTo('profile')}
+          onEditTags={() => {
+            goTo('profile');
+            setProfileFocus({ key: Date.now(), section: 'tags' });
+          }}
           onOpenTag={showTagOnMap}
         />
       ) : null}
 
       {tab === 'profile' && profileView === 'main' ? (
         <ProfileScreen
+          focusRequest={profileFocus}
           profile={profile}
           drops={myDrops}
           asTab
