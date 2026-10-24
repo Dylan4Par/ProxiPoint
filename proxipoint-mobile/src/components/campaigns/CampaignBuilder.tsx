@@ -442,7 +442,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                 testID="campaign-add-existing"
               >
                 <Plus size={16} color={c.accent} strokeWidth={2.25} />
-                <Text style={styles.outlineText}>My Points</Text>
+                <Text style={styles.outlineText}>My Drops</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -485,7 +485,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                   );
                 })
               ) : (
-                <Text style={styles.emptyInCard}>No upcoming Points to add. Drop one from the map, or add a new event here.</Text>
+                <Text style={styles.emptyInCard}>No upcoming drops to add. Drop one from the map, or add a new event here.</Text>
               )}
             </View>
           ) : null}
