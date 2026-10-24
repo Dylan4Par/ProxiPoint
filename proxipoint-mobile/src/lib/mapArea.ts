@@ -55,7 +55,7 @@ export function visibleRadiusMeters(visibleWidthWorld: number, visibleHeightWorl
   return Math.round(Math.hypot(visibleWidthWorld, visibleHeightWorld) / 2 / WORLD_SCALE);
 }
 
-/** "Near Erie" (closest city within 15 km), otherwise "Map area". */
+/** "Erie" (closest city within 15 km), otherwise "Map area". Shown on the location pill. */
 export function areaName(
   spot: { latitude: number; longitude: number },
   cities: Array<{ name: string; latitude: number; longitude: number }>,
@@ -66,5 +66,5 @@ export function areaName(
     const meters = calculateDistanceMeters(spot.latitude, spot.longitude, city.latitude, city.longitude);
     if (meters <= maxMeters && (!best || meters < best.meters)) best = { name: city.name, meters };
   }
-  return best ? `Near ${best.name}` : 'Map area';
+  return best ? best.name : 'Map area';
 }

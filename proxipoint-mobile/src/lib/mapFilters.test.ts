@@ -73,6 +73,6 @@ test('map area name: closest city within 15 km', () => {
     { name: 'Erie', latitude: 40.0503, longitude: -105.05 },
     { name: 'Boulder', latitude: 40.015, longitude: -105.2705 },
   ];
-  assert.equal(areaName({ latitude: 40.06, longitude: -105.06 }, cities), 'Near Erie');
+  assert.equal(areaName({ latitude: 40.06, longitude: -105.06 }, cities), 'Erie');
   assert.equal(areaName({ latitude: 41, longitude: -106 }, cities), 'Map area');
 });
