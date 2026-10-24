@@ -39,6 +39,10 @@ import { CITY_LIST, cityAt, cityLabel, currentPosition, watchPosition, type City
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
 import { addPost, getChannel, getChannels, getPost, syncAutoChannels } from '../lib/channels';
 import { formatPointWhen, publicWhere } from '../lib/droppedPoint';
+import { announcementText, campaignEvents, takeDueBroadcasts, type Campaign, type NewCampaignEvent } from '../lib/campaigns';
+import { createBeaconDraft, toBeaconCreatePayload } from '../lib/beaconDraft';
+import { formatBeaconStart, presetForHours, windowDurationHours } from '../lib/beaconWindow';
+import { BeaconApiError, postBeacon } from '../services/beaconApi';
 import { planAutoChannels } from '../lib/autoChannels';
 import { useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
@@ -418,6 +422,94 @@ export const DiscoverScreen: React.FC = () => {
     setManagingId(point.id);
   };
 
+  // ---- Campaigns ----------------------------------------------------------------------------
+  /** New events typed into a campaign become real Points (same path as Create Drop). */
+  const createCampaignPoints = async (
+    events: NewCampaignEvent[],
+    meta: { campaignName: string; description: string; tags: string[] },
+  ): Promise<DroppedPoint[]> => {
+    const store = useDiscoveryStore.getState();
+    const created: DroppedPoint[] = [];
+    for (const event of events) {
+      if (!event.place) continue;
+      const start = new Date(event.startsAt);
+      const end = new Date(event.endsAt);
+      const durationHours = windowDurationHours(start, end);
+      const draft = createBeaconDraft({
+        title: event.title,
+        description: meta.description,
+        tags: meta.tags.join(', '),
+        visibility: 'public',
+        channelId: null,
+        venue: event.place.label,
+        latitude: event.place.latitude,
+        longitude: event.place.longitude,
+        isLiveNow: false,
+        duration: presetForHours(durationHours),
+        durationHours,
+        scheduledStart: formatBeaconStart(start),
+        tierLevel: 'micro',
+      });
+      let id: string | undefined;
+      let synced = true;
+      try {
+        // Sent alongside the usual payload; the backend needs to accept these fields.
+        const saved = await postBeacon(
+          Object.assign(toBeaconCreatePayload(draft), { startsAt: event.startsAt, endsAt: event.endsAt, campaignName: meta.campaignName }),
+        );
+        const savedId = (saved as { id?: unknown } | null)?.id;
+        id = store.adoptPersistedBeacon(saved, draft) || (savedId != null ? String(savedId) : undefined);
+      } catch (error) {
+        if (error instanceof BeaconApiError && error.status >= 400 && error.status < 500) {
+          throw new Error(`The server rejected "${event.title}". Check its title and place, then try again.`);
+        }
+        id = store.dropBeacon(draft); // offline: on this phone only, like Create Drop
+        synced = false;
+      }
+      created.push({
+        id: id ?? `local-${Date.now()}-${created.length}`,
+        title: event.title,
+        description: meta.description,
+        tags: meta.tags.map((tag) => tag.replace(/^#+/, '')),
+        visibility: 'public',
+        channelId: null,
+        venue: event.place.label,
+        latitude: event.place.latitude,
+        longitude: event.place.longitude,
+        isLiveNow: false,
+        startsAt: event.startsAt,
+        endsAt: event.endsAt,
+        coverPhotoUri: null,
+        requiresApproval: false,
+        maxAttendance: null,
+        locationPrivacy: null,
+        beaconRadius: null,
+        invites: [],
+        synced,
+        createdAt: new Date().toISOString(),
+      });
+    }
+    setMyDrops((current) => [...created, ...current.filter((drop) => !created.some((p) => p.id === drop.id))]);
+    created.forEach((point) => syncMyPoint(point));
+    return created;
+  };
+
+  /** A campaign's announcement: posted in each chosen channel you can post in. The other audiences
+   *  (#tag followers, your followers, RSVP reminders) are sent by the server. */
+  const announceCampaign = (campaign: Campaign, events: DroppedPoint[]) => {
+    const text = announcementText(campaign, events);
+    campaign.audience.channelIds.forEach((id) => {
+      const channel = getChannel(id);
+      if (channel?.joined && canPostIn(channel)) addPost(channel.id, profile.handle, text, null, [], 'heads_up');
+    });
+  };
+
+  // Scheduled announcements go out when their time comes (checked on the 30-second clock).
+  useEffect(() => {
+    takeDueBroadcasts().forEach((campaign) => announceCampaign(campaign, campaignEvents(campaign, myDrops)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boostClock]);
+
   const updateDrop = (point: DroppedPoint) => {
     setMyDrops((current) => current.map((drop) => (drop.id === point.id ? point : drop)));
     // Keep the map pin and Discover card in step (tags, title, place, time; ending removes it).
@@ -601,6 +693,13 @@ export const DiscoverScreen: React.FC = () => {
 
       {tab === 'channels' ? (
         <ChannelsScreen
+          myDrops={myDrops}
+          onCreateCampaignPoints={createCampaignPoints}
+          onAnnounceCampaign={announceCampaign}
+          onManagePoint={(id) => {
+            setJustDroppedId(null);
+            setManagingId(id);
+          }}
           segment={channelsSegment}
           onChangeSegment={setChannelsSegment}
           channelId={channelId}

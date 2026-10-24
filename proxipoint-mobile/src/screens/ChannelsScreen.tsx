@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CampaignsView } from '../components/campaigns/CampaignsView';
+import type { CampaignBuilderProps } from '../components/campaigns/CampaignBuilder';
+import type { DroppedPoint } from '../lib/droppedPoint';
 import { BadgeCheck, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, Heart, ImagePlus, Lock, SmilePlus, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
 import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
 import { ReportSheet, type ReportTarget } from '../components/safety/ReportSheet';
@@ -76,7 +79,7 @@ import {
 import { POST_KINDS, asksStillHappening, defaultPinHours, kindInfo, pinChoices, type PostKind } from '../lib/postKinds';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
-export type ChannelsSegment = 'feed' | 'alerts' | 'manage';
+export type ChannelsSegment = 'feed' | 'alerts' | 'manage' | 'campaigns';
 
 interface ChannelsScreenProps {
   segment: ChannelsSegment;
@@ -112,6 +115,11 @@ interface ChannelsScreenProps {
   onOpenPlace: (id: string | null) => void;
   /** Explore Map, slid to this spot. */
   onShowSpotOnMap: (spot: LatLon) => void;
+  /** Campaigns: your Points, turning new campaign events into Points, the announcement, and Manage. */
+  myDrops: DroppedPoint[];
+  onCreateCampaignPoints: CampaignBuilderProps['onCreatePoints'];
+  onAnnounceCampaign: CampaignBuilderProps['onAnnounce'];
+  onManagePoint: (id: string) => void;
 }
 
 /** Points listed on a channel page (a city channel can have many). */
@@ -142,6 +150,7 @@ const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
   { id: 'feed', label: 'Feed' },
   { id: 'alerts', label: 'Alerts' },
   { id: 'manage', label: 'My Channels' },
+  { id: 'campaigns', label: 'Campaigns' },
 ];
 
 /**
@@ -206,7 +215,14 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
           <Text style={styles.searchBtnText}>Search</Text>
         </TouchableOpacity>
       </View>
-      <View style={styles.segmentRow} accessibilityRole="tablist">
+      {/* Scrolls sideways when the tabs don't all fit. */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.segmentScroll}
+        contentContainerStyle={styles.segmentRow}
+        accessibilityRole="tablist"
+      >
         {SEGMENTS.map(({ id, label }) => {
           const active = segment === id;
           const badge = id === 'alerts' && unreadAlerts > 0 && !active;
@@ -229,7 +245,7 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
             </TouchableOpacity>
           );
         })}
-      </View>
+      </ScrollView>
 
       {segment === 'feed' ? <FeedView {...props} channels={channels} /> : null}
       {segment === 'alerts' ? (
@@ -244,6 +260,14 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
       ) : null}
       {segment === 'manage' ? (
         <ManageView channels={channels} onOpenChannel={onOpenChannel} myHandle={props.myHandle} />
+      ) : null}
+      {segment === 'campaigns' ? (
+        <CampaignsView
+          drops={props.myDrops}
+          onCreatePoints={props.onCreateCampaignPoints}
+          onAnnounce={props.onAnnounceCampaign}
+          onOpenPoint={props.onManagePoint}
+        />
       ) : null}
     </View>
   );
@@ -1894,6 +1918,7 @@ const createStyles = (c: ThemeColors) =>
     },
     searchBtnText: { color: c.accent, fontSize: 13, fontWeight: '800' },
     title: { color: c.text, fontSize: 24, fontWeight: '800' },
+    segmentScroll: { flexGrow: 0 },
     segmentRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
     segmentPill: {
       flexDirection: 'row',
