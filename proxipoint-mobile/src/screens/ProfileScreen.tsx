@@ -346,7 +346,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <MyEventsTile drops={drops} onOpen={onOpenDrop} onDropAgain={onDropAgain} onSeeAll={onOpenMyDrops} />
 
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>SIGNAL</Text>
-          <SignalTile signal={signal} contributions={contributions} isMe onOpenPost={onOpenPost} />
+          <SignalTile signal={signal} contributions={contributions} isMe collapsible onOpenPost={onOpenPost} />
 
           <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY #TAGS</Text>
           <MyTagsTile

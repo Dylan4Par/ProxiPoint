@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState } from 'react';
+import { LayoutAnimation, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ChevronDown, ChevronUp, Crown, Heart, MessageCircle, Radio } from 'lucide-react-native';
 import { useChannels } from '../../lib/channels';
 import { timeAgo } from '../../lib/activity';
@@ -60,19 +61,46 @@ const PREVIEW = 4;
  * Profile → SIGNAL: the Signal Score, what it's made of (earned + contributed), and the person's
  * contributions (posts and comments) underneath. Same tile on your own profile and others'.
  */
+/** Where "Signal minimized" is saved on the phone (your own Profile only). */
+const SIGNAL_MINIMIZED_KEY = 'pp.profile.signalMinimized.v1';
+
 export const SignalTile: React.FC<{
   signal: Signal;
   contributions: Contribution[];
   /** Your own profile: friendlier empty state and the "next bar" hint. */
   isMe?: boolean;
   onOpenPost?: (postId: string) => void;
-}> = ({ signal, contributions, isMe = false, onOpenPost }) => {
+  /** Adds a minimize button; the tile then shows just the score row. Remembered on this phone. */
+  collapsible?: boolean;
+}> = ({ signal, contributions, isMe = false, onOpenPost, collapsible = false }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const channels = useChannels();
   const [kind, setKind] = useState<'post' | 'comment'>('post');
   const [showAll, setShowAll] = useState(false);
   const [explain, setExplain] = useState(false);
+  const [minimized, setMinimized] = useState(false);
+  useEffect(() => {
+    if (!collapsible) return;
+    let cancelled = false;
+    AsyncStorage.getItem(SIGNAL_MINIMIZED_KEY)
+      .then((saved) => {
+        if (!cancelled && saved === '1') setMinimized(true);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [collapsible]);
+  const toggleMinimized = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setMinimized((current) => {
+      const next = !current;
+      AsyncStorage.setItem(SIGNAL_MINIMIZED_KEY, next ? '1' : '0').catch(() => undefined);
+      return next;
+    });
+  };
+  const collapsed = collapsible && minimized;
   const shown = contributions.filter((item) => item.kind === kind);
   const toNext = nextBarIn(signal.score);
   const channelName = (id: string) => channels.find((channel) => channel.id === id)?.name ?? 'a channel';
@@ -92,7 +120,26 @@ export const SignalTile: React.FC<{
             {signal.earned} earned · {signal.contributed} contributed
           </Text>
         </View>
+        {collapsible ? (
+          <TouchableOpacity
+            style={styles.minimizeBtn}
+            onPress={toggleMinimized}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={collapsed ? 'Expand Signal' : 'Minimize Signal'}
+            accessibilityState={{ expanded: !collapsed }}
+            testID="signal-minimize"
+          >
+            {collapsed ? (
+              <ChevronDown size={18} color={c.textMuted} strokeWidth={2.5} />
+            ) : (
+              <ChevronUp size={18} color={c.textMuted} strokeWidth={2.5} />
+            )}
+          </TouchableOpacity>
+        ) : null}
       </View>
+      {collapsed ? null : (
+      <>
       {isMe && toNext !== null ? (
         <Text style={styles.hint}>
           {signal.score === 0
@@ -201,6 +248,8 @@ export const SignalTile: React.FC<{
               : 'No comments yet.'}
         </Text>
       )}
+      </>
+      )}
     </View>
   );
 };
@@ -307,6 +356,17 @@ const createStyles = (c: ThemeColors) =>
       gap: 10,
     },
     scoreRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+    minimizeBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      alignSelf: 'flex-start',
+      backgroundColor: c.base,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
     scoreIcon: {
       width: 48,
       height: 48,
