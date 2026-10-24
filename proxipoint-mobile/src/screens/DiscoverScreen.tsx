@@ -774,6 +774,10 @@ export const DiscoverScreen: React.FC = () => {
             goTo('channels');
             setChannelsSegment('alerts');
           }}
+          onOpenCampaigns={() => {
+            goTo('channels');
+            setChannelsSegment('campaigns');
+          }}
           onDropPoint={() => {
             setManagingId(null);
             setDropPrefill(null);
