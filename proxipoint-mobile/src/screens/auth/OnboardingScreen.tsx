@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { BackHandler, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { Bell, Check, LocateFixed, MapPin, Users, X } from 'lucide-react-native';
+import { Bell, Check, LocateFixed, MapPin, X } from 'lucide-react-native';
 import { AuthButton, AuthError, AuthField, AuthPage, AuthTitle } from '../../components/auth/AuthParts';
 import { CityPickerSheet } from '../../components/discovery/CityPicker';
 import {
@@ -44,7 +44,6 @@ export const OnboardingScreen: React.FC = () => {
   const [pickingCity, setPickingCity] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
   const [trackLocation, setTrackLocation] = useState(false);
-  const [countMeIn, setCountMeIn] = useState(false);
   const [notifications, setNotifications] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -98,7 +97,7 @@ export const OnboardingScreen: React.FC = () => {
         homeCity,
         interestTags: interests,
         trackLocation,
-        countMeInInterests: countMeIn,
+        countMeInInterests: false, // "Count me in" is turned off for now
         notifications,
       });
     } catch (e) {
@@ -190,10 +189,8 @@ export const OnboardingScreen: React.FC = () => {
         return (
           <PrivacyStep
             trackLocation={trackLocation}
-            countMeIn={countMeIn}
             notifications={notifications}
             onTrack={setTrackLocation}
-            onCountMeIn={setCountMeIn}
             onNotifications={setNotifications}
           />
         );
@@ -343,12 +340,10 @@ const InterestsStep: React.FC<{ selected: string[]; onToggle: (tag: string) => v
 
 const PrivacyStep: React.FC<{
   trackLocation: boolean;
-  countMeIn: boolean;
   notifications: boolean;
   onTrack: (on: boolean) => void;
-  onCountMeIn: (on: boolean) => void;
   onNotifications: (on: boolean) => void;
-}> = ({ trackLocation, countMeIn, notifications, onTrack, onCountMeIn, onNotifications }) => {
+}> = ({ trackLocation, notifications, onTrack, onNotifications }) => {
   const styles = useThemedStyles(createStyles);
   return (
     <View>
@@ -360,14 +355,6 @@ const PrivacyStep: React.FC<{
         value={trackLocation}
         onChange={onTrack}
         testID="onboarding-track"
-      />
-      <ChoiceRow
-        Icon={Users}
-        title="Count me in local interest numbers"
-        body="Adds you, with no name or location, to counts like “20+ people into #Hiking nearby”."
-        value={countMeIn}
-        onChange={onCountMeIn}
-        testID="onboarding-count-me-in"
       />
       <ChoiceRow
         Icon={Bell}

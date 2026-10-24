@@ -67,8 +67,6 @@ interface ProfileScreenProps {
   defaultAreaLabel: string;
   /** One of your posts (from Contributions): its page in the Channels tab. */
   onOpenPost: (postId: string) => void;
-  /** Counted in nearby interest numbers (opt-in). */
-  onChangeCountMeIn: (on: boolean) => void;
   /** Your home area: where "nearby" counts are worked out from (never GPS). */
   homeArea: { latitude: number; longitude: number };
 }
@@ -119,7 +117,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   recaps,
   onChangeRecaps,
   onOpenPost,
-  onChangeCountMeIn,
   homeArea,
 }) => {
   const styles = useThemedStyles(createStyles);
@@ -353,8 +350,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             tags={profile.interestTags ?? []}
             isPublic={profile.interestTagsPublic ?? false}
             onChange={onChangeInterestTags}
-            countMeIn={profile.countMeInInterests ?? false}
-            onChangeCountMeIn={onChangeCountMeIn}
             nearbyCounts={nearbyCounts}
           />
 
