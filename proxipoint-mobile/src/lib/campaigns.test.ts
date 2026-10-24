@@ -5,6 +5,7 @@ import {
   announcementText,
   audienceSummary,
   campaignDateRange,
+  campaignShareMessage,
   campaignEvents,
   campaignOfEvent,
   campaignPhase,
@@ -150,4 +151,44 @@ test('new events need a title, place and a future window; next week copies the r
   assert.equal(new Date(next.startsAt).getHours(), 18);
   assert.equal(next.place?.label, 'Coal Creek Trail');
   assert.equal(next.key, 'k2');
+});
+
+test('share text lists upcoming events with links, then the #tags', () => {
+  const point = (id: string, title: string, day: number, extra: Record<string, unknown> = {}) => ({
+    ...ev(id, day, 18),
+    title,
+    description: '',
+    tags: [],
+    visibility: 'public' as const,
+    venue: 'Erie Town Hall',
+    latitude: 40,
+    longitude: -105,
+    isLiveNow: false,
+    coverPhotoUri: null,
+    requiresApproval: false,
+    maxAttendance: null,
+    locationPrivacy: null,
+    beaconRadius: null,
+    invites: [],
+    synced: true,
+    createdAt: now.toISOString(),
+    ...extra,
+  });
+  const text = campaignShareMessage(
+    { name: 'Dylan for 2026', description: 'Meet the candidate', tags: ['#VoteForDylan'] },
+    [
+      point('old', 'Kickoff', 20),
+      point('a', 'Town hall', 25),
+      point('b', 'Coffee chat', 26, { locationPrivacy: { level: 'neighborhood', regionName: 'Old Town' } }),
+    ],
+    now,
+  );
+  const lines = text.split('\n');
+  assert.equal(lines[0], 'Dylan for 2026');
+  assert.equal(lines[1], '3 events · Oct 20 – Oct 26');
+  assert.equal(lines[2], 'Meet the candidate');
+  assert.ok(!text.includes('Kickoff'), 'ended events are left out');
+  assert.match(text, /• Town hall: Sun, Oct 25 · 6:00 PM – 8:00 PM · Erie Town Hall\n  https:\/\/proxipoint\.app\/p\/a/);
+  assert.match(text, /Coffee chat: .* · Somewhere in Old Town/, 'privacy areas stay private');
+  assert.equal(lines[lines.length - 1], '#VoteForDylan');
 });

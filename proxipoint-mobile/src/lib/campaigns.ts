@@ -10,7 +10,7 @@
  * announcement at scheduled_broadcast_time and the RSVP reminders. Until then campaigns live in
  * memory on the phone (like My Drops).
  */
-import type { DroppedPoint } from './droppedPoint';
+import { formatPointWhen, pointStatus, publicWhere, shareUrl, type DroppedPoint } from './droppedPoint';
 
 export type CampaignStatus = 'draft' | 'scheduled' | 'sent' | 'cancelled';
 
@@ -323,4 +323,32 @@ export function nextWeekEvent(previous: NewCampaignEvent, key: string): NewCampa
     return d.toISOString();
   };
   return { key, title: previous.title, place: previous.place, startsAt: plusWeek(previous.startsAt), endsAt: plusWeek(previous.endsAt) };
+}
+
+// ---- Sharing ------------------------------------------------------------------------------------
+
+/** Events listed in a shared campaign before "+N more". */
+export const CAMPAIGN_SHARE_MAX_EVENTS = 5;
+
+/**
+ * Text for the share sheet: name, dates, description, each upcoming event with its link (where
+ * others see it: privacy areas stay private), and the #tags. Ended events are left out unless
+ * they all have ended.
+ */
+export function campaignShareMessage(
+  campaign: Pick<Campaign, 'name' | 'description' | 'tags'>,
+  events: DroppedPoint[],
+  now = new Date(),
+): string {
+  const upcoming = events.filter((e) => pointStatus(e, now) !== 'past');
+  const listed = upcoming.length ? upcoming : events;
+  const lines = [campaign.name, `${events.length} ${events.length === 1 ? 'event' : 'events'} · ${campaignDateRange(events)}`];
+  if (campaign.description.trim()) lines.push(campaign.description.trim());
+  if (listed.length) lines.push('');
+  for (const e of listed.slice(0, CAMPAIGN_SHARE_MAX_EVENTS)) {
+    lines.push(`• ${e.title}: ${formatPointWhen(e, now)} · ${publicWhere(e)}`, `  ${shareUrl(e)}`);
+  }
+  if (listed.length > CAMPAIGN_SHARE_MAX_EVENTS) lines.push(`+ ${listed.length - CAMPAIGN_SHARE_MAX_EVENTS} more on ProxiPoint`);
+  if (campaign.tags.length) lines.push('', campaign.tags.join(' '));
+  return lines.join('\n');
 }

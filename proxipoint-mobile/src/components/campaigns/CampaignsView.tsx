@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
-import { Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Alert, Modal, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, Pencil, Plus, Radio, Send, Trash2, X } from 'lucide-react-native';
+import { ChevronRight, Pencil, Plus, Radio, Send, Share2, Trash2, X } from 'lucide-react-native';
 import { CampaignBuilder, type CampaignBuilderProps } from './CampaignBuilder';
 import { useCampaigns } from '../../hooks/useCampaigns';
 import {
@@ -9,6 +9,7 @@ import {
   campaignDateRange,
   campaignEvents,
   campaignPhase,
+  campaignShareMessage,
   deleteCampaign,
   phaseLabel,
   saveCampaign,
@@ -16,7 +17,7 @@ import {
   type Campaign,
   type CampaignPhase,
 } from '../../lib/campaigns';
-import { cleanVenueLabel, formatPointWhen, pointStatus, type DroppedPoint } from '../../lib/droppedPoint';
+import { cleanVenueLabel, formatPointWhen, pointStatus, shareUrl, type DroppedPoint } from '../../lib/droppedPoint';
 import { useBoosts } from '../../lib/boost';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -80,6 +81,17 @@ export const CampaignsView: React.FC<{
                     {cm.name}
                   </Text>
                   <PhasePill phase={phase} label={phaseLabel(phase, cm)} />
+                  {/* Its own button, so tapping the rest of the card still opens it. */}
+                  <TouchableOpacity
+                    style={styles.shareBtn}
+                    onPress={() => void shareCampaign(cm, events)}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Share ${cm.name}`}
+                    testID={`campaign-share-${cm.id}`}
+                  >
+                    <Share2 size={16} color={c.accent} strokeWidth={2.25} />
+                  </TouchableOpacity>
                 </View>
                 <Text style={styles.cardMeta}>
                   {events.length} {events.length === 1 ? 'event' : 'events'} · {campaignDateRange(events)}
@@ -134,6 +146,21 @@ export const CampaignsView: React.FC<{
     </View>
   );
 };
+
+/** Opens the share sheet with the campaign's dates and each upcoming event's link. */
+async function shareCampaign(campaign: Campaign, events: DroppedPoint[]): Promise<void> {
+  const message = campaignShareMessage(campaign, events);
+  const first = events.find((e) => pointStatus(e) !== 'past') ?? events[0];
+  try {
+    // iOS can show one link as a rich preview; Android only uses message, which has every link.
+    await Share.share(
+      Platform.OS === 'ios' && first ? { message, url: shareUrl(first) } : { message },
+      { subject: campaign.name },
+    );
+  } catch {
+    Alert.alert('Couldn’t open sharing', 'Try again in a moment.');
+  }
+}
 
 const PhasePill: React.FC<{ phase: CampaignPhase; label: string }> = ({ phase, label }) => {
   const styles = useThemedStyles(createStyles);
@@ -257,6 +284,15 @@ const CampaignDetail: React.FC<{
           <TouchableOpacity style={styles.iconBtn} onPress={confirmDelete} accessibilityRole="button" accessibilityLabel="Delete campaign" testID="campaign-delete">
             <Trash2 size={18} color={c.red} strokeWidth={2.25} />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.iconBtn}
+            onPress={() => void shareCampaign(campaign, events)}
+            accessibilityRole="button"
+            accessibilityLabel="Share campaign"
+            testID="campaign-share"
+          >
+            <Share2 size={18} color={c.accent} strokeWidth={2.25} />
+          </TouchableOpacity>
           <TouchableOpacity style={styles.secondaryBtn} onPress={onEdit} accessibilityRole="button" testID="campaign-edit">
             <Pencil size={16} color={c.accent} strokeWidth={2.25} />
             <Text style={styles.secondaryText}>Edit</Text>
@@ -308,6 +344,15 @@ const createStyles = (c: ThemeColors) =>
     },
     cardTop: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     cardName: { flex: 1, color: c.text, fontSize: 16, fontWeight: '800' },
+    shareBtn: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+    },
     cardMeta: { color: c.textMuted, fontSize: 13, fontWeight: '600' },
     cardAudience: { color: c.textFaint, fontSize: 12 },
     tags: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
