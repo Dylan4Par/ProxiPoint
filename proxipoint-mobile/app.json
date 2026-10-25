@@ -7,10 +7,6 @@
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "icon": "./assets/icon.png",
-    "splash": {
-      "backgroundColor": "#0a1120",
-      "resizeMode": "contain"
-    },
     "newArchEnabled": true,
     "plugins": [
       "expo-router",
@@ -34,7 +30,13 @@
         }
       ],
       "@react-native-community/datetimepicker",
-      "expo-splash-screen"
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0a1120",
+          "resizeMode": "contain"
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
