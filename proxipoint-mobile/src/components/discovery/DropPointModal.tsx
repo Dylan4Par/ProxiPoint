@@ -1526,7 +1526,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 </View>
                 {needsName && !locationComplete ? (
                   <Text style={styles.nameHint} testID="drop-spot-name-hint">
-                    {`Give this spot a name people will recognize (${MIN_SPOT_NAME}+ characters).`}
+                    {`${MIN_SPOT_NAME} character minimum`}
                   </Text>
                 ) : null}
                 {coords ? (
@@ -2626,7 +2626,7 @@ const createStyles = (c: ThemeColors) =>
   },
   titleInput: { fontSize: 17, fontWeight: '700' },
   recentBlock: { marginTop: 12, gap: 6 },
-  nameHint: { marginTop: 6, color: c.amber, fontSize: 12, fontWeight: '600' },
+  nameHint: { marginTop: 6, color: c.accent, fontSize: 12, fontWeight: '600' },
   locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   locationInputFlex: { flex: 1 },
   recentLabel: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
