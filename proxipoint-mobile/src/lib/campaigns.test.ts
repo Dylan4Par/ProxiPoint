@@ -51,13 +51,13 @@ test('events come back in start order and the range reads nicely', () => {
   assert.deepEqual(events.map((e) => e.id), ['a', 'b']);
   assert.equal(campaignDateRange(events), 'Oct 27 – Oct 29');
   assert.equal(campaignDateRange([week1]), 'Oct 27');
-  assert.equal(campaignDateRange([]), 'No events yet');
+  assert.equal(campaignDateRange([]), 'No drops yet');
 });
 
 test('drafts need only a name; publishing needs events, an audience and a sensible time', () => {
   assert.equal(validateCampaign(input({ name: '  ' }), [], 'draft', now), 'Give the series a name.');
   assert.equal(validateCampaign(input({ eventIds: [] }), [], 'draft', now), null);
-  assert.match(validateCampaign(input(), [week1], 'publish', now) ?? '', /at least 2 events/);
+  assert.match(validateCampaign(input(), [week1], 'publish', now) ?? '', /at least 2 drops/);
   assert.equal(validateCampaign(input(), [week1, week2], 'publish', now), null);
   assert.match(validateCampaign(input(), [past, { ...past, id: 'p2' }], 'publish', now) ?? '', /ended/);
   const nobody = { tagFollowers: false, myFollowers: false, channelIds: [], rsvpReminderMinutes: null };
@@ -66,7 +66,7 @@ test('drafts need only a name; publishing needs events, an audience and a sensib
   // Announcement time: in the future and before the first event.
   assert.equal(validateCampaign(input({ broadcastAt: at(26, 9) }), [week1, week2], 'publish', now), null);
   assert.match(validateCampaign(input({ broadcastAt: at(23, 9) }), [week1, week2], 'publish', now) ?? '', /passed/);
-  assert.match(validateCampaign(input({ broadcastAt: at(28, 9) }), [week1, week2], 'publish', now) ?? '', /before the first event/);
+  assert.match(validateCampaign(input({ broadcastAt: at(28, 9) }), [week1, week2], 'publish', now) ?? '', /before the first drop/);
 });
 
 test('publishing with no time sends now; with a future time it waits', () => {

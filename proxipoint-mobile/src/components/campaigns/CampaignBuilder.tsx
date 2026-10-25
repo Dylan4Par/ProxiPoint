@@ -305,10 +305,10 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
               />
             </View>
           </View>
-          <Text style={styles.note}>Each new event gets these #tags and the description.</Text>
+          <Text style={styles.note}>Each new drop gets these #tags and the description.</Text>
 
           {/* ---- Events ---- */}
-          <Text style={styles.section}>EVENTS · {rows.length}</Text>
+          <Text style={styles.section}>DROPS · {rows.length}</Text>
           {rows.length ? (
             <View style={styles.card}>
               {rows.map((row, i) => (
@@ -345,14 +345,14 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
               ))}
             </View>
           ) : (
-            <Text style={styles.empty}>Add at least {MIN_CAMPAIGN_EVENTS} events: new ones, or Points you've already dropped.</Text>
+            <Text style={styles.empty}>Add at least {MIN_CAMPAIGN_EVENTS} drops: new ones, or Points you've already dropped.</Text>
           )}
 
           {form ? (
             <View style={[styles.card, styles.formCard]} testID="campaign-event-form">
               <TextInput
                 style={styles.formTitle}
-                placeholder="Event title"
+                placeholder="Drop title"
                 placeholderTextColor={c.textFaint}
                 value={form.title}
                 onChangeText={(v) => updateForm({ title: v })}
@@ -416,7 +416,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                   <Text style={styles.ghostText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={addFormEvent} accessibilityRole="button" style={styles.smallPrimary} testID="campaign-event-add">
-                  <Text style={styles.smallPrimaryText}>Add event</Text>
+                  <Text style={styles.smallPrimaryText}>Add drop</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -432,7 +432,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                 testID="campaign-new-event"
               >
                 <CalendarPlus size={16} color={c.accent} strokeWidth={2.25} />
-                <Text style={styles.outlineText}>New event</Text>
+                <Text style={styles.outlineText}>New drop</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.outlineBtn, pickingExisting && styles.outlineBtnOn]}
@@ -485,12 +485,12 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                   );
                 })
               ) : (
-                <Text style={styles.emptyInCard}>No upcoming drops to add. Drop one from the map, or add a new event here.</Text>
+                <Text style={styles.emptyInCard}>No upcoming drops to add. Drop one from the map, or add a new drop here.</Text>
               )}
             </View>
           ) : null}
           {newEvents.length ? (
-            <Text style={styles.note}>New events go on the map when you save. The announcement waits until you publish.</Text>
+            <Text style={styles.note}>New drops go on the map when you save. The announcement waits until you publish.</Text>
           ) : null}
 
           {/* ---- Announcement ---- */}
@@ -633,7 +633,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                 );
               })}
             </View>
-            <Text style={styles.noteInCard}>Sent to people going, before each event in the series.</Text>
+            <Text style={styles.noteInCard}>Sent to people going, before each drop in the series.</Text>
           </View>
         </KeyboardAwareScrollView>
 

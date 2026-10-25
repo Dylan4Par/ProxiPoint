@@ -67,7 +67,7 @@ export const CampaignsView: React.FC<{
             <View style={styles.emptyIcon}>
               <Radio size={24} color={c.accent} strokeWidth={2} />
             </View>
-            <Text style={styles.emptyTitle}>Group your events</Text>
+            <Text style={styles.emptyTitle}>Group your drops</Text>
             <Text style={styles.emptyBody}>
               A run club, a trivia season, a festival weekend: put the dates together, schedule one announcement,
               and remind everyone going before each event.
@@ -103,7 +103,7 @@ export const CampaignsView: React.FC<{
                   </TouchableOpacity>
                 </View>
                 <Text style={styles.cardMeta}>
-                  {events.length} {events.length === 1 ? 'event' : 'events'} · {campaignDateRange(events)}
+                  {events.length} {events.length === 1 ? 'drop' : 'drops'} · {campaignDateRange(events)}
                 </Text>
                 <Text style={styles.cardAudience} numberOfLines={1}>
                   {audienceSummary(cm)}
@@ -246,7 +246,7 @@ const CampaignDetail: React.FC<{
           <View style={styles.flex}>
             <Text style={styles.sheetTitle}>{campaign.name}</Text>
             <Text style={styles.cardMeta}>
-              {events.length} {events.length === 1 ? 'event' : 'events'} · {campaignDateRange(events)}
+              {events.length} {events.length === 1 ? 'drop' : 'drops'} · {campaignDateRange(events)}
             </Text>
           </View>
           <TouchableOpacity onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
@@ -284,7 +284,7 @@ const CampaignDetail: React.FC<{
               );
             })
           ) : (
-            <Text style={styles.emptyBody}>No events yet. Edit the series to add some.</Text>
+            <Text style={styles.emptyBody}>No drops yet. Edit the series to add some.</Text>
           )}
         </ScrollView>
 

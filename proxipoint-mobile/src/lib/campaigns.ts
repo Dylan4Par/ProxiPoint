@@ -87,7 +87,7 @@ export function campaignEvents<T extends Timed>(campaign: Pick<Campaign, 'eventI
 
 /** "Oct 30", "Oct 30 – Nov 20", or "No events yet". */
 export function campaignDateRange(events: Timed[]): string {
-  if (events.length === 0) return 'No events yet';
+  if (events.length === 0) return 'No drops yet';
   const first = new Date(Math.min(...events.map((e) => new Date(e.startsAt).getTime())));
   const last = new Date(Math.max(...events.map((e) => new Date(e.startsAt).getTime())));
   return first.toDateString() === last.toDateString() ? shortDate(first) : `${shortDate(first)} – ${shortDate(last)}`;
@@ -163,12 +163,12 @@ export function validateCampaign(
   if (input.description.length > CAMPAIGN_DESCRIPTION_MAX) {
     return `Keep the description under ${CAMPAIGN_DESCRIPTION_MAX} characters.`;
   }
-  if (input.eventIds.length > MAX_CAMPAIGN_EVENTS) return `A series can have up to ${MAX_CAMPAIGN_EVENTS} events.`;
+  if (input.eventIds.length > MAX_CAMPAIGN_EVENTS) return `A series can have up to ${MAX_CAMPAIGN_EVENTS} drops.`;
   if (mode === 'draft') return null;
 
-  if (events.length < MIN_CAMPAIGN_EVENTS) return `Add at least ${MIN_CAMPAIGN_EVENTS} events to publish.`;
+  if (events.length < MIN_CAMPAIGN_EVENTS) return `Add at least ${MIN_CAMPAIGN_EVENTS} drops to publish.`;
   const t = now.getTime();
-  if (events.every((e) => new Date(e.endsAt).getTime() <= t)) return 'All of these events have ended. Add an upcoming one.';
+  if (events.every((e) => new Date(e.endsAt).getTime() <= t)) return 'All of these drops have ended. Add an upcoming one.';
   const a = input.audience;
   if (!a.tagFollowers && !a.myFollowers && a.channelIds.length === 0 && a.rsvpReminderMinutes == null) {
     return 'Pick who to notify: #tag followers, your followers, a channel, or RSVP reminders.';
@@ -179,7 +179,7 @@ export function validateCampaign(
     if (!Number.isFinite(at)) return 'Pick a valid announcement time.';
     if (at < t - 60_000) return 'The announcement time has passed. Pick a later time, or announce on publish.';
     const firstStart = Math.min(...events.map((e) => new Date(e.startsAt).getTime()));
-    if (at >= firstStart) return 'Announce before the first event starts.';
+    if (at >= firstStart) return 'Announce before the first drop starts.';
   }
   return null;
 }
@@ -304,12 +304,12 @@ export interface NewCampaignEvent {
 
 /** Problems with one new event, or null. */
 export function validateNewEvent(e: NewCampaignEvent, now = new Date()): string | null {
-  if (!e.title.trim()) return 'Give the event a title.';
-  if (!e.place) return 'Pick a place for the event.';
+  if (!e.title.trim()) return 'Give the drop a title.';
+  if (!e.place) return 'Pick a place for the drop.';
   const start = new Date(e.startsAt).getTime();
   const end = new Date(e.endsAt).getTime();
   if (!Number.isFinite(start) || !Number.isFinite(end)) return 'Pick a valid date and time.';
-  if (end <= start) return 'The event has to end after it starts.';
+  if (end <= start) return 'The drop has to end after it starts.';
   if (start < now.getTime() - 60_000) return 'That start time has passed. Pick a later one.';
   return null;
 }
