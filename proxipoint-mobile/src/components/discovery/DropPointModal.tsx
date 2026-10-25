@@ -37,6 +37,7 @@ import {
   UserPlus,
   ImagePlus,
   Move,
+  BadgeCheck,
   History,
   RotateCcw,
   X,
@@ -226,8 +227,8 @@ interface RegionMove {
   radiusMeters: number;
 }
 
-/** A spot picked on the map with no place name needs a name longer than 5 characters. */
-const MIN_SPOT_NAME = 6;
+/** A spot picked on the map with no place name needs a name longer than 4 characters. */
+const MIN_SPOT_NAME = 5;
 
 /** Cover photos are saved as square JPEGs this size and shown as circles. */
 const COVER_PHOTO_SIZE = 512;
@@ -1490,11 +1491,15 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             <GlowFrame active={locationComplete}>
             <View style={[styles.locationContainer, locationComplete && styles.glowBorder]}>
               <View style={styles.locationCopy}>
+                <View style={styles.locationNameRow}>
+                {needsName && locationComplete ? (
+                  <BadgeCheck size={20} color={c.green} strokeWidth={2.25} testID="drop-spot-named" />
+                ) : null}
                 <TextInput
                   ref={locationInputRef}
                   placeholder={needsName ? 'Name this spot' : 'Search location or venue...'}
                   placeholderTextColor={c.textFaint}
-                  style={styles.locationInput}
+                  style={[styles.locationInput, styles.locationInputFlex]}
                   value={locationSearch}
                   maxLength={needsName ? 60 : undefined}
                   onChangeText={(value) => {
@@ -1518,14 +1523,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   autoCorrect={false}
                   testID="drop-place"
                 />
-                {needsName ? (
-                  <Text
-                    style={[styles.nameHint, locationSearch.trim().length >= MIN_SPOT_NAME && styles.nameHintOk]}
-                    testID="drop-spot-name-hint"
-                  >
-                    {locationSearch.trim().length >= MIN_SPOT_NAME
-                      ? 'Spot named.'
-                      : `Give this spot a name people will recognize (${MIN_SPOT_NAME}+ characters).`}
+                </View>
+                {needsName && !locationComplete ? (
+                  <Text style={styles.nameHint} testID="drop-spot-name-hint">
+                    {`Give this spot a name people will recognize (${MIN_SPOT_NAME}+ characters).`}
                   </Text>
                 ) : null}
                 {coords ? (
@@ -2626,7 +2627,8 @@ const createStyles = (c: ThemeColors) =>
   titleInput: { fontSize: 17, fontWeight: '700' },
   recentBlock: { marginTop: 12, gap: 6 },
   nameHint: { marginTop: 6, color: c.amber, fontSize: 12, fontWeight: '600' },
-  nameHintOk: { color: c.green },
+  locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  locationInputFlex: { flex: 1 },
   recentLabel: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
   recentChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   recentChip: {
