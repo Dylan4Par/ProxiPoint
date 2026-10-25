@@ -226,6 +226,9 @@ interface RegionMove {
   radiusMeters: number;
 }
 
+/** A spot picked on the map with no place name needs a name longer than 5 characters. */
+const MIN_SPOT_NAME = 6;
+
 /** Cover photos are saved as square JPEGs this size and shown as circles. */
 const COVER_PHOTO_SIZE = 512;
 
@@ -326,6 +329,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [selectedRadiusMeters, setSelectedRadiusMeters] = useState<number>(BOUNDARY_RADII.micro);
   const [placeLabel, setPlaceLabel] = useState('');
   const [placeType, setPlaceType] = useState<string | undefined>(undefined);
+  // A spot picked on the map with no known place there: the host has to name it.
+  const [needsName, setNeedsName] = useState(false);
   const [suggestions, setSuggestions] = useState<PlaceSuggestion[]>([]);
   const [searching, setSearching] = useState(false);
   const [locating, setLocating] = useState(false);
@@ -367,6 +372,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const reducedMotion = useRef(false);
   const [photoBusy, setPhotoBusy] = useState(false);
   const skipSearch = useRef(false);
+  const locationInputRef = useRef<TextInput>(null);
   const selectedLabel = useRef<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -471,6 +477,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setDescription('');
     setTags('');
     setLocationSearch('');
+    setNeedsName(false);
     setCoords(null);
     setSelectedTier('micro');
     setSelectedRadiusMeters(BOUNDARY_RADII.micro);
@@ -536,6 +543,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     // Location: same spot and venue name, without kicking off a new search.
     const venue = cleanVenueLabel(source.venue);
     skipSearch.current = true;
+    setNeedsName(false);
     selectedLabel.current = venue;
     setLocationSearch(venue);
     setCoords({ lat: source.latitude, lon: source.longitude });
@@ -689,6 +697,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return false;
     }
     skipSearch.current = true;
+    setNeedsName(false);
     selectedLabel.current = place.label;
     setLocationSearch(place.label);
     setCoords({ lat: place.latitude, lon: place.longitude });
@@ -711,16 +720,20 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
     const nearby = nearestPlace(latitude, longitude);
-    applyPlace(
-      nearby ?? {
+    if (nearby) applyPlace(nearby);
+    else {
+      // No known place here: keep the spot, and ask for a name (MIN_SPOT_NAME+ characters).
+      applyPlace({
         id: `map-${latitude.toFixed(5)}-${longitude.toFixed(5)}`,
-        label: 'Selected on map',
+        label: '',
         subtitle: `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`,
         latitude,
         longitude,
         placeType: 'address',
-      },
-    );
+      });
+      setNeedsName(true);
+      setTimeout(() => locationInputRef.current?.focus(), 350);
+    }
     setMapPicking(false);
   };
 
@@ -770,6 +783,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     if (visibility === 'private' && invites.length === 0 && !shareAfterDrop) {
       setInviteOpen(true);
       setFormError('Private Points need at least one invite. Add someone, share a link, or switch to Channel or Public.');
+      return;
+    }
+
+    if (needsName && locationSearch.trim().length < MIN_SPOT_NAME) {
+      setFormError(`Name the spot you picked on the map (at least ${MIN_SPOT_NAME} characters).`);
+      locationInputRef.current?.focus();
       return;
     }
 
@@ -927,6 +946,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
   if (!visible) return null;
 
+  // Done once there's a spot, and (for an unnamed map spot) a name for it.
+  const locationComplete = Boolean(coords) && (!needsName || locationSearch.trim().length >= MIN_SPOT_NAME);
   const titleAndTagsComplete = title.trim().length > 0 && parseBeaconTags(tags).length > 0;
   // Shown next to the title so it's clear switching tabs won't lose anything.
   const hasDraftContent =
@@ -1466,17 +1487,25 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
           </GlowFrame>
 
           <View style={styles.locationBlock}>
-            <GlowFrame active={Boolean(coords)}>
-            <View style={[styles.locationContainer, coords && styles.glowBorder]}>
+            <GlowFrame active={locationComplete}>
+            <View style={[styles.locationContainer, locationComplete && styles.glowBorder]}>
               <View style={styles.locationCopy}>
                 <TextInput
-                  placeholder="Search location or venue..."
+                  ref={locationInputRef}
+                  placeholder={needsName ? 'Name this spot' : 'Search location or venue...'}
                   placeholderTextColor={c.textFaint}
                   style={styles.locationInput}
                   value={locationSearch}
+                  maxLength={needsName ? 60 : undefined}
                   onChangeText={(value) => {
                     setLocationSearch(value);
                     setFormError(null);
+                    if (needsName) {
+                      // Naming a map spot: keep the spot, don't search.
+                      selectedLabel.current = value;
+                      setPlaceLabel(value);
+                      return;
+                    }
                     if (value !== selectedLabel.current) {
                       selectedLabel.current = null;
                       setCoords(null);
@@ -1489,6 +1518,16 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   autoCorrect={false}
                   testID="drop-place"
                 />
+                {needsName ? (
+                  <Text
+                    style={[styles.nameHint, locationSearch.trim().length >= MIN_SPOT_NAME && styles.nameHintOk]}
+                    testID="drop-spot-name-hint"
+                  >
+                    {locationSearch.trim().length >= MIN_SPOT_NAME
+                      ? 'Spot named.'
+                      : `Give this spot a name people will recognize (${MIN_SPOT_NAME}+ characters).`}
+                  </Text>
+                ) : null}
                 {coords ? (
                   <>
                     <View style={styles.locationDivider} />
@@ -2586,6 +2625,8 @@ const createStyles = (c: ThemeColors) =>
   },
   titleInput: { fontSize: 17, fontWeight: '700' },
   recentBlock: { marginTop: 12, gap: 6 },
+  nameHint: { marginTop: 6, color: c.amber, fontSize: 12, fontWeight: '600' },
+  nameHintOk: { color: c.green },
   recentLabel: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
   recentChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   recentChip: {
