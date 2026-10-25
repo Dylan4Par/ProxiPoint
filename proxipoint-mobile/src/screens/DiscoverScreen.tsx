@@ -525,11 +525,9 @@ export const DiscoverScreen: React.FC = () => {
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
-      <StatusBar
-        barStyle={mode === 'light' ? 'dark-content' : 'light-content'}
-        translucent
-        backgroundColor="transparent"
-      />
+      {/* Edge-to-edge: the status bar is always see-through; only its icon color is set.
+          (translucent / backgroundColor are removed in Expo SDK 58 / React Native 0.88.) */}
+      <StatusBar barStyle={mode === 'light' ? 'dark-content' : 'light-content'} />
 
       {tab === 'discover' ? (
         <DiscoverFeedScreen
