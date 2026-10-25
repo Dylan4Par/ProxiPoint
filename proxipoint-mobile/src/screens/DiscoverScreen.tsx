@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProximitySocket } from '../hooks/useProximitySocket';
@@ -46,6 +46,7 @@ import { BeaconApiError, postBeacon } from '../services/beaconApi';
 import { planAutoChannels } from '../lib/autoChannels';
 import { useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
+import { myTagSuggestions } from '../lib/tagInput';
 import { DEFAULT_PROFILE, DEFAULT_SETTINGS, type MyProfile, type MySettings } from '../lib/myProfile';
 import type { PointRecap } from '../lib/pointRecap';
 import type { DroppedPoint } from '../lib/droppedPoint';
@@ -361,6 +362,8 @@ export const DiscoverScreen: React.FC = () => {
     setOverlay('settings');
   };
 
+  // Tags you use most (your Drops, then MY #TAGS), offered on Create Drop.
+  const myTags = useMemo(() => myTagSuggestions(profile.interestTags, myDrops), [profile.interestTags, myDrops]);
   const managing = myDrops.find((drop) => drop.id === managingId) ?? null;
 
   const openDropAgain = (id: string) => {
@@ -851,6 +854,7 @@ export const DiscoverScreen: React.FC = () => {
       <DropPointModal
         visible={dropOpen}
         prefill={dropPrefill}
+        myTags={myTags}
         onClose={closeDrop}
         onDropped={handleDropped}
       />

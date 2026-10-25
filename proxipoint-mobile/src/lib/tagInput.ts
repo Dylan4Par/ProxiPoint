@@ -155,3 +155,69 @@ export function useTagField(
       }),
   };
 }
+
+// ---- Tag picker (chips) ----------------------------------------------------------------------
+
+/** Most #tags a Drop can carry. */
+export const DROP_TAG_LIMIT = 10;
+
+/** The tags in a Tags value, without #, in order, no repeats (case-insensitive). */
+export function selectedTags(value: string): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const part of value.split(/[\s,]+/)) {
+    const tag = cleanTagWord(part);
+    const key = tag.toLowerCase();
+    if (!tag || seen.has(key)) continue;
+    seen.add(key);
+    out.push(tag);
+  }
+  return out;
+}
+
+/** Adds a tag (ignored if it's empty, already there, or the limit is reached). */
+export function addTag(value: string, tag: string, limit = DROP_TAG_LIMIT): string {
+  const clean = cleanTagWord(tag);
+  const current = selectedTags(value);
+  if (!clean || current.length >= limit || current.some((t) => t.toLowerCase() === clean.toLowerCase())) {
+    return tagsToInput(current);
+  }
+  return tagsToInput([...current, clean]);
+}
+
+export function removeTag(value: string, tag: string): string {
+  const key = cleanTagWord(tag).toLowerCase();
+  return tagsToInput(selectedTags(value).filter((t) => t.toLowerCase() !== key));
+}
+
+/**
+ * The tags you're associated with, most relevant first: the ones on your own Drops (most used,
+ * then most recent), then your MY #TAGS, then any used this session.
+ */
+export function myTagSuggestions(
+  interestTags: string[],
+  drops: { tags: string[]; createdAt?: string }[],
+): string[] {
+  const entries = new Map<string, { label: string; count: number; last: number; order: number }>();
+  let order = 0;
+  const add = (raw: string, weight: number, at: number) => {
+    const label = cleanTagWord(raw);
+    if (!label) return;
+    const key = label.toLowerCase();
+    const entry = entries.get(key);
+    if (entry) {
+      entry.count += weight;
+      entry.last = Math.max(entry.last, at);
+    } else entries.set(key, { label, count: weight, last: at, order: order++ });
+  };
+  drops.forEach((drop) => {
+    const at = drop.createdAt ? Date.parse(drop.createdAt) || 0 : 0;
+    drop.tags.forEach((tag) => add(tag, 1, at));
+  });
+  // MY #TAGS count a little less than one Drop's use, so your real habits lead.
+  interestTags.forEach((tag) => add(tag, 0.5, 0));
+  sessionTags.forEach((count, tag) => add(tag, count, 0));
+  return [...entries.values()]
+    .sort((a, b) => b.count - a.count || b.last - a.last || a.order - b.order)
+    .map((entry) => entry.label);
+}

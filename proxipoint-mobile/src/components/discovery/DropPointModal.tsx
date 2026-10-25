@@ -81,7 +81,8 @@ import { ensurePhotoPolicyAccepted } from '../../lib/photoPolicy';
 import { cropToCircle } from '../../lib/coverPhoto';
 import { currentPosition } from '../../lib/places';
 import { PhotoRulesNote } from '../safety/PhotoRulesNote';
-import { rememberTags, tagsToInput, useTagField } from '../../lib/tagInput';
+import { rememberTags, tagsToInput } from '../../lib/tagInput';
+import { TagPicker } from './TagPicker';
 import { DiscoveryLeafletMap, type DropAnimation, type PrivacyMapPreview } from './DiscoveryLeafletMap';
 import {
   lookupPrivacyRegions,
@@ -138,6 +139,8 @@ interface DropPointModalProps {
    * time, which starts as Live Now with the same length as the original.
    */
   prefill?: DroppedPoint | null;
+  /** Your usual #tags, most relevant first, offered as one-tap chips. */
+  myTags?: string[];
 }
 
 const VISIBILITY_OPTIONS: Array<{
@@ -268,7 +271,7 @@ function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
   return <Landmark {...props} />;
 }
 
-export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose, onDropped, prefill = null }) => {
+export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose, onDropped, prefill = null, myTags = [] }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c, tone } = useTheme();
   const insets = useSafeAreaInsets();
@@ -314,7 +317,6 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState('');
-  const tagField = useTagField(tags, setTags, knownBeacons);
   const [locationSearch, setLocationSearch] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedTier, setSelectedTier] = useState<BoundaryTierLevel>('micro');
@@ -1322,50 +1324,16 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               <TextInput
                 placeholder="e.g. Boulder Tech & GIS Meetup"
                 placeholderTextColor={c.textFaint}
-                style={styles.textInput}
+                style={[styles.textInput, styles.titleInput, !title && styles.titlePlaceholder]}
                 value={title}
                 onChangeText={setTitle}
                 testID="drop-title"
               />
             </View>
             <View style={styles.hairline} />
-            <View style={styles.inputRow} ref={tourTarget('drop-tags')} collapsable={false}>
-              <Text style={styles.inputLabel}>Tags</Text>
-              <TextInput
-                placeholder="#TechMeetup, #PostGIS"
-                placeholderTextColor={c.textFaint}
-                style={styles.textInput}
-                value={tags}
-                onChangeText={tagField.onChangeText}
-                onFocus={tagField.onFocus}
-                onBlur={tagField.onBlur}
-                autoCapitalize="none"
-                autoCorrect={false}
-                testID="drop-tags"
-              />
+            <View ref={tourTarget('drop-tags')} collapsable={false}>
+              <TagPicker value={tags} onChange={setTags} mine={myTags} known={knownBeacons} />
             </View>
-            {/* Always mounted (just collapsed when empty) so the layout under the field never jumps. */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                keyboardShouldPersistTaps="always"
-                style={tagField.suggestions.length > 0 ? null : styles.collapsed}
-                contentContainerStyle={tagField.suggestions.length > 0 ? styles.tagSuggestionRow : null}
-                testID="drop-tag-suggestions"
-              >
-                {tagField.suggestions.map((tag) => (
-                  <TouchableOpacity
-                    key={tag}
-                    style={styles.tagSuggestion}
-                    onPress={() => tagField.applySuggestion(tag)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Add tag ${tag}`}
-                    testID={`drop-tag-suggestion-${tag}`}
-                  >
-                    <Text style={styles.tagSuggestionText}>#{tag}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
             <View style={styles.hairline} />
             <View style={styles.photoRow}>
               <TouchableOpacity
@@ -2547,24 +2515,6 @@ const createStyles = (c: ThemeColors) =>
   channelChipActive: { backgroundColor: c.violetTint, borderColor: c.violet },
   channelChipText: { color: c.textSecondary, fontSize: 12.5, fontWeight: '700' },
   channelChipTextActive: { color: c.violetText },
-  tagSuggestionRow: {
-    gap: 8,
-    paddingTop: 10,
-    paddingLeft: 60,
-  },
-  tagSuggestion: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: c.borderStrong,
-    backgroundColor: c.base,
-  },
-  tagSuggestionText: {
-    color: c.accentSoft,
-    fontSize: 12,
-    fontWeight: '700',
-  },
   descriptionLabel: {
     color: c.textMuted,
     fontSize: 12,
@@ -2601,6 +2551,9 @@ const createStyles = (c: ThemeColors) =>
     fontSize: 13,
     padding: 0,
   },
+  titleInput: { fontSize: 17, fontWeight: '700' },
+  // The hint stays light until there's a title.
+  titlePlaceholder: { fontSize: 15, fontWeight: '400' },
   hairline: {
     height: 1,
     backgroundColor: c.border,
