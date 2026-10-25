@@ -1317,44 +1317,6 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
           <GlowFrame active={titleAndTagsComplete}>
           <View style={[styles.groupedContainer, titleAndTagsComplete && styles.glowBorder]} testID="drop-details">
-            <View style={styles.photoRow}>
-              <TouchableOpacity
-                onPress={pickCoverPhoto}
-                disabled={photoBusy}
-                style={[styles.photoCircle, coverPhoto && styles.photoCircleFilled]}
-                accessibilityRole="button"
-                accessibilityLabel={coverPhoto ? 'Change cover photo' : 'Add cover photo'}
-                testID="drop-photo"
-              >
-                {photoBusy ? (
-                  <ActivityIndicator color={c.accent} />
-                ) : coverPhoto ? (
-                  <Image source={{ uri: coverPhoto.uri }} style={styles.photoImage} />
-                ) : (
-                  <ImagePlus size={22} color={c.accent} strokeWidth={2} />
-                )}
-              </TouchableOpacity>
-              <View style={styles.photoCopy}>
-                <Text style={styles.descriptionLabel}>Cover photo</Text>
-                <Text style={styles.photoHint}>
-                  {coverPhoto ? 'Tap the circle to change it.' : 'Optional. Cropped to a circle for the map and cards.'}
-                </Text>
-                <PhotoRulesNote style={{ marginTop: 3 }} />
-              </View>
-              {coverPhoto && !photoBusy ? (
-                <TouchableOpacity
-                  onPress={() => setCoverPhoto(null)}
-                  style={styles.photoRemove}
-                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Remove cover photo"
-                  testID="drop-photo-remove"
-                >
-                  <X size={16} color={c.textMuted} strokeWidth={2.25} />
-                </TouchableOpacity>
-              ) : null}
-            </View>
-            <View style={styles.hairline} />
             <View style={styles.inputRow}>
               <Text style={styles.inputLabel}>Title</Text>
               <TextInput
@@ -1404,6 +1366,44 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+            <View style={styles.hairline} />
+            <View style={styles.photoRow}>
+              <TouchableOpacity
+                onPress={pickCoverPhoto}
+                disabled={photoBusy}
+                style={[styles.photoCircle, coverPhoto && styles.photoCircleFilled]}
+                accessibilityRole="button"
+                accessibilityLabel={coverPhoto ? 'Change cover photo' : 'Add cover photo'}
+                testID="drop-photo"
+              >
+                {photoBusy ? (
+                  <ActivityIndicator color={c.accent} />
+                ) : coverPhoto ? (
+                  <Image source={{ uri: coverPhoto.uri }} style={styles.photoImage} />
+                ) : (
+                  <ImagePlus size={22} color={c.accent} strokeWidth={2} />
+                )}
+              </TouchableOpacity>
+              <View style={styles.photoCopy}>
+                <Text style={styles.descriptionLabel}>Cover photo</Text>
+                <Text style={styles.photoHint}>
+                  {coverPhoto ? 'Tap the circle to change it.' : 'Optional. Cropped to a circle for the map and cards.'}
+                </Text>
+                <PhotoRulesNote style={{ marginTop: 3 }} />
+              </View>
+              {coverPhoto && !photoBusy ? (
+                <TouchableOpacity
+                  onPress={() => setCoverPhoto(null)}
+                  style={styles.photoRemove}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityRole="button"
+                  accessibilityLabel="Remove cover photo"
+                  testID="drop-photo-remove"
+                >
+                  <X size={16} color={c.textMuted} strokeWidth={2.25} />
+                </TouchableOpacity>
+              ) : null}
+            </View>
             <View style={styles.hairline} />
             {/* Channel: who can see it (Channel visibility), or where else it's listed (Public/Private). */}
             <View style={styles.channelField} testID="drop-channel">
