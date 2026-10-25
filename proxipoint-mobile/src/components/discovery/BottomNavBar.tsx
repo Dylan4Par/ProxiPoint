@@ -35,9 +35,8 @@ interface BottomNavBarProps {
   dropActive?: boolean;
 }
 
-/** Size of the raised Drop button and how far it rises above the bar. */
-const DROP_SIZE = 60;
-const DROP_RISE = 22;
+/** Size of the Drop button set into the middle of the bar. */
+const DROP_SIZE = 54;
 
 // Ink on the yellow unread dot stays dark in both themes.
 const INK = '#0a1120';
@@ -85,7 +84,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
     >
       {TABS.map(({ id, label, Icon, testID }, index) => {
         const active = current === id;
-        // The raised + sits between Explore Map and Channels.
+        // The + sits in the bar between Explore Map and Channels.
         const dropSlot =
           onDrop && index === 2 ? (
             <View key="drop" style={styles.dropSlot} pointerEvents="box-none">
@@ -97,7 +96,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
                 accessibilityLabel="Create Drop"
                 testID="nav-drop"
               >
-                <Plus size={30} color={c.onAccent} strokeWidth={2.75} />
+                <Plus size={28} color={c.white} strokeWidth={2.75} />
               </TouchableOpacity>
             </View>
           ) : null;
@@ -194,38 +193,29 @@ const createStyles = (c: ThemeColors) =>
     shadowRadius: 12,
     elevation: 8,
   },
-  /* Middle slot: the + rises above the bar, ringed in the bar's color so it reads as cut out. */
+  /* Middle slot: the + is set into the bar, same height as the tabs. */
   dropSlot: {
-    width: DROP_SIZE + 12,
+    width: DROP_SIZE + 14,
     alignItems: 'center',
-    justifyContent: 'flex-start',
-    alignSelf: 'stretch',
+    justifyContent: 'center',
   },
   dropButton: {
-    marginTop: -DROP_RISE,
     width: DROP_SIZE,
     height: DROP_SIZE,
     borderRadius: DROP_SIZE / 2,
-    backgroundColor: c.accent,
-    borderWidth: 4,
-    borderColor: c.nav,
+    backgroundColor: c.accentDeep,
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: c.accent,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius: 14,
-    elevation: 10,
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 8,
   },
-  // While Create Drop is open its own button sits just above the bar, so the + settles into the
-  // bar instead of rising over it.
+  // Create Drop is open: a bright ring around the +.
   dropButtonActive: {
-    marginTop: 4,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderColor: c.accentBright,
     borderWidth: 2,
+    borderColor: c.accentBright,
   },
   iconSlot: {
     width: 32,
