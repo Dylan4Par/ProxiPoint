@@ -287,7 +287,7 @@ const ProfileStep: React.FC<{
     );
   return (
     <View>
-      <AuthTitle title="What should people call you?" subtitle="Your name shows on your posts and Points." />
+      <AuthTitle title="What should people call you?" subtitle="Your name shows on your posts and Drop Points." />
       <View style={styles.avatarRow}>
         <TouchableOpacity
           style={styles.avatar}
