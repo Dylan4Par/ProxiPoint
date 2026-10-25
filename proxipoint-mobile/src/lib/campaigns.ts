@@ -158,12 +158,12 @@ export function validateCampaign(
   now = new Date(),
 ): string | null {
   const name = input.name.trim();
-  if (!name) return 'Give the campaign a name.';
+  if (!name) return 'Give the series a name.';
   if (name.length > CAMPAIGN_NAME_MAX) return `Keep the name under ${CAMPAIGN_NAME_MAX} characters.`;
   if (input.description.length > CAMPAIGN_DESCRIPTION_MAX) {
     return `Keep the description under ${CAMPAIGN_DESCRIPTION_MAX} characters.`;
   }
-  if (input.eventIds.length > MAX_CAMPAIGN_EVENTS) return `A campaign can have up to ${MAX_CAMPAIGN_EVENTS} events.`;
+  if (input.eventIds.length > MAX_CAMPAIGN_EVENTS) return `A series can have up to ${MAX_CAMPAIGN_EVENTS} events.`;
   if (mode === 'draft') return null;
 
   if (events.length < MIN_CAMPAIGN_EVENTS) return `Add at least ${MIN_CAMPAIGN_EVENTS} events to publish.`;

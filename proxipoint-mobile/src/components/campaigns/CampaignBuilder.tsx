@@ -246,7 +246,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
       }
       onClose();
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Couldn’t save the campaign. Try again.');
+      setError(e instanceof Error ? e.message : 'Couldn’t save the series. Try again.');
       setSaving(false);
     }
   };
@@ -257,7 +257,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
     <Modal visible={visible} animationType="slide" onRequestClose={onClose} statusBarTranslucent>
       <View style={[styles.screen, { paddingTop: insets.top + 8 }]} testID="campaign-builder">
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>{campaign ? 'EDIT CAMPAIGN' : 'NEW CAMPAIGN'}</Text>
+          <Text style={styles.headerTitle}>{campaign ? 'EDIT SERIES' : 'NEW SERIES'}</Text>
           <TouchableOpacity onPress={onClose} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close" testID="campaign-close">
             <X size={22} color={c.text} strokeWidth={2.25} />
           </TouchableOpacity>
@@ -268,7 +268,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
           <View style={styles.card}>
             <TextInput
               style={styles.nameInput}
-              placeholder="Campaign name, e.g. Fall Run Club"
+              placeholder="Series name, e.g. Fall Run Club"
               placeholderTextColor={c.textFaint}
               value={name}
               onChangeText={(v) => {
@@ -633,7 +633,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                 );
               })}
             </View>
-            <Text style={styles.noteInCard}>Sent to people going, before each event in the campaign.</Text>
+            <Text style={styles.noteInCard}>Sent to people going, before each event in the series.</Text>
           </View>
         </KeyboardAwareScrollView>
 

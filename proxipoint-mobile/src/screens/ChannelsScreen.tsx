@@ -119,6 +119,9 @@ interface ChannelsScreenProps {
   myDrops: DroppedPoint[];
   onCreateCampaignPoints: CampaignBuilderProps['onCreatePoints'];
   onAnnounceCampaign: CampaignBuilderProps['onAnnounce'];
+  /** The bottom bar's + → Series: open a new series on the Series tab. */
+  newSeriesRequest?: number | null;
+  onNewSeriesHandled?: () => void;
   onManagePoint: (id: string) => void;
 }
 
@@ -150,7 +153,7 @@ const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
   { id: 'feed', label: 'Feed' },
   { id: 'alerts', label: 'Alerts' },
   { id: 'manage', label: 'My Channels' },
-  { id: 'campaigns', label: 'Campaigns' },
+  { id: 'campaigns', label: 'Series' },
 ];
 
 /**
@@ -267,6 +270,8 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
           onCreatePoints={props.onCreateCampaignPoints}
           onAnnounce={props.onAnnounceCampaign}
           onOpenPoint={props.onManagePoint}
+          newRequest={props.newSeriesRequest}
+          onNewHandled={props.onNewSeriesHandled}
         />
       ) : null}
     </View>

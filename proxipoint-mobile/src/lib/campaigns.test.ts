@@ -55,7 +55,7 @@ test('events come back in start order and the range reads nicely', () => {
 });
 
 test('drafts need only a name; publishing needs events, an audience and a sensible time', () => {
-  assert.equal(validateCampaign(input({ name: '  ' }), [], 'draft', now), 'Give the campaign a name.');
+  assert.equal(validateCampaign(input({ name: '  ' }), [], 'draft', now), 'Give the series a name.');
   assert.equal(validateCampaign(input({ eventIds: [] }), [], 'draft', now), null);
   assert.match(validateCampaign(input(), [week1], 'publish', now) ?? '', /at least 2 events/);
   assert.equal(validateCampaign(input(), [week1, week2], 'publish', now), null);

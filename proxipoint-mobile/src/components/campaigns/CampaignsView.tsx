@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, Modal, Platform, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronRight, Pencil, Plus, Radio, Send, Share2, Trash2, X } from 'lucide-react-native';
@@ -22,7 +22,7 @@ import { useBoosts } from '../../lib/boost';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 /**
- * Channels → Campaigns: your grouped events. Each campaign has its Points, one announcement
+ * Channels → Series: your grouped events. Each campaign has its Points, one announcement
  * (now or scheduled) and who it notifies. Tap one for its events and actions.
  */
 export const CampaignsView: React.FC<{
@@ -31,7 +31,10 @@ export const CampaignsView: React.FC<{
   onAnnounce: CampaignBuilderProps['onAnnounce'];
   /** Opens one of your Points (Manage sheet). */
   onOpenPoint: (id: string) => void;
-}> = ({ drops, onCreatePoints, onAnnounce, onOpenPoint }) => {
+  /** Open a new series right away (the bottom bar's + → Series). Cleared with onNewHandled. */
+  newRequest?: number | null;
+  onNewHandled?: () => void;
+}> = ({ drops, onCreatePoints, onAnnounce, onOpenPoint, newRequest = null, onNewHandled }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const campaigns = useCampaigns();
@@ -39,6 +42,12 @@ export const CampaignsView: React.FC<{
   const [builder, setBuilder] = useState<{ campaign: Campaign | null } | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const open = campaigns.find((cm) => cm.id === openId) ?? null;
+  useEffect(() => {
+    if (!newRequest) return;
+    setOpenId(null);
+    setBuilder({ campaign: null });
+    onNewHandled?.();
+  }, [newRequest, onNewHandled]);
 
   return (
     <View style={styles.flex}>
@@ -50,7 +59,7 @@ export const CampaignsView: React.FC<{
           testID="campaigns-new"
         >
           <Plus size={18} color={c.onAccent} strokeWidth={2.75} />
-          <Text style={styles.newText}>New campaign</Text>
+          <Text style={styles.newText}>New series</Text>
         </TouchableOpacity>
 
         {campaigns.length === 0 ? (
@@ -60,7 +69,7 @@ export const CampaignsView: React.FC<{
             </View>
             <Text style={styles.emptyTitle}>Group your events</Text>
             <Text style={styles.emptyBody}>
-              A run club series, a trivia season, a festival weekend: put the dates together, schedule one announcement,
+              A run club, a trivia season, a festival weekend: put the dates together, schedule one announcement,
               and remind everyone going before each event.
             </Text>
           </View>
@@ -214,7 +223,7 @@ const CampaignDetail: React.FC<{
 
   const confirmDelete = () =>
     Alert.alert(
-      'Delete campaign?',
+      'Delete series?',
       'Its events stay on the map; only the grouping and the announcement settings are removed.',
       [
         { text: 'Cancel', style: 'cancel' },
@@ -275,20 +284,20 @@ const CampaignDetail: React.FC<{
               );
             })
           ) : (
-            <Text style={styles.emptyBody}>No events yet. Edit the campaign to add some.</Text>
+            <Text style={styles.emptyBody}>No events yet. Edit the series to add some.</Text>
           )}
         </ScrollView>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <View style={styles.actions}>
-          <TouchableOpacity style={styles.iconBtn} onPress={confirmDelete} accessibilityRole="button" accessibilityLabel="Delete campaign" testID="campaign-delete">
+          <TouchableOpacity style={styles.iconBtn} onPress={confirmDelete} accessibilityRole="button" accessibilityLabel="Delete series" testID="campaign-delete">
             <Trash2 size={18} color={c.red} strokeWidth={2.25} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.iconBtn}
             onPress={() => void shareCampaign(campaign, events)}
             accessibilityRole="button"
-            accessibilityLabel="Share campaign"
+            accessibilityLabel="Share series"
             testID="campaign-share"
           >
             <Share2 size={18} color={c.accent} strokeWidth={2.25} />

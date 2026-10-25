@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { BackHandler, StyleSheet, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProximitySocket } from '../hooks/useProximitySocket';
@@ -6,6 +6,7 @@ import { DiscoveryMapCanvas } from '../components/discovery/DiscoveryMapCanvas';
 import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
 import { EventCardList } from '../components/discovery/EventCardList';
 import { BottomNavBar, type NavTab } from '../components/discovery/BottomNavBar';
+import { CreateChooserSheet } from '../components/discovery/CreateChooserSheet';
 import { DropPointModal } from '../components/discovery/DropPointModal';
 import { ManagePointSheet } from '../components/drops/ManagePointSheet';
 import { MyDropsScreen } from './MyDropsScreen';
@@ -82,6 +83,10 @@ export const DiscoverScreen: React.FC = () => {
   const [searchRequest, setSearchRequest] = useState<{ key: number; text?: string } | null>(null);
   const [mapFocus, setMapFocus] = useState<{ latitude: number; longitude: number; key: number } | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
+  // The bottom bar's +: Single Drop or Series.
+  const [createChooser, setCreateChooser] = useState(false);
+  const [newSeriesRequest, setNewSeriesRequest] = useState<number | null>(null);
+  const clearNewSeriesRequest = useCallback(() => setNewSeriesRequest(null), []);
   // Kept in memory for now; load from the backend (e.g. GET /me/points) once that exists.
   const [myDrops, setMyDrops] = useState<DroppedPoint[]>([]);
   const [managingId, setManagingId] = useState<string | null>(null);
@@ -700,6 +705,8 @@ export const DiscoverScreen: React.FC = () => {
           myDrops={myDrops}
           onCreateCampaignPoints={createCampaignPoints}
           onAnnounceCampaign={announceCampaign}
+          newSeriesRequest={newSeriesRequest}
+          onNewSeriesHandled={clearNewSeriesRequest}
           onManagePoint={(id) => {
             setJustDroppedId(null);
             setManagingId(id);
@@ -879,14 +886,28 @@ export const DiscoverScreen: React.FC = () => {
         onChannels={() => goTo('channels')}
         onProfile={() => goTo('profile')}
         unreadCount={tab === 'channels' && channelsSegment === 'alerts' ? 0 : unread}
-        dropActive={dropOpen}
-        onDrop={() => {
+        dropActive={dropOpen || createChooser}
+        onDrop={() => setCreateChooser(true)}
+      />
+
+      <CreateChooserSheet
+        visible={createChooser}
+        onClose={() => setCreateChooser(false)}
+        onSingle={() => {
           // Same as + Drop elsewhere: a fresh Point over whatever tab is open.
+          setCreateChooser(false);
           setDetailId(null);
           setHostHandle(null);
           setManagingId(null);
           setDropPrefill(null);
           setDropOpen(true);
+        }}
+        onSeries={() => {
+          // Channels → Series, with a new series open.
+          setCreateChooser(false);
+          goTo('channels');
+          setChannelsSegment('campaigns');
+          setNewSeriesRequest(Date.now());
         }}
       />
 
