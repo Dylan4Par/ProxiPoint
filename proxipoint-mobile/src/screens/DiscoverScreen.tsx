@@ -38,7 +38,7 @@ import { CityPill, CityPickerSheet, type PickKind } from '../components/discover
 import { CITY_LIST, cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
 import { addPost, getChannel, getChannels, getPost, syncAutoChannels } from '../lib/channels';
-import { formatPointWhen, publicWhere } from '../lib/droppedPoint';
+import { formatPointWhen, publicWhere, recentDropPlaces } from '../lib/droppedPoint';
 import { announcementText, campaignEvents, takeDueBroadcasts, type Campaign, type NewCampaignEvent } from '../lib/campaigns';
 import { createBeaconDraft, toBeaconCreatePayload } from '../lib/beaconDraft';
 import { formatBeaconStart, presetForHours, windowDurationHours } from '../lib/beaconWindow';
@@ -364,6 +364,7 @@ export const DiscoverScreen: React.FC = () => {
 
   // Tags you use most (your Drops, then MY #TAGS), offered on Create Drop.
   const myTags = useMemo(() => myTagSuggestions(profile.interestTags, myDrops), [profile.interestTags, myDrops]);
+  const recentPlaces = useMemo(() => recentDropPlaces(myDrops), [myDrops]);
   const managing = myDrops.find((drop) => drop.id === managingId) ?? null;
 
   const openDropAgain = (id: string) => {
@@ -855,6 +856,7 @@ export const DiscoverScreen: React.FC = () => {
         visible={dropOpen}
         prefill={dropPrefill}
         myTags={myTags}
+        recentPlaces={recentPlaces}
         onClose={closeDrop}
         onDropped={handleDropped}
       />

@@ -179,3 +179,29 @@ export function calendarEventFor(point: DroppedPoint): {
     notes: [point.description, shareUrl(point)].filter(Boolean).join('\n\n'),
   };
 }
+
+/**
+ * Places you've dropped at, most recent first, one per spot (same venue name or within ~50 m),
+ * for the "Recent" chips on Create Drop.
+ */
+export function recentDropPlaces(
+  drops: Pick<DroppedPoint, 'id' | 'venue' | 'latitude' | 'longitude' | 'createdAt'>[],
+  limit = 3,
+): { id: string; label: string; subtitle: string; latitude: number; longitude: number }[] {
+  const out: { id: string; label: string; subtitle: string; latitude: number; longitude: number }[] = [];
+  const sorted = [...drops].sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+  for (const drop of sorted) {
+    if (!Number.isFinite(drop.latitude) || !Number.isFinite(drop.longitude)) continue;
+    const label = cleanVenueLabel(drop.venue) || `${drop.latitude.toFixed(4)}, ${drop.longitude.toFixed(4)}`;
+    const same = out.some((place) => {
+      if (place.label.toLowerCase() === label.toLowerCase()) return true;
+      const dLat = (place.latitude - drop.latitude) * 111_320;
+      const dLon = (place.longitude - drop.longitude) * 111_320 * Math.cos((drop.latitude * Math.PI) / 180);
+      return Math.hypot(dLat, dLon) < 50;
+    });
+    if (same) continue;
+    out.push({ id: `recent-${drop.id}`, label, subtitle: 'Recent', latitude: drop.latitude, longitude: drop.longitude });
+    if (out.length >= limit) break;
+  }
+  return out;
+}

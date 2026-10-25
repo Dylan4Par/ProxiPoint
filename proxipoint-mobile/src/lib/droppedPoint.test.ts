@@ -87,3 +87,23 @@ test('attendee summary counts going, cap and waiting', () => {
   assert.equal(attendeeSummary({ ...live, rsvps }), '2 going · 1 waiting');
   assert.equal(attendeeSummary({ ...live, rsvps: rsvps.slice(0, 2), maxAttendance: 20 }), '2 / 20 going');
 });
+
+test('recent places: newest first, one per spot', async () => {
+  const { recentDropPlaces } = await import('./droppedPoint');
+  const p = (id: string, venue: string, lat: number, day: number) => ({
+    id,
+    venue,
+    latitude: lat,
+    longitude: -105,
+    createdAt: new Date(2026, 9, day).toISOString(),
+  });
+  const places = recentDropPlaces([
+    p('a', 'Erie Town Hall', 40.05, 1),
+    p('b', 'Coal Creek Trail (selected on map)', 40.1, 5),
+    p('c', 'Erie Town Hall', 40.05, 3),
+    p('d', 'Dropped pin', 40.10001, 4), // ~1 m from b
+    p('e', 'Library', 40.2, 2),
+  ]);
+  assert.deepEqual(places.map((x) => x.label), ['Coal Creek Trail', 'Erie Town Hall', 'Library']);
+  assert.equal(places[0].latitude, 40.1);
+});

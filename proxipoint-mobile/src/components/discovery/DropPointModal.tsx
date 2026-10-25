@@ -37,6 +37,7 @@ import {
   UserPlus,
   ImagePlus,
   Move,
+  History,
   RotateCcw,
   X,
   type LucideIcon,
@@ -141,6 +142,8 @@ interface DropPointModalProps {
   prefill?: DroppedPoint | null;
   /** Your usual #tags, most relevant first, offered as one-tap chips. */
   myTags?: string[];
+  /** Places you've dropped at before, newest first (lib/droppedPoint recentDropPlaces). */
+  recentPlaces?: PlaceSuggestion[];
 }
 
 const VISIBILITY_OPTIONS: Array<{
@@ -271,7 +274,7 @@ function TierGlyph({ id, active }: { id: BoundaryTierLevel; active: boolean }) {
   return <Landmark {...props} />;
 }
 
-export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose, onDropped, prefill = null, myTags = [] }) => {
+export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose, onDropped, prefill = null, myTags = [], recentPlaces = [] }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c, tone } = useTheme();
   const insets = useSafeAreaInsets();
@@ -770,8 +773,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
 
+    // The channel picker only shows for Channel visibility, so only that sends one.
+    const listedChannelId = visibility === 'channel' ? channelId : null;
     if (visibility === 'channel' && !channelId) {
-      setFormError('Channel Points need a channel. Pick one under Tags, or switch to Public.');
+      setFormError('Channel Points need a channel. Pick one in the Channel row, or switch to Public.');
       return;
     }
 
@@ -811,7 +816,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       description,
       tags,
       visibility,
-      channelId,
+      channelId: listedChannelId,
       venue: cleanVenueLabel(locationSearch) || 'Dropped Point',
       latitude: coords.lat,
       longitude: coords.lon,
@@ -864,7 +869,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       description: description.trim(),
       tags: parseBeaconTags(tags).map((tag) => tag.replace(/^#+/, '')),
       visibility,
-      channelId,
+      channelId: listedChannelId,
       venue: cleanVenueLabel(locationSearch) || 'Dropped Point',
       latitude: coords.lat,
       longitude: coords.lon,
@@ -1372,8 +1377,11 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 </TouchableOpacity>
               ) : null}
             </View>
+            {/* Channel: only for Channel visibility (who can see it). Listing a Public/Private Point
+                in a channel too is hidden for now. */}
+            {visibility === 'channel' ? (
+            <>
             <View style={styles.hairline} />
-            {/* Channel: who can see it (Channel visibility), or where else it's listed (Public/Private). */}
             <View style={styles.channelField} testID="drop-channel">
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>Channel</Text>
@@ -1426,6 +1434,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 </ScrollView>
               ) : null}
             </View>
+            </>
+            ) : null}
             <View style={styles.hairline} />
             <View style={styles.descriptionBlock}>
               <View style={styles.descriptionHeader}>
@@ -1506,6 +1516,29 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   <MapPin size={14} color={c.accent} strokeWidth={2.25} />
                   <Text style={styles.mapPickBtnText}>Select on map</Text>
                 </TouchableOpacity>
+                {/* Recent: places you've dropped at, until a spot is picked or a search is typed. */}
+                {!coords && !locationSearch.trim() && recentPlaces.length > 0 ? (
+                  <View style={styles.recentBlock} testID="drop-recent-places">
+                    <Text style={styles.recentLabel}>RECENT</Text>
+                    <View style={styles.recentChips}>
+                      {recentPlaces.map((place) => (
+                        <TouchableOpacity
+                          key={place.id}
+                          style={styles.recentChip}
+                          onPress={() => applyPlace(place)}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Drop at ${place.label}`}
+                          testID={`drop-recent-${place.id}`}
+                        >
+                          <History size={13} color={c.accent} strokeWidth={2.25} />
+                          <Text style={styles.recentChipText} numberOfLines={1}>
+                            {place.label}
+                          </Text>
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                ) : null}
               </View>
               <TouchableOpacity
                 onPress={handleUseCurrentLocation}
@@ -2552,6 +2585,22 @@ const createStyles = (c: ThemeColors) =>
     padding: 0,
   },
   titleInput: { fontSize: 17, fontWeight: '700' },
+  recentBlock: { marginTop: 12, gap: 6 },
+  recentLabel: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
+  recentChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  recentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    maxWidth: '100%',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    backgroundColor: c.base,
+  },
+  recentChipText: { flexShrink: 1, color: c.textSecondary, fontSize: 12, fontWeight: '700' },
   // The hint stays light until there's a title.
   titlePlaceholder: { fontSize: 15, fontWeight: '400' },
   hairline: {

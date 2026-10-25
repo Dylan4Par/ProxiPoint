@@ -1,14 +1,14 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Plus, X } from 'lucide-react-native';
 import { DROP_TAG_LIMIT, addTag, cleanTagWord, collectKnownTags, removeTag, selectedTags } from '../../lib/tagInput';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
-const MAX_SUGGESTIONS = 10;
+const MAX_SUGGESTIONS = 8;
 
 /**
- * Tags as chips. Picked tags show as filled pills (tap × to remove); under them, your usual
- * tags are one tap away. "Add tag" types a new one (space, comma or return adds it; backspace
+ * Tags as chips. "# Add tag" comes first and picked tags trail to its right as filled pills
+ * (tap × to remove); under them, your usual tags are one tap away (wrapped, never scrolled off). "Add tag" types a new one (space, comma or return adds it; backspace
  * on an empty field removes the last chip). The value stays in "#A, #B" form for the form.
  */
 export const TagPicker: React.FC<{
@@ -77,19 +77,6 @@ export const TagPicker: React.FC<{
       <View style={styles.row}>
         <Text style={styles.label}>Tags</Text>
         <View style={styles.chips}>
-          {picked.map((tag) => (
-            <TouchableOpacity
-              key={tag}
-              style={styles.chip}
-              onPress={() => onChange(removeTag(value, tag))}
-              accessibilityRole="button"
-              accessibilityLabel={`Remove #${tag}`}
-              testID={`${testID}-chip-${tag}`}
-            >
-              <Text style={styles.chipText}>#{tag}</Text>
-              <X size={14} color={c.accent} strokeWidth={2.5} />
-            </TouchableOpacity>
-          ))}
           {full ? (
             <Text style={styles.fullNote}>{limit} tags max</Text>
           ) : (
@@ -108,7 +95,7 @@ export const TagPicker: React.FC<{
                 }}
                 blurOnSubmit={false}
                 returnKeyType="done"
-                placeholder={picked.length ? 'Add tag' : 'Pick below or type a tag'}
+                placeholder="Add tag"
                 placeholderTextColor={c.textFaint}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -117,16 +104,23 @@ export const TagPicker: React.FC<{
               />
             </View>
           )}
+          {picked.map((tag) => (
+            <TouchableOpacity
+              key={tag}
+              style={styles.chip}
+              onPress={() => onChange(removeTag(value, tag))}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove #${tag}`}
+              testID={`${testID}-chip-${tag}`}
+            >
+              <Text style={styles.chipText}>#{tag}</Text>
+              <X size={14} color={c.accent} strokeWidth={2.5} />
+            </TouchableOpacity>
+          ))}
         </View>
       </View>
       {suggestions.length > 0 ? (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
-          contentContainerStyle={styles.suggestions}
-          testID={`${testID}-suggestions`}
-        >
+        <View style={styles.suggestions} testID={`${testID}-suggestions`}>
           {suggestions.map((tag) => (
             <TouchableOpacity
               key={tag}
@@ -143,7 +137,7 @@ export const TagPicker: React.FC<{
               <Text style={styles.suggestionText}>#{tag}</Text>
             </TouchableOpacity>
           ))}
-        </ScrollView>
+        </View>
       ) : null}
     </View>
   );
@@ -167,11 +161,12 @@ const createStyles = (c: ThemeColors) =>
       borderColor: c.accentBorder,
     },
     chipText: { color: c.accent, fontSize: 13, fontWeight: '800' },
-    inputWrap: { flexDirection: 'row', alignItems: 'center', minWidth: 120, flexGrow: 1, height: 30 },
+    inputWrap: { flexDirection: 'row', alignItems: 'center', width: 96, height: 30 },
     hash: { color: c.textMuted, fontSize: 14, fontWeight: '700', marginRight: 2 },
     input: { flex: 1, color: c.text, fontSize: 14, fontWeight: '600', padding: 0 },
     fullNote: { color: c.textFaint, fontSize: 12 },
-    suggestions: { gap: 8, paddingTop: 10, paddingLeft: 60 },
+    // Wraps instead of scrolling sideways, so every suggestion stays in view.
+    suggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 10, paddingLeft: 60 },
     suggestion: {
       flexDirection: 'row',
       alignItems: 'center',
