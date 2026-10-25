@@ -305,7 +305,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
               />
             </View>
           </View>
-          <Text style={styles.note}>Each new drop gets these #tags and the description.</Text>
+          <Text style={styles.note}>Each new Drop gets these #tags and the description.</Text>
 
           {/* ---- Events ---- */}
           <Text style={styles.section}>DROPS · {rows.length}</Text>
@@ -345,7 +345,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
               ))}
             </View>
           ) : (
-            <Text style={styles.empty}>Add at least {MIN_CAMPAIGN_EVENTS} drops: new ones, or Points you've already dropped.</Text>
+            <Text style={styles.empty}>Add at least {MIN_CAMPAIGN_EVENTS} Drops: new ones, or Points you've already dropped.</Text>
           )}
 
           {form ? (
@@ -416,7 +416,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                   <Text style={styles.ghostText}>Cancel</Text>
                 </TouchableOpacity>
                 <TouchableOpacity onPress={addFormEvent} accessibilityRole="button" style={styles.smallPrimary} testID="campaign-event-add">
-                  <Text style={styles.smallPrimaryText}>Add drop</Text>
+                  <Text style={styles.smallPrimaryText}>Add Drop</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -432,7 +432,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                 testID="campaign-new-event"
               >
                 <CalendarPlus size={16} color={c.accent} strokeWidth={2.25} />
-                <Text style={styles.outlineText}>New drop</Text>
+                <Text style={styles.outlineText}>New Drop</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.outlineBtn, pickingExisting && styles.outlineBtnOn]}
@@ -485,12 +485,12 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                   );
                 })
               ) : (
-                <Text style={styles.emptyInCard}>No upcoming drops to add. Drop one from the map, or add a new drop here.</Text>
+                <Text style={styles.emptyInCard}>No upcoming Drops to add. Drop one from the map, or add a new Drop here.</Text>
               )}
             </View>
           ) : null}
           {newEvents.length ? (
-            <Text style={styles.note}>New drops go on the map when you save. The announcement waits until you publish.</Text>
+            <Text style={styles.note}>New Drops go on the map when you save. The announcement waits until you publish.</Text>
           ) : null}
 
           {/* ---- Announcement ---- */}
@@ -633,7 +633,7 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
                 );
               })}
             </View>
-            <Text style={styles.noteInCard}>Sent to people going, before each drop in the series.</Text>
+            <Text style={styles.noteInCard}>Sent to people going, before each Drop in the series.</Text>
           </View>
         </KeyboardAwareScrollView>
 
