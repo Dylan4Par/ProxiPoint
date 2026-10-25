@@ -46,8 +46,11 @@ interface AuthState {
   hydrate: () => Promise<void>;
   /** After sign-up or sign-in. */
   setSession: (session: AuthSession) => Promise<void>;
-  /** Save onboarding to the account, then open the app. Throws AuthError (e.g. handle_taken). */
-  finishOnboarding: (profile: OnboardingProfile) => Promise<void>;
+  /**
+   * Save onboarding to the account, then open the app. Throws AuthError (e.g. handle_taken).
+   * The photo stays on the phone for now (upload + PATCH /me once the backend takes photos).
+   */
+  finishOnboarding: (profile: OnboardingProfile, avatarUri?: string | null) => Promise<void>;
   signOut: () => Promise<void>;
 }
 
@@ -109,7 +112,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     set({ session, clock, notice: null, status: statusFor(session) });
   },
 
-  finishOnboarding: async (profile) => {
+  finishOnboarding: async (profile, avatarUri = null) => {
     const session = get().session;
     if (!session) return;
     const account = await completeOnboarding(session, profile);
@@ -122,6 +125,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         interestTags: profile.interestTags,
         trackLocation: profile.trackLocation,
         countMeInInterests: profile.countMeInInterests,
+        ...(avatarUri ? { avatarUri } : {}),
       },
       notifications: profile.notifications,
     };

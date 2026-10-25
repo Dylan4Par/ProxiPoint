@@ -1,8 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BackHandler, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
-import { Bell, Check, LocateFixed, MapPin, X } from 'lucide-react-native';
+import { ActivityIndicator, BackHandler, Image, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
+import { Bell, Camera, Check, LocateFixed, MapPin, X } from 'lucide-react-native';
 import { AuthButton, AuthError, AuthField, AuthPage, AuthTitle } from '../../components/auth/AuthParts';
+import { CircleCropHost } from '../../components/common/CircleCropHost';
 import { CityPickerSheet } from '../../components/discovery/CityPicker';
+import { PhotoPolicyHost } from '../../components/safety/PhotoPolicyHost';
 import {
   ONBOARDING_STEPS,
   STARTER_INTERESTS,
@@ -15,6 +17,7 @@ import {
   toggleInterest,
   type OnboardingStep,
 } from '../../lib/authForm';
+import { pickCoverPhoto } from '../../lib/coverPhoto';
 import { INTEREST_TAG_LIMIT } from '../../lib/myProfile';
 import { cityLabel, type CityPlace } from '../../lib/places';
 import { AuthError as ApiError, handleAvailable } from '../../services/authApi';
@@ -40,6 +43,9 @@ export const OnboardingScreen: React.FC = () => {
   // Until you edit the handle yourself, it follows your name.
   const [handleEdited, setHandleEdited] = useState(!!session?.account.handle);
   const [handleState, setHandleState] = useState<'idle' | 'checking' | 'free' | 'taken'>('idle');
+  const [avatarUri, setAvatarUri] = useState<string | null>(null);
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
   const [homeCity, setHomeCity] = useState<CityPlace | null>(null);
   const [pickingCity, setPickingCity] = useState(false);
   const [interests, setInterests] = useState<string[]>([]);
@@ -65,6 +71,21 @@ export const OnboardingScreen: React.FC = () => {
     }, 400);
     return () => clearTimeout(timer);
   }, [handle, problem, session?.account.handle]);
+
+  // Same picker and circle cropper as the Profile page (512px square, shown as a circle).
+  const pickAvatar = async () => {
+    if (photoBusy) return;
+    setPhotoBusy(true);
+    setPhotoError(null);
+    try {
+      const photo = await pickCoverPhoto();
+      if (photo) setAvatarUri(photo.uri);
+    } catch {
+      setPhotoError('Couldn’t load that photo. Try a different one.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
 
   const profileOk = isValidDisplayName(displayName) && !!handle && !problem && handleState === 'free';
 
@@ -99,7 +120,7 @@ export const OnboardingScreen: React.FC = () => {
         trackLocation,
         countMeInInterests: false, // "Count me in" is turned off for now
         notifications,
-      });
+      }, avatarUri);
     } catch (e) {
       const code = e instanceof ApiError ? e.code : 'unknown';
       setError(authErrorMessage(code));
@@ -153,6 +174,9 @@ export const OnboardingScreen: React.FC = () => {
         }}
         onClose={() => setPickingCity(false)}
       />
+      {/* Photo rules (first upload) and the circle cropper for the profile photo. */}
+      <PhotoPolicyHost />
+      <CircleCropHost />
     </>
   );
 
@@ -165,6 +189,11 @@ export const OnboardingScreen: React.FC = () => {
             handle={handle}
             handleState={handleState}
             problem={problem}
+            avatarUri={avatarUri}
+            photoBusy={photoBusy}
+            photoError={photoError}
+            onPickAvatar={() => void pickAvatar()}
+            onRemoveAvatar={() => setAvatarUri(null)}
             onName={(text) => {
               const name = cleanDisplayName(text);
               setDisplayName(name);
@@ -222,9 +251,26 @@ const ProfileStep: React.FC<{
   handle: string;
   handleState: 'idle' | 'checking' | 'free' | 'taken';
   problem: string | null;
+  avatarUri: string | null;
+  photoBusy: boolean;
+  photoError: string | null;
+  onPickAvatar: () => void;
+  onRemoveAvatar: () => void;
   onName: (text: string) => void;
   onHandle: (text: string) => void;
-}> = ({ displayName, handle, handleState, problem, onName, onHandle }) => {
+}> = ({
+  displayName,
+  handle,
+  handleState,
+  problem,
+  avatarUri,
+  photoBusy,
+  photoError,
+  onPickAvatar,
+  onRemoveAvatar,
+  onName,
+  onHandle,
+}) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const initial = displayName.trim().charAt(0).toUpperCase();
@@ -243,10 +289,38 @@ const ProfileStep: React.FC<{
     <View>
       <AuthTitle title="What should people call you?" subtitle="Your name shows on your posts and Points." />
       <View style={styles.avatarRow}>
-        <View style={styles.avatar}>
-          <Text style={styles.avatarText}>{initial || '•'}</Text>
+        <TouchableOpacity
+          style={styles.avatar}
+          onPress={onPickAvatar}
+          disabled={photoBusy}
+          accessibilityRole="button"
+          accessibilityLabel={avatarUri ? 'Change profile photo' : 'Add profile photo'}
+          testID="onboarding-photo"
+        >
+          {photoBusy ? (
+            <ActivityIndicator color={c.accent} />
+          ) : avatarUri ? (
+            <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+          ) : (
+            <Text style={styles.avatarText}>{initial || '•'}</Text>
+          )}
+          <View style={styles.avatarBadge}>
+            <Camera size={12} color={c.onAccent} strokeWidth={2.4} />
+          </View>
+        </TouchableOpacity>
+        <View style={styles.avatarCopy}>
+          <TouchableOpacity onPress={onPickAvatar} disabled={photoBusy} hitSlop={8} accessibilityRole="button">
+            <Text style={styles.avatarAction}>{avatarUri ? 'Change photo' : 'Add a photo'}</Text>
+          </TouchableOpacity>
+          {avatarUri ? (
+            <TouchableOpacity onPress={onRemoveAvatar} hitSlop={8} accessibilityRole="button">
+              <Text style={styles.avatarRemove}>Remove</Text>
+            </TouchableOpacity>
+          ) : (
+            <Text style={styles.avatarNote}>Optional. You can change it anytime from your profile.</Text>
+          )}
+          {photoError ? <Text style={styles.avatarError}>{photoError}</Text> : null}
         </View>
-        <Text style={styles.avatarNote}>You can add a photo later from your profile.</Text>
       </View>
       <AuthField
         label="Name"
@@ -418,7 +492,25 @@ const createStyles = (c: ThemeColors) =>
       justifyContent: 'center',
     },
     avatarText: { color: c.accent, fontSize: 22, fontWeight: '800' },
-    avatarNote: { flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 18 },
+    avatarImage: { width: 56, height: 56, borderRadius: 28 },
+    avatarBadge: {
+      position: 'absolute',
+      right: -2,
+      bottom: -2,
+      width: 22,
+      height: 22,
+      borderRadius: 11,
+      backgroundColor: c.accent,
+      borderWidth: 2,
+      borderColor: c.base,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    avatarCopy: { flex: 1, gap: 3 },
+    avatarAction: { color: c.accent, fontSize: 15, fontWeight: '700' },
+    avatarRemove: { color: c.textMuted, fontSize: 13, fontWeight: '600' },
+    avatarNote: { color: c.textMuted, fontSize: 13, lineHeight: 18 },
+    avatarError: { color: c.red, fontSize: 12, lineHeight: 16 },
     hint: { color: c.textMuted, fontSize: 12, marginTop: 6 },
     hintRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 6 },
     hintOk: { color: c.green, marginTop: 0, fontWeight: '700' },
