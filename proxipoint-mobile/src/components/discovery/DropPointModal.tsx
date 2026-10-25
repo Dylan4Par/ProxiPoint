@@ -41,6 +41,7 @@ import {
   History,
   RotateCcw,
   X,
+  XCircle,
   type LucideIcon,
 } from 'lucide-react-native';
 import {
@@ -85,6 +86,7 @@ import { currentPosition } from '../../lib/places';
 import { PhotoRulesNote } from '../safety/PhotoRulesNote';
 import { rememberTags, tagsToInput } from '../../lib/tagInput';
 import { TagPicker } from './TagPicker';
+import { OFFENSIVE_MESSAGE, containsOffensive } from '../../lib/profanity';
 import { DiscoveryLeafletMap, type DropAnimation, type PrivacyMapPreview } from './DiscoveryLeafletMap';
 import {
   lookupPrivacyRegions,
@@ -792,6 +794,11 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       locationInputRef.current?.focus();
       return;
     }
+    // Built-in language check on everything people will see.
+    if ([title, tags, description, locationSearch].some(containsOffensive)) {
+      setFormError(OFFENSIVE_MESSAGE);
+      return;
+    }
 
     // The channel picker only shows for Channel visibility, so only that sends one.
     const listedChannelId = visibility === 'channel' ? channelId : null;
@@ -948,7 +955,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   if (!visible) return null;
 
   // Done once there's a spot, and (for an unnamed map spot) a name for it.
-  const locationComplete = Boolean(coords) && (!needsName || locationSearch.trim().length >= MIN_SPOT_NAME);
+  const spotNameOffensive = needsName && containsOffensive(locationSearch);
+  const spotNameOk = locationSearch.trim().length >= MIN_SPOT_NAME && !spotNameOffensive;
+  const locationComplete = Boolean(coords) && (!needsName || spotNameOk);
   const titleAndTagsComplete = title.trim().length > 0 && parseBeaconTags(tags).length > 0;
   // Shown next to the title so it's clear switching tabs won't lose anything.
   const hasDraftContent =
@@ -1492,8 +1501,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             <View style={[styles.locationContainer, locationComplete && styles.glowBorder]}>
               <View style={styles.locationCopy}>
                 <View style={styles.locationNameRow}>
-                {needsName && locationComplete ? (
-                  <BadgeCheck size={20} color={c.green} strokeWidth={2.25} testID="drop-spot-named" />
+                {needsName && locationSearch.trim() ? (
+                  spotNameOk ? (
+                    <BadgeCheck size={20} color={c.green} strokeWidth={2.25} testID="drop-spot-named" />
+                  ) : (
+                    <XCircle size={20} color={c.red} strokeWidth={2.25} testID="drop-spot-name-bad" />
+                  )
                 ) : null}
                 <TextInput
                   ref={locationInputRef}
@@ -1525,18 +1538,21 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   testID="drop-place"
                 />
                 {needsName && !locationSearch ? (
-                  <Text style={styles.namePlaceholder} pointerEvents="none" numberOfLines={1}>
-                    Name this spot{' '}
-                    <Text style={styles.nameHint} testID="drop-spot-name-hint">
+                  <View style={styles.namePlaceholder} pointerEvents="none">
+                    <Text style={styles.namePlaceholderText} numberOfLines={1}>
+                      Name this spot
+                    </Text>
+                    <Text style={styles.nameHint} numberOfLines={1} testID="drop-spot-name-hint">
                       ({MIN_SPOT_NAME} character minimum)
                     </Text>
-                  </Text>
-                ) : needsName && !locationComplete ? (
-                  <Text style={styles.nameHint} testID="drop-spot-name-hint">
-                    ({MIN_SPOT_NAME} character minimum)
-                  </Text>
+                  </View>
                 ) : null}
                 </View>
+                {needsName && spotNameOffensive ? (
+                  <Text style={styles.nameError} testID="drop-spot-name-error">
+                    {OFFENSIVE_MESSAGE}
+                  </Text>
+                ) : null}
                 {coords ? (
                   <>
                     <View style={styles.locationDivider} />
@@ -2639,10 +2655,12 @@ const createStyles = (c: ThemeColors) =>
     position: 'absolute',
     left: 0,
     right: 0,
-    color: c.textFaint,
-    fontSize: 17,
-    fontWeight: '600',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
   },
+  namePlaceholderText: { color: c.textFaint, fontSize: 17, fontWeight: '600' },
+  nameError: { marginTop: 6, color: c.red, fontSize: 12, fontWeight: '600' },
   locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   locationInputFlex: { flex: 1 },
   recentLabel: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
