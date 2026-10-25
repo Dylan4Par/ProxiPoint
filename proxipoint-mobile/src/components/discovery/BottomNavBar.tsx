@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { tourTarget } from '../tour/tourTargets';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { CircleUser, Compass, Map as MapIcon, Users, type LucideIcon } from 'lucide-react-native';
+import { CircleUser, Compass, Map as MapIcon, Plus, Users, type LucideIcon } from 'lucide-react-native';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 /** discover = feed, map = Explore Map, channels = groups + alerts, profile = your profile. */
@@ -29,7 +29,15 @@ interface BottomNavBarProps {
   onProfile?: () => void;
   /** Unread alerts. Shows a yellow dot (1–9) or "9+" on the Channels icon. */
   unreadCount?: number;
+  /** The raised + in the middle: start a new Drop. Hidden when not given. */
+  onDrop?: () => void;
+  /** Create Drop is open (the + gets a ring). */
+  dropActive?: boolean;
 }
+
+/** Size of the raised Drop button and how far it rises above the bar. */
+const DROP_SIZE = 60;
+const DROP_RISE = 22;
 
 // Ink on the yellow unread dot stays dark in both themes.
 const INK = '#0a1120';
@@ -55,6 +63,8 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   onChannels,
   onProfile,
   unreadCount = 0,
+  onDrop,
+  dropActive = false,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -73,10 +83,27 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
       style={[styles.navWrapper, { height: NAV_BAR_BASE_HEIGHT + insets.bottom, paddingBottom: 6 + insets.bottom }]}
       accessibilityRole="tablist"
     >
-      {TABS.map(({ id, label, Icon, testID }) => {
+      {TABS.map(({ id, label, Icon, testID }, index) => {
         const active = current === id;
+        // The raised + sits between Explore Map and Channels.
+        const dropSlot =
+          onDrop && index === 2 ? (
+            <View key="drop" style={styles.dropSlot} pointerEvents="box-none">
+              <TouchableOpacity
+                style={[styles.dropButton, dropActive && styles.dropButtonActive]}
+                onPress={onDrop}
+                activeOpacity={0.85}
+                accessibilityRole="button"
+                accessibilityLabel="Create Drop"
+                testID="nav-drop"
+              >
+                <Plus size={30} color={c.onAccent} strokeWidth={2.75} />
+              </TouchableOpacity>
+            </View>
+          ) : null;
         const showBadge = id === 'channels' && unreadCount > 0;
-        return (
+        return [
+          dropSlot,
           <TouchableOpacity
             key={id}
             ref={
@@ -120,8 +147,8 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
               {label}
             </Text>
             </View>
-          </TouchableOpacity>
-        );
+          </TouchableOpacity>,
+        ];
       })}
     </View>
   );
@@ -150,8 +177,8 @@ const createStyles = (c: ThemeColors) =>
   tabBox: {
     alignItems: 'center',
     justifyContent: 'center',
-    minWidth: 76,
-    paddingHorizontal: 8,
+    minWidth: 68,
+    paddingHorizontal: 6,
     paddingTop: 4,
     paddingBottom: 3,
     borderRadius: 14,
@@ -166,6 +193,39 @@ const createStyles = (c: ThemeColors) =>
     shadowOpacity: 0.55,
     shadowRadius: 12,
     elevation: 8,
+  },
+  /* Middle slot: the + rises above the bar, ringed in the bar's color so it reads as cut out. */
+  dropSlot: {
+    width: DROP_SIZE + 12,
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    alignSelf: 'stretch',
+  },
+  dropButton: {
+    marginTop: -DROP_RISE,
+    width: DROP_SIZE,
+    height: DROP_SIZE,
+    borderRadius: DROP_SIZE / 2,
+    backgroundColor: c.accent,
+    borderWidth: 4,
+    borderColor: c.nav,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: c.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.7,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  // While Create Drop is open its own button sits just above the bar, so the + settles into the
+  // bar instead of rising over it.
+  dropButtonActive: {
+    marginTop: 4,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    borderColor: c.accentBright,
+    borderWidth: 2,
   },
   iconSlot: {
     width: 32,

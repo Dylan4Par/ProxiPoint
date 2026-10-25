@@ -879,6 +879,15 @@ export const DiscoverScreen: React.FC = () => {
         onChannels={() => goTo('channels')}
         onProfile={() => goTo('profile')}
         unreadCount={tab === 'channels' && channelsSegment === 'alerts' ? 0 : unread}
+        dropActive={dropOpen}
+        onDrop={() => {
+          // Same as + Drop elsewhere: a fresh Point over whatever tab is open.
+          setDetailId(null);
+          setHostHandle(null);
+          setManagingId(null);
+          setDropPrefill(null);
+          setDropOpen(true);
+        }}
       />
 
       {hostHandle ? (
