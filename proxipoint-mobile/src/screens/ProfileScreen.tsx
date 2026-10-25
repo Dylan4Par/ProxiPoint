@@ -206,7 +206,11 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     <View style={asTab ? styles.tab : styles.overlay} testID="profile-screen">
       <KeyboardAwareScrollView
         ref={scrollRef}
-        onLayout={(e) => setLayout((l) => ({ ...l, viewport: e.nativeEvent.layout.height }))}
+        onLayout={(e) => {
+          // Read the size now: the event is cleared before a state updater runs.
+          const viewport = e.nativeEvent.layout.height;
+          setLayout((l) => ({ ...l, viewport }));
+        }}
         style={styles.scroll}
         contentContainerStyle={{ paddingBottom: asTab ? 24 : insets.bottom + 24 }}
         bounces={false}
@@ -333,7 +337,13 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
         </View>
 
         {/* Sheet */}
-        <View style={styles.sheet} onLayout={(e) => setLayout((l) => ({ ...l, sheetY: e.nativeEvent.layout.y }))}>
+        <View
+          style={styles.sheet}
+          onLayout={(e) => {
+            const sheetY = e.nativeEvent.layout.y;
+            setLayout((l) => ({ ...l, sheetY }));
+          }}
+        >
           <View style={styles.pullBar} />
 
           {/* Bio: type straight into the tile; saved as you go. */}
@@ -372,9 +382,10 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <SignalTile signal={signal} contributions={contributions} isMe collapsible onOpenPost={onOpenPost} />
 
           <View
-            onLayout={(e) =>
-              setLayout((l) => ({ ...l, tags: { y: e.nativeEvent.layout.y, height: e.nativeEvent.layout.height } }))
-            }
+            onLayout={(e) => {
+              const { y, height } = e.nativeEvent.layout;
+              setLayout((l) => ({ ...l, tags: { y, height } }));
+            }}
           >
             <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY #TAGS</Text>
             <MyTagsTile
