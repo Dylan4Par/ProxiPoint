@@ -1497,7 +1497,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 ) : null}
                 <TextInput
                   ref={locationInputRef}
-                  placeholder={needsName ? 'Name this spot' : 'Search location or venue...'}
+                  // Naming a map spot: the overlay below shows "Name this spot (5 character minimum)".
+                  placeholder={needsName ? '' : 'Search location or venue...'}
                   placeholderTextColor={c.textFaint}
                   style={[styles.locationInput, styles.locationInputFlex]}
                   value={locationSearch}
@@ -1523,12 +1524,19 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                   autoCorrect={false}
                   testID="drop-place"
                 />
-                </View>
-                {needsName && !locationComplete ? (
+                {needsName && !locationSearch ? (
+                  <Text style={styles.namePlaceholder} pointerEvents="none" numberOfLines={1}>
+                    Name this spot{' '}
+                    <Text style={styles.nameHint} testID="drop-spot-name-hint">
+                      ({MIN_SPOT_NAME} character minimum)
+                    </Text>
+                  </Text>
+                ) : needsName && !locationComplete ? (
                   <Text style={styles.nameHint} testID="drop-spot-name-hint">
-                    {`${MIN_SPOT_NAME} character minimum`}
+                    ({MIN_SPOT_NAME} character minimum)
                   </Text>
                 ) : null}
+                </View>
                 {coords ? (
                   <>
                     <View style={styles.locationDivider} />
@@ -2626,7 +2634,15 @@ const createStyles = (c: ThemeColors) =>
   },
   titleInput: { fontSize: 17, fontWeight: '700' },
   recentBlock: { marginTop: 12, gap: 6 },
-  nameHint: { marginTop: 6, color: c.accent, fontSize: 12, fontWeight: '600' },
+  nameHint: { color: c.accent, fontSize: 12, fontWeight: '600' },
+  namePlaceholder: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    color: c.textFaint,
+    fontSize: 17,
+    fontWeight: '600',
+  },
   locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   locationInputFlex: { flex: 1 },
   recentLabel: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
