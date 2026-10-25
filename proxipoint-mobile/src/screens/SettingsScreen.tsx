@@ -11,7 +11,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  UIManager,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -50,9 +49,7 @@ import { useAuthStore } from '../stores/useAuthStore';
  */
 const ABS_FILL = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 } as const;
 
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+// LayoutAnimation works on Android without any setup on the New Architecture.
 
 type SectionId = 'friends' | 'edit' | 'app' | 'privacy' | 'plans' | 'integrations' | 'faqs' | 'help';
 
