@@ -97,6 +97,11 @@ function heroDots() {
   return dots;
 }
 
+/** How long after opening Profile to a section it keeps re-aiming as the page settles. */
+const FOCUS_SETTLE_MS = 1500;
+/** Space kept above a focused section's title. */
+const FOCUS_TOP_GAP = 16;
+
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   profile,
   drops,
@@ -136,15 +141,20 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
     sheetY: null,
     tags: null,
   });
-  const handledFocus = useRef(0);
+  // The page settles for a moment after opening (e.g. the Signal card restores its minimized state),
+  // which moves MY #TAGS. So keep re-aiming for a short while after the request.
+  const focusStarted = useRef<{ key: number; at: number } | null>(null);
   useEffect(() => {
-    if (!focusRequest || focusRequest.key === handledFocus.current) return;
+    if (!focusRequest) return;
+    if (focusStarted.current?.key !== focusRequest.key) focusStarted.current = { key: focusRequest.key, at: Date.now() };
+    if (Date.now() - focusStarted.current.at > FOCUS_SETTLE_MS) return;
     if (!layout.viewport || layout.sheetY == null || !layout.tags) return; // wait for layout
-    handledFocus.current = focusRequest.key;
     const { y, height } = layout.tags;
-    // Center the tile; if it's taller than the screen, show its top.
-    const target = layout.sheetY + y + Math.min(height, layout.viewport) / 2 - layout.viewport / 2;
-    const timer = setTimeout(() => scrollRef.current?.scrollTo({ y: Math.max(0, target), animated: true }), 60);
+    const top = layout.sheetY + y;
+    // Centered, but never so low that the MY #TAGS title is cut off at the top.
+    const centered = top + Math.min(height, layout.viewport) / 2 - layout.viewport / 2;
+    const target = Math.max(0, Math.min(centered, top - FOCUS_TOP_GAP));
+    const timer = setTimeout(() => scrollRef.current?.scrollTo({ y: target, animated: true }), 60);
     return () => clearTimeout(timer);
   }, [focusRequest?.key, layout]);
   // As a tab, the screen around it already keeps clear of the status bar.
