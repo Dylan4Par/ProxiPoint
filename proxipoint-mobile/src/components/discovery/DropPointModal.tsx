@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -37,11 +37,9 @@ import {
   UserPlus,
   ImagePlus,
   Move,
-  BadgeCheck,
   History,
   RotateCcw,
   X,
-  XCircle,
   type LucideIcon,
 } from 'lucide-react-native';
 import {
@@ -85,6 +83,7 @@ import { cropToCircle } from '../../lib/coverPhoto';
 import { currentPosition } from '../../lib/places';
 import { PhotoRulesNote } from '../safety/PhotoRulesNote';
 import { rememberTags, tagsToInput } from '../../lib/tagInput';
+import { SpotNameInput } from './SpotNameInput';
 import { TagPicker } from './TagPicker';
 import { OFFENSIVE_MESSAGE, containsOffensive } from '../../lib/profanity';
 import { DiscoveryLeafletMap, type DropAnimation, type PrivacyMapPreview } from './DiscoveryLeafletMap';
@@ -376,6 +375,14 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [photoBusy, setPhotoBusy] = useState(false);
   const skipSearch = useRef(false);
   const locationInputRef = useRef<TextInput>(null);
+  // Naming a map spot: the latest typed name (SpotNameInput keeps its own text).
+  const spotNameRef = useRef('');
+  const settleSpotName = useCallback((name: string) => {
+    selectedLabel.current = name;
+    setLocationSearch(name);
+    setPlaceLabel(name);
+    setFormError(null);
+  }, []);
   const selectedLabel = useRef<string | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   /**
@@ -480,6 +487,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setDescription('');
     setTags('');
     setLocationSearch('');
+    spotNameRef.current = '';
     setNeedsName(false);
     setCoords(null);
     setSelectedTier('micro');
@@ -656,6 +664,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
   useEffect(() => {
     if (!visible) return;
+    if (needsName) {
+      // Naming a map spot is not a search.
+      setSuggestions([]);
+      setSearching(false);
+      return;
+    }
     // Don't search for the place that's already chosen (picked from the list, GPS, the map, or
     // filled in by "Drop again"). The ref check alone can be used up by an earlier render,
     // which left the suggestion list open over the Location Privacy tile.
@@ -690,7 +704,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [locationSearch, visible]);
+  }, [locationSearch, visible, needsName]);
 
   /** Sets the Point's place. Refuses (with a message) a spot more than 100 mi from you. */
   const applyPlace = (place: PlaceSuggestion): boolean => {
@@ -701,6 +715,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     }
     skipSearch.current = true;
     setNeedsName(false);
+    spotNameRef.current = place.label;
     selectedLabel.current = place.label;
     setLocationSearch(place.label);
     setCoords({ lat: place.latitude, lon: place.longitude });
@@ -789,13 +804,14 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
 
-    if (needsName && locationSearch.trim().length < MIN_SPOT_NAME) {
+    const placeText = needsName ? spotNameRef.current : locationSearch;
+    if (needsName && placeText.trim().length < MIN_SPOT_NAME) {
       setFormError(`Name the spot you picked on the map (at least ${MIN_SPOT_NAME} characters).`);
       locationInputRef.current?.focus();
       return;
     }
     // Built-in language check on everything people will see.
-    if ([title, tags, description, locationSearch].some(containsOffensive)) {
+    if ([title, tags, description, placeText].some(containsOffensive)) {
       setFormError(OFFENSIVE_MESSAGE);
       return;
     }
@@ -844,7 +860,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       tags,
       visibility,
       channelId: listedChannelId,
-      venue: cleanVenueLabel(locationSearch) || 'Dropped Point',
+      venue: cleanVenueLabel(placeText) || 'Dropped Point',
       latitude: coords.lat,
       longitude: coords.lon,
       isLiveNow,
@@ -897,7 +913,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       tags: parseBeaconTags(tags).map((tag) => tag.replace(/^#+/, '')),
       visibility,
       channelId: listedChannelId,
-      venue: cleanVenueLabel(locationSearch) || 'Dropped Point',
+      venue: cleanVenueLabel(placeText) || 'Dropped Point',
       latitude: coords.lat,
       longitude: coords.lon,
       isLiveNow,
@@ -1500,59 +1516,38 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             <GlowFrame active={locationComplete}>
             <View style={[styles.locationContainer, locationComplete && styles.glowBorder]}>
               <View style={styles.locationCopy}>
-                <View style={styles.locationNameRow}>
-                {needsName && locationSearch.trim() ? (
-                  spotNameOk ? (
-                    <BadgeCheck size={20} color={c.green} strokeWidth={2.25} testID="drop-spot-named" />
-                  ) : (
-                    <XCircle size={20} color={c.red} strokeWidth={2.25} testID="drop-spot-name-bad" />
-                  )
-                ) : null}
-                <TextInput
-                  ref={locationInputRef}
-                  // Naming a map spot: the overlay below shows "Name this spot (5 character minimum)".
-                  placeholder={needsName ? '' : 'Search location or venue...'}
-                  placeholderTextColor={c.textFaint}
-                  style={[styles.locationInput, styles.locationInputFlex]}
-                  value={locationSearch}
-                  maxLength={needsName ? 60 : undefined}
-                  onChangeText={(value) => {
-                    setLocationSearch(value);
-                    setFormError(null);
-                    if (needsName) {
-                      // Naming a map spot: keep the spot, don't search.
-                      selectedLabel.current = value;
-                      setPlaceLabel(value);
-                      return;
-                    }
-                    if (value !== selectedLabel.current) {
-                      selectedLabel.current = null;
-                      setCoords(null);
-                      setPlaceLabel('');
-                      setPlaceType(undefined);
-                      setSelectedTier('micro');
-                      setSelectedRadiusMeters(BOUNDARY_RADII.micro);
-                    }
-                  }}
-                  autoCorrect={false}
-                  testID="drop-place"
-                />
-                {needsName && !locationSearch ? (
-                  <View style={styles.namePlaceholder} pointerEvents="none">
-                    <Text style={styles.namePlaceholderText} numberOfLines={1}>
-                      Name this spot
-                    </Text>
-                    <Text style={styles.nameHint} numberOfLines={1} testID="drop-spot-name-hint">
-                      ({MIN_SPOT_NAME} character minimum)
-                    </Text>
-                  </View>
-                ) : null}
-                </View>
-                {needsName && spotNameOffensive ? (
-                  <Text style={styles.nameError} testID="drop-spot-name-error">
-                    {OFFENSIVE_MESSAGE}
-                  </Text>
-                ) : null}
+                {needsName ? (
+                  // A map spot with no known place: name it (its own small field, so typing stays quick).
+                  <SpotNameInput
+                    key={coords ? `${coords.lat},${coords.lon}` : 'none'}
+                    ref={locationInputRef}
+                    minLength={MIN_SPOT_NAME}
+                    latest={spotNameRef}
+                    onSettled={settleSpotName}
+                  />
+                ) : (
+                  <TextInput
+                    ref={locationInputRef}
+                    placeholder="Search location or venue..."
+                    placeholderTextColor={c.textFaint}
+                    style={styles.locationInput}
+                    value={locationSearch}
+                    onChangeText={(value) => {
+                      setLocationSearch(value);
+                      setFormError(null);
+                      if (value !== selectedLabel.current) {
+                        selectedLabel.current = null;
+                        setCoords(null);
+                        setPlaceLabel('');
+                        setPlaceType(undefined);
+                        setSelectedTier('micro');
+                        setSelectedRadiusMeters(BOUNDARY_RADII.micro);
+                      }
+                    }}
+                    autoCorrect={false}
+                    testID="drop-place"
+                  />
+                )}
                 {coords ? (
                   <>
                     <View style={styles.locationDivider} />
@@ -2650,19 +2645,6 @@ const createStyles = (c: ThemeColors) =>
   },
   titleInput: { fontSize: 17, fontWeight: '700' },
   recentBlock: { marginTop: 12, gap: 6 },
-  nameHint: { color: c.accent, fontSize: 12, fontWeight: '600' },
-  namePlaceholder: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-  },
-  namePlaceholderText: { color: c.textFaint, fontSize: 17, fontWeight: '600' },
-  nameError: { marginTop: 6, color: c.red, fontSize: 12, fontWeight: '600' },
-  locationNameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  locationInputFlex: { flex: 1 },
   recentLabel: { color: c.textMuted, fontSize: 10, fontWeight: '800', letterSpacing: 1.2 },
   recentChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   recentChip: {
