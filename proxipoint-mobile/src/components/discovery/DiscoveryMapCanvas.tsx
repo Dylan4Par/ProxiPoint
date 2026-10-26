@@ -11,7 +11,7 @@ import {
   AccessibilityInfo,
 } from 'react-native';
 import { toCanvasCoordinates, useDiscoveryStore, type DiscoveryNode } from '../../stores/useDiscoveryStore';
-import { matchesDiscoverFilters, useMyChannelsOnly } from '../../lib/discoverFilters';
+import { matchesDiscoverFilters, useMapRange, useMyChannelsOnly } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
@@ -171,10 +171,11 @@ export const DiscoveryMapCanvas: React.FC<{
   const boostClock = useBoosts(); // re-render when a boost starts or runs out
   useTimeWindow(); // re-filter when the date window changes (3 days, or Calendar dates)
   const myChannelsOnly = useMyChannelsOnly(); // Filter & sort → Show only → My channels
+  const rangeMeters = useMapRange(); // Filter & sort → Distance
   useChannels(); // re-filter when you join or leave a channel
   // Boosted pins are drawn last so they sit on top of nearby pins.
   const nodeList = allNodes
-    .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace }))
+    .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace, rangeMeters }))
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
 
   // Channel posts attached to a Point on the map, while their pin lasts, from channels you FOLLOW

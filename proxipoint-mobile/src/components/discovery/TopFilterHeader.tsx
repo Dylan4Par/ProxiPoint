@@ -14,7 +14,8 @@ import {
 import { tourTarget } from '../tour/tourTargets';
 import { CalendarDays, ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react-native';
 import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort, type PointSort } from '../../lib/pointSort';
-import { setMyChannelsOnly, useMyChannelsOnly } from '../../lib/discoverFilters';
+import { setMapRange, setMyChannelsOnly, useMapRange, useMyChannelsOnly } from '../../lib/discoverFilters';
+import { searchRanges, useUnits } from '../../lib/units';
 
 /** Short labels for the three Sort by buttons. */
 const SORT_SHORT: Record<PointSort, string> = { closest: 'Nearest First', soonest: 'Soonest', popular: 'Most Going' };
@@ -84,7 +85,11 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const sort = usePointSort();
   // Badge on the filter button: how many choices differ from the defaults.
   const myChannelsOnly = useMyChannelsOnly();
-  const activeCount = (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (liveOnly ? 1 : 0) + (myChannelsOnly ? 1 : 0);
+  const rangeMeters = useMapRange();
+  const units = useUnits();
+  const ranges = searchRanges(units);
+  const activeCount =
+    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (liveOnly ? 1 : 0) + (myChannelsOnly ? 1 : 0) + (rangeMeters != null ? 1 : 0);
   const [newTagInput, setNewTagInput] = useState('');
 
   const handleAddNewTag = () => {
@@ -310,8 +315,30 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 ))}
               </View>
 
+              {/* Distance from the middle of the area being explored. */}
+              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Distance</Text>
+              <View style={styles.rangeRow} accessibilityRole="radiogroup">
+                {ranges.map((option) => {
+                  const on = rangeMeters === option.meters;
+                  return (
+                    <TouchableOpacity
+                      key={option.label}
+                      style={[styles.rangeChip, on && styles.rangeChipOn]}
+                      onPress={() => setMapRange(option.meters)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={option.meters == null ? 'Any distance' : `Within ${option.label}`}
+                      testID={`filter-range-${option.meters ?? 'any'}`}
+                    >
+                      <Text style={[styles.rangeText, on && styles.rangeTextOn]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.sortNote}>From the middle of the area you're exploring.</Text>
+
               {/* Sort: three side-by-side buttons. */}
-              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Sort by</Text>
+              <Text style={styles.sectionSubtitle}>Sort by</Text>
               <View style={styles.sortSegment} accessibilityRole="radiogroup">
                 {POINT_SORTS.map((option) => {
                   const on = sort === option.id;
@@ -378,6 +405,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   setPointSort(DEFAULT_POINT_SORT);
                   if (liveOnly) onToggleLiveOnly?.();
                   setMyChannelsOnly(false);
+                  setMapRange(null);
                 }}
                 accessibilityRole="button"
               >
@@ -694,6 +722,18 @@ const createStyles = (c: ThemeColors) =>
   sortLabelOn: { color: c.accent },
   sortHint: { color: c.textMuted, fontSize: 12 },
   sortNote: { color: c.textFaint, fontSize: 11, marginTop: 8, marginBottom: 16 },
+  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  rangeChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  rangeChipOn: { backgroundColor: c.accent, borderColor: c.accent },
+  rangeText: { color: c.textSecondary, fontSize: 14, fontWeight: '700' },
+  rangeTextOn: { color: c.onAccent },
   sortSegment: {
     flexDirection: 'row',
     padding: 4,

@@ -14,7 +14,7 @@ import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore
 import { PointCard } from './PointCard';
 import { sortPoints, usePointSort } from '../../lib/pointSort';
 import { useChannels } from '../../lib/channels';
-import { matchesDiscoverFilters, useMyChannelsOnly } from '../../lib/discoverFilters';
+import { matchesDiscoverFilters, useMapRange, useMyChannelsOnly } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { useModeration } from '../../lib/moderation';
 import { isBoosted, useBoosts } from '../../lib/boost';
@@ -65,6 +65,7 @@ export const EventCardList: React.FC<{
   const boostClock = useBoosts(); // re-render when a boost starts or runs out
   useTimeWindow(); // re-filter when the date window changes (3 days, or Calendar dates)
   const myChannelsOnly = useMyChannelsOnly(); // Filter & sort → Show only → My channels
+  const rangeMeters = useMapRange(); // Filter & sort → Distance
   useChannels(); // re-filter when you join or leave a channel
   const sort = usePointSort(); // Filter & sort sheet: closest, soonest or most going
   const [mode, setMode] = useState<DrawerMode>('half');
@@ -77,7 +78,7 @@ export const EventCardList: React.FC<{
     ? (Object.values(allNodes || {}) as DiscoveryNode[]).sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0))
     : getVisibleNodes();
   const visibleNodes = sortPoints(
-    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace })),
+    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace, rangeMeters })),
     sort,
   )
     .map((node, index) => ({ node, index, boosted: isBoosted(node.id, boostClock) }))
