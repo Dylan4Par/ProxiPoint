@@ -225,7 +225,17 @@ export const EventCardList: React.FC<{
   return (
     <Animated.View ref={tourTarget('map-cards')} style={[styles.drawerContainer, { height: animatedHeight }]}>
       <View {...panResponder.panHandlers} style={styles.headerDraggable}>
-        <View style={styles.pullBar} />
+        {/* Tap the grab bar: minimize the list (tap again to bring the cards back). */}
+        <TouchableOpacity
+          style={styles.pullBarTap}
+          onPress={() => animateDrawer(mode === 'collapsed' ? 'half' : 'collapsed')}
+          hitSlop={{ top: 10, bottom: 6, left: 40, right: 40 }}
+          accessibilityRole="button"
+          accessibilityLabel={mode === 'collapsed' ? 'Show the cards' : 'Minimize the cards'}
+          testID="cards-grab-bar"
+        >
+          <View style={styles.pullBar} />
+        </TouchableOpacity>
 
         <View style={styles.collapsedHeaderRow}>
           <TouchableOpacity
@@ -343,13 +353,12 @@ const createStyles = (c: ThemeColors) =>
     paddingHorizontal: 16,
     backgroundColor: c.sheet,
   },
+  pullBarTap: { alignSelf: 'center', paddingHorizontal: 24, paddingVertical: 4, marginBottom: 2 },
   pullBar: {
     width: 42,
     height: 4,
     borderRadius: 2,
     backgroundColor: c.borderStrong,
-    alignSelf: 'center',
-    marginBottom: 6,
   },
   collapsedHeaderRow: {
     flexDirection: 'row',
