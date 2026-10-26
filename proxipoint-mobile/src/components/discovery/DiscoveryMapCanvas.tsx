@@ -383,6 +383,8 @@ export const DiscoveryMapCanvas: React.FC<{
   }, [postPins.map((p) => `${p.post.id}:${p.x}:${p.y}`).join(','), singles, clusters, clusterZoom]);
   const [pickPosts, setPickPosts] = useState<ChannelPost[] | null>(null);
   const [pickCluster, setPickCluster] = useState<MapClusterData | null>(null);
+  const sheetOpen = useRef(false);
+  sheetOpen.current = pickCluster != null || pickPosts != null;
   const [pickHighlight, setPickHighlight] = useState<string | null>(null);
 
   // Card tapped: Points sharing a spot open their bubble's list; others open their details.
@@ -799,9 +801,12 @@ export const DiscoveryMapCanvas: React.FC<{
   const panResponder = useRef(
     PanResponder.create({
       // Two fingers down claims the gesture straight away (so pins don't steal a pinch).
-      onStartShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length >= 2,
+      // While a pick sheet is open the map stays still: the sheets are Modals rendered inside the
+      // map, and React passes their touches up to it, so dragging on a sheet used to pan the map.
+      onStartShouldSetPanResponder: (evt) => !sheetOpen.current && evt.nativeEvent.touches.length >= 2,
       onMoveShouldSetPanResponder: (evt, gestureState) =>
-        evt.nativeEvent.touches.length >= 2 || Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4,
+        !sheetOpen.current &&
+        (evt.nativeEvent.touches.length >= 2 || Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4),
       onPanResponderGrant: () => {
         stopMove();
         pan.stopAnimation();
@@ -868,7 +873,9 @@ export const DiscoveryMapCanvas: React.FC<{
       style={styles.canvasContainer}
       {...panResponder.panHandlers}
       // onTouchStart sees every touch without taking it, so panning and pin taps still work.
-      onTouchStart={onMapTouch}
+      onTouchStart={() => {
+        if (!sheetOpen.current) onMapTouch?.();
+      }}
     >
       <Animated.View
         style={[
