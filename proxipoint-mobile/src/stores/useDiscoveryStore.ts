@@ -3,6 +3,8 @@ import { LOCALRADAR_HANDLE, type PointSource } from '../lib/aggregated';
 import { venuePageHandle } from '../lib/hostProfiles';
 import { describeBeaconTiming, normalizeVisibility, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
 import { calculateDistanceMeters } from '../lib/locationFilter';
+// 30 more sample Points around the default area and 10 in Fort Collins.
+import { MORE_SEED_POINTS } from './seedPointsMore';
 import type {
   BeaconDraft,
   BeaconDuration,
@@ -565,11 +567,17 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
   const metersPerDegLat = 111320;
   const metersPerDegLon = 111320 * Math.cos((self.latitude * Math.PI) / 180);
   const nodes: Record<string, DiscoveryNode> = {};
-  SEED_POINTS.forEach((point) => {
-    const latitude = self.latitude + point.north / metersPerDegLat;
-    const longitude = self.longitude + point.east / metersPerDegLon;
+  const all: Array<SeedPoint & { near?: { latitude: number; longitude: number } }> = [...SEED_POINTS, ...MORE_SEED_POINTS];
+  all.forEach((point) => {
+    // Placed around the default location, or around another city (`near`, e.g. Fort Collins).
+    const anchor = point.near ?? self;
+    const lonScale = point.near ? 111320 * Math.cos((anchor.latitude * Math.PI) / 180) : metersPerDegLon;
+    const latitude = anchor.latitude + point.north / metersPerDegLat;
+    const longitude = anchor.longitude + point.east / lonScale;
     const { x, y } = toCanvasCoordinates(latitude, longitude, self.latitude, self.longitude);
-    const distanceMeters = Math.round(Math.hypot(point.east, point.north));
+    const distanceMeters = point.near
+      ? Math.round(calculateDistanceMeters(self.latitude, self.longitude, latitude, longitude))
+      : Math.round(Math.hypot(point.east, point.north));
     const etaMinutes = Math.max(2, Math.round(distanceMeters / 80));
     const start = seedStart(point, now);
     const end = new Date(start.getTime() + point.lengthMin * 60000);
