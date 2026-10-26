@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
   Alert,
   Image,
@@ -28,7 +29,6 @@ import {
   Pencil,
   Plug,
   Plus,
-  Search,
   Shield,
   SlidersHorizontal,
   type LucideIcon,
@@ -36,6 +36,8 @@ import {
 import { profileInitial, type MyProfile, type MySettings } from '../lib/myProfile';
 import { getPhotoPolicyState, openPhotoPolicy, PHOTO_POLICY_VERSION, subscribePhotoPolicy, SUPPORT_EMAIL } from '../lib/photoPolicy';
 import { getBlockedHandles, unblockUser, useModeration } from '../lib/moderation';
+import { NAME_CHANGED_AT_KEY, nameCooldown, waitLabel } from '../lib/nameCooldown';
+import { OFFENSIVE_MESSAGE, containsOffensive } from '../lib/profanity';
 import { useTheme, useThemedStyles, type ThemeColors, type ThemePreference } from '../theme/ThemeContext';
 import { KeyboardAwareScrollView } from '../components/common/KeyboardAwareScrollView';
 import { CallSignMark } from '../components/brand/CallSignMark';
@@ -51,7 +53,7 @@ const ABS_FILL = { position: 'absolute', top: 0, right: 0, bottom: 0, left: 0 } 
 
 // LayoutAnimation works on Android without any setup on the New Architecture.
 
-type SectionId = 'friends' | 'edit' | 'app' | 'privacy' | 'plans' | 'integrations' | 'faqs' | 'help';
+type SectionId = 'edit' | 'app' | 'privacy' | 'plans' | 'integrations' | 'faqs' | 'help';
 
 interface SettingsScreenProps {
   profile: MyProfile;
@@ -67,7 +69,6 @@ interface SettingsScreenProps {
 }
 
 const ROWS: Array<{ id: SectionId; label: string; Icon: LucideIcon; kind: 'page' | 'expand' }> = [
-  { id: 'friends', label: 'Add friends', Icon: Search, kind: 'page' },
   { id: 'edit', label: 'Edit profile', Icon: Pencil, kind: 'page' },
   { id: 'app', label: 'App settings', Icon: SlidersHorizontal, kind: 'expand' },
   { id: 'privacy', label: 'Privacy', Icon: Shield, kind: 'expand' },
@@ -182,7 +183,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
               {isOpen ? (
                 <View style={styles.panel}>
-                  {id === 'friends' ? <AddFriends handle={profile.handle} /> : null}
                   {id === 'edit' ? (
                     <EditProfile
                       profile={profile}
@@ -383,36 +383,21 @@ const ContactDetails: React.FC<{ settings: MySettings; onChange: (settings: MySe
   );
 };
 
-const AddFriends: React.FC<{ handle: string }> = ({ handle }) => {
-  const styles = useThemedStyles(createStyles);
-  const { colors: c } = useTheme();
-  const [query, setQuery] = useState('');
-  return (
-    <>
-      <TextInput
-        value={query}
-        onChangeText={(text) => setQuery(text === '' ? '' : `@${text.replace(/@/g, '').replace(/[^A-Za-z0-9_.-]/g, '')}`)}
-        placeholder="Search by @handle"
-        placeholderTextColor={c.textFaint}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.input}
-        testID="settings-friend-search"
-      />
-      <Text style={styles.note}>
-        {query.length > 1
-          ? 'Searching people needs the ProxiPoint server, which isn’t connected yet.'
-          : `Friends can find you as ${handle}.`}
-      </Text>
-    </>
-  );
-};
-
 const EditProfile: React.FC<{ profile: MyProfile; onSave: (profile: MyProfile) => void }> = ({ profile, onSave }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [name, setName] = useState(profile.displayName);
   const [error, setError] = useState('');
+  // One name change every 72 hours (the time of the last one is kept on the phone).
+  const [changedAt, setChangedAt] = useState<string | null>(null);
+  useEffect(() => {
+    AsyncStorage.getItem(NAME_CHANGED_AT_KEY)
+      .then(setChangedAt)
+      .catch(() => undefined);
+  }, []);
+  const cooldown = nameCooldown(changedAt);
+  const locked = !cooldown.allowed;
+  const unchanged = name.trim() === profile.displayName.trim();
 
   const save = () => {
     const trimmed = name.trim();
@@ -420,7 +405,20 @@ const EditProfile: React.FC<{ profile: MyProfile; onSave: (profile: MyProfile) =
       setError('Add a name.');
       return;
     }
-    // Server side: PATCH /me. Photo and bio are edited on the Profile page itself.
+    if (unchanged) return;
+    if (locked) {
+      setError('You changed your name recently. Try again later.');
+      return;
+    }
+    if (containsOffensive(trimmed)) {
+      setError(OFFENSIVE_MESSAGE);
+      return;
+    }
+    // Server side: PATCH /me (and it should refuse a second change within 72 hours).
+    // Photo and bio are edited on the Profile page itself.
+    const now = new Date();
+    setChangedAt(now.toISOString());
+    AsyncStorage.setItem(NAME_CHANGED_AT_KEY, now.toISOString()).catch(() => undefined);
     onSave({ ...profile, displayName: trimmed });
   };
 
@@ -435,13 +433,30 @@ const EditProfile: React.FC<{ profile: MyProfile; onSave: (profile: MyProfile) =
         }}
         placeholder="Your name"
         placeholderTextColor={c.textFaint}
-        style={styles.input}
+        style={[styles.input, locked && styles.inputLocked]}
+        editable={!locked}
         maxLength={40}
         testID="settings-edit-name"
       />
+      {locked && cooldown.availableAt ? (
+        <Text style={styles.cooldownNote} testID="settings-name-cooldown">
+          You can change your name again {waitLabel(cooldown.availableAt)} (
+          {cooldown.availableAt.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })},{' '}
+          {cooldown.availableAt.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}).
+        </Text>
+      ) : (
+        <Text style={styles.note}>You can change your name once every 72 hours.</Text>
+      )}
       <Text style={styles.note}>Your handle {profile.handle} stays the same. Change your photo and bio on your Profile page.</Text>
       {error ? <Text style={styles.error}>{error}</Text> : null}
-      <TouchableOpacity style={styles.saveBtn} onPress={save} accessibilityRole="button" testID="settings-edit-save">
+      <TouchableOpacity
+        style={[styles.saveBtn, (locked || unchanged) && styles.saveBtnOff]}
+        onPress={save}
+        disabled={locked || unchanged}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: locked || unchanged }}
+        testID="settings-edit-save"
+      >
         <Text style={styles.saveText}>SAVE PROFILE</Text>
       </TouchableOpacity>
     </>
@@ -686,6 +701,9 @@ const createStyles = (c: ThemeColors) =>
   contactBlock: { gap: 8 },
   fieldLabel: { color: c.textMuted, fontSize: 12, fontWeight: '700', marginTop: 4 },
   note: { color: c.textMuted, fontSize: 12, lineHeight: 17 },
+  cooldownNote: { color: c.accent, fontSize: 12, lineHeight: 17, fontWeight: '600' },
+  inputLocked: { opacity: 0.55 },
+  saveBtnOff: { opacity: 0.45 },
   input: {
     backgroundColor: c.surface,
     borderRadius: 10,
