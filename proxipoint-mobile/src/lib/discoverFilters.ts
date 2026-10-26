@@ -1,6 +1,7 @@
+import { useEffect, useState } from 'react';
 import { isLiveNode } from './liveStatus';
 import { isNodeAllowed } from './moderation';
-import { canSeePoint } from './channels';
+import { canSeePoint, getChannels } from './channels';
 import { getTimeWindow, inTimeWindow } from './timeWindow';
 
 /**
@@ -13,6 +14,46 @@ export interface DiscoverFilters {
   liveOnly?: boolean;
   /** 'RSVPd' = only Points you've RSVP'd to. */
   activeTab?: string | null;
+  /** Show only → My channels: Points listed in, or tagged like, a channel you've joined. */
+  myChannelsOnly?: boolean;
+}
+
+/** In one of your channels: listed there, or sharing a #tag with a channel you've joined. */
+export function inMyChannels(node: unknown, channels = getChannels()): boolean {
+  const joined = channels.filter((channel) => channel.joined);
+  if (!joined.length) return false;
+  const channelId = (node as { channelId?: unknown } | null)?.channelId;
+  if (typeof channelId === 'string' && joined.some((channel) => channel.id === channelId)) return true;
+  const tags = new Set(joined.flatMap((channel) => channel.tags.map(normalizeTag)));
+  return nodeTags(node).some((tag) => tags.has(tag));
+}
+
+// ---- "My channels" switch (Filter & sort → Show only), shared by the map and the cards ----------
+
+let myChannelsOnly = false;
+const listeners = new Set<() => void>();
+
+export function getMyChannelsOnly(): boolean {
+  return myChannelsOnly;
+}
+
+export function setMyChannelsOnly(on: boolean): void {
+  if (on === myChannelsOnly) return;
+  myChannelsOnly = on;
+  listeners.forEach((listener) => listener());
+}
+
+export function useMyChannelsOnly(): boolean {
+  const [on, setOn] = useState(myChannelsOnly);
+  useEffect(() => {
+    const listener = () => setOn(myChannelsOnly);
+    listeners.add(listener);
+    listener();
+    return () => {
+      listeners.delete(listener);
+    };
+  }, []);
+  return on;
 }
 
 function normalizeTag(tag: string): string {
@@ -37,6 +78,7 @@ export function matchesDiscoverFilters(node: unknown, filters: DiscoverFilters):
   const tag = filters.selectedTag ? normalizeTag(filters.selectedTag) : '';
   if (tag && tag !== 'all' && !nodeTags(node).includes(tag)) return false;
   if (filters.liveOnly && !isLiveNode(node)) return false;
+  if (filters.myChannelsOnly && !inMyChannels(node)) return false;
   if (filters.activeTab === 'RSVPd' && (node as { isRsvpd?: unknown } | null)?.isRsvpd !== true) return false;
   // Only the next 3 days (or the dates picked in the Calendar).
   if (!inTimeWindow(node, getTimeWindow())) return false;

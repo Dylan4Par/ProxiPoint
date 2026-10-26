@@ -9,10 +9,15 @@ import {
   TextInput,
   TouchableWithoutFeedback,
   Image,
+  Switch,
 } from 'react-native';
 import { tourTarget } from '../tour/tourTargets';
-import { CalendarDays, Check, ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react-native';
-import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort } from '../../lib/pointSort';
+import { CalendarDays, ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react-native';
+import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort, type PointSort } from '../../lib/pointSort';
+import { setMyChannelsOnly, useMyChannelsOnly } from '../../lib/discoverFilters';
+
+/** Short labels for the three Sort by buttons. */
+const SORT_SHORT: Record<PointSort, string> = { closest: 'Nearest First', soonest: 'Soonest', popular: 'Most Going' };
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -78,7 +83,8 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const [tagModalOpen, setTagModalOpen] = useState(false);
   const sort = usePointSort();
   // Badge on the filter button: how many choices differ from the defaults.
-  const activeCount = (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (liveOnly ? 1 : 0);
+  const myChannelsOnly = useMyChannelsOnly();
+  const activeCount = (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (liveOnly ? 1 : 0) + (myChannelsOnly ? 1 : 0);
   const [newTagInput, setNewTagInput] = useState('');
 
   const handleAddNewTag = () => {
@@ -270,53 +276,8 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             </View>
 
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
-              {/* Sort */}
-              <Text style={styles.sectionSubtitle}>Sort by</Text>
-              <View style={styles.sortList}>
-                {POINT_SORTS.map((option) => {
-                  const on = sort === option.id;
-                  return (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.sortRow, on && styles.sortRowOn]}
-                      onPress={() => setPointSort(option.id)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: on }}
-                      testID={`sort-${option.id}`}
-                    >
-                      <View style={styles.sortCopy}>
-                        <Text style={[styles.sortLabel, on && styles.sortLabelOn]}>{option.label}</Text>
-                        <Text style={styles.sortHint}>{option.hint}</Text>
-                      </View>
-                      {on ? <Check size={18} color={c.accent} strokeWidth={3} /> : null}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={styles.sortNote}>Boosted Points stay at the top, labeled.</Text>
-
-              {/* Show */}
-              {onToggleLiveOnly ? (
-                <>
-                  <Text style={styles.sectionSubtitle}>Show</Text>
-                  <TouchableOpacity
-                    style={[styles.sortRow, liveOnly && styles.sortRowOn]}
-                    onPress={onToggleLiveOnly}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: liveOnly }}
-                    testID="filter-sheet-live"
-                  >
-                    <View style={styles.sortCopy}>
-                      <Text style={[styles.sortLabel, liveOnly && styles.sortLabelOn]}>Live now only</Text>
-                      <Text style={styles.sortHint}>Points happening right now</Text>
-                    </View>
-                    {liveOnly ? <Check size={18} color={c.accent} strokeWidth={3} /> : null}
-                  </TouchableOpacity>
-                </>
-              ) : null}
-
               {/* Hashtag chips */}
-              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Your hashtags</Text>
+              <Text style={styles.sectionSubtitle}>Your hashtags</Text>
               <View style={styles.addTagRow}>
                 <TextInput
                   style={styles.addTagInput}
@@ -348,6 +309,65 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   </View>
                 ))}
               </View>
+
+              {/* Sort: three side-by-side buttons. */}
+              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Sort by</Text>
+              <View style={styles.sortSegment} accessibilityRole="radiogroup">
+                {POINT_SORTS.map((option) => {
+                  const on = sort === option.id;
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.sortSegmentBtn, on && styles.sortSegmentBtnOn]}
+                      onPress={() => setPointSort(option.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={`${option.label}: ${option.hint}`}
+                      testID={`sort-${option.id}`}
+                    >
+                      <Text style={[styles.sortSegmentText, on && styles.sortSegmentTextOn]} numberOfLines={1}>
+                        {SORT_SHORT[option.id]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.sortNote}>Boosted Points stay at the top, labeled.</Text>
+
+              {/* Show only: switches. */}
+              <Text style={styles.sectionSubtitle}>Show only</Text>
+              <View style={styles.showCard}>
+                {onToggleLiveOnly ? (
+                  <View style={styles.showRow}>
+                    <View style={styles.sortCopy}>
+                      <Text style={styles.sortLabel}>Live now only</Text>
+                      <Text style={styles.sortHint}>Points happening right now</Text>
+                    </View>
+                    <Switch
+                      value={liveOnly}
+                      onValueChange={onToggleLiveOnly}
+                      trackColor={{ false: c.borderStrong, true: c.accentTrack }}
+                      thumbColor={liveOnly ? c.accent : c.textMuted}
+                      accessibilityLabel="Live now only"
+                      testID="filter-sheet-live"
+                    />
+                  </View>
+                ) : null}
+                <View style={[styles.showRow, onToggleLiveOnly ? styles.showRowDivider : null]}>
+                  <View style={styles.sortCopy}>
+                    <Text style={styles.sortLabel}>My channels</Text>
+                    <Text style={styles.sortHint}>Points from channels you've joined</Text>
+                  </View>
+                  <Switch
+                    value={myChannelsOnly}
+                    onValueChange={setMyChannelsOnly}
+                    trackColor={{ false: c.borderStrong, true: c.accentTrack }}
+                    thumbColor={myChannelsOnly ? c.accent : c.textMuted}
+                    accessibilityLabel="My channels only"
+                    testID="filter-sheet-my-channels"
+                  />
+                </View>
+              </View>
             </ScrollView>
 
             <View style={styles.sheetButtons}>
@@ -357,6 +377,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 onPress={() => {
                   setPointSort(DEFAULT_POINT_SORT);
                   if (liveOnly) onToggleLiveOnly?.();
+                  setMyChannelsOnly(false);
                 }}
                 accessibilityRole="button"
               >
@@ -672,7 +693,46 @@ const createStyles = (c: ThemeColors) =>
   sortLabel: { color: c.text, fontSize: 14, fontWeight: '700' },
   sortLabelOn: { color: c.accent },
   sortHint: { color: c.textMuted, fontSize: 12 },
-  sortNote: { color: c.textFaint, fontSize: 11, marginBottom: 16 },
+  sortNote: { color: c.textFaint, fontSize: 11, marginTop: 8, marginBottom: 16 },
+  sortSegment: {
+    flexDirection: 'row',
+    padding: 4,
+    gap: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  sortSegmentBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  sortSegmentBtnOn: {
+    borderColor: c.accent,
+    backgroundColor: c.accentTint,
+    shadowColor: c.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  sortSegmentText: { color: c.textSecondary, fontSize: 13, fontWeight: '700' },
+  sortSegmentTextOn: { color: c.accent, fontWeight: '800' },
+  showCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+    paddingHorizontal: 14,
+    marginBottom: 6,
+  },
+  showRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  showRowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border },
   sectionGap: { marginTop: 10 },
   sheetButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
   resetBtn: {
