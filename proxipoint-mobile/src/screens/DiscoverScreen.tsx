@@ -34,7 +34,7 @@ import { areaName } from '../lib/mapArea';
 import { setMyInterestMembership } from '../lib/nearbyInterest';
 import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
 import { formatRange } from '../lib/calendarRange';
-import { CalendarDays, ChevronDown, ChevronLeft, Plus } from 'lucide-react-native';
+import { CalendarDays, ChevronDown, ChevronLeft } from 'lucide-react-native';
 import { CityPill, CityPickerSheet, type PickKind } from '../components/discovery/CityPicker';
 import { CITY_LIST, cityAt, cityLabel, currentPosition, watchPosition, type CityPlace } from '../lib/places';
 import { checkTagAlerts, unreadCount as activityUnread, useActivity } from '../lib/activity';
@@ -584,29 +584,10 @@ export const DiscoverScreen: React.FC = () => {
           <TopFilterHeader
             liveOnly={liveOnly}
             onToggleLiveOnly={() => setLiveOnly((on) => !on)}
-            // Top row: + Event · city · dates (Next 3 days by default; ⌄ opens When → Calendar).
+            // Top row: city (fills the row) · dates (Next 3 days by default; ⌄ opens When → Calendar).
+            // Creating a Drop is the + in the bottom bar.
             topRow={
               <>
-                <TouchableOpacity
-                  ref={tourTarget('create-event')}
-                  style={styles.createEventBtn}
-                  onPress={() => {
-                    setDetailId(null);
-                    setHostHandle(null);
-                    // Always starts a fresh Point.
-                    setManagingId(null);
-                    setDropPrefill(null);
-                    setDropOpen(true);
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Drop a Point"
-                  testID="map-drop-point"
-                >
-                  <Plus size={16} color={c.onAccent} strokeWidth={3} />
-                  <Text style={styles.createEventText} numberOfLines={1}>
-                    Drop
-                  </Text>
-                </TouchableOpacity>
                 <CityPill
                   inline
                   label={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
@@ -1001,16 +982,6 @@ const createStyles = (c: ThemeColors) =>
   subBackText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
   datePillText: { color: c.text, fontSize: 12, fontWeight: '800', flexShrink: 1 },
   /* Explore Map top row */
-  createEventBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 12,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: c.accent,
-  },
-  createEventText: { color: c.onAccent, fontSize: 13, fontWeight: '800' },
   dateChip: {
     flexDirection: 'row',
     alignItems: 'center',

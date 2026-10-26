@@ -43,7 +43,7 @@ export const CityPill: React.FC<{
   return (
     <View style={inline ? styles.pillRowInline : styles.pillRow} pointerEvents="box-none">
       <TouchableOpacity
-        style={[styles.pill, exploring && styles.pillExploring]}
+        style={[styles.pill, inline && styles.pillFill, exploring && styles.pillExploring]}
         onPress={onPress}
         activeOpacity={0.85}
         accessibilityRole="button"
@@ -55,7 +55,7 @@ export const CityPill: React.FC<{
         ) : (
           <MapPin size={14} color={exploring ? c.violetText : c.accent} strokeWidth={2.5} />
         )}
-        <View style={styles.pillCopy}>
+        <View style={[styles.pillCopy, inline && styles.pillCopyFill]}>
           {exploring ? <Text style={styles.pillKicker}>EXPLORING</Text> : null}
           <Text style={styles.pillText} numberOfLines={1}>
             {label}
@@ -266,6 +266,9 @@ const createStyles = (c: ThemeColors) =>
     pillRow: { position: 'absolute', top: 14, left: 14, right: 70, flexDirection: 'row', alignItems: 'center', gap: 6, zIndex: 15 },
     pillRowInline: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 4 },
     pillCopy: { flexShrink: 1, minWidth: 0 },
+    // Inline (Explore Map's top row): the pill takes the free width, chevron at the right end.
+    pillFill: { flex: 1 },
+    pillCopyFill: { flex: 1 },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',

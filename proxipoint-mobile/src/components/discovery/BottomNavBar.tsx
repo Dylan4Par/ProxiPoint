@@ -89,6 +89,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           onDrop && index === TABS.length - 1 ? (
             <View key="drop" style={styles.dropSlot} pointerEvents="box-none">
               <TouchableOpacity
+                ref={tourTarget('create-event')}
                 style={[styles.dropButton, dropActive && styles.dropButtonActive]}
                 onPress={onDrop}
                 activeOpacity={0.85}
