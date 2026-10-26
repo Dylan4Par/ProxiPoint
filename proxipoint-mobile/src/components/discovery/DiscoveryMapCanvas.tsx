@@ -450,11 +450,10 @@ export const DiscoveryMapCanvas: React.FC<{
     const maxX = left + viewSize.current.width / z + 40;
     const minY = top - 40;
     const maxY = top + visibleMapHeight() / z + 40;
-    // The card list follows these. While a finger is moving the map, hand them over at most every
-    // 120 ms (and once more when it lets go) instead of on every frame.
+    // The card list follows these, but not while a finger is on the map: the map drags freely and
+    // the cards load once it's let go (onPanResponderRelease / Terminate hand them over).
     pendingBounds.current = { minX, maxX, minY, maxY };
     if (gesture.current.mode === 'none') flushBounds();
-    else if (!boundsTimer.current) boundsTimer.current = setTimeout(flushBounds, 120);
     // Far from the area's center (or zoomed well out)? Offer "Search this area".
     const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, AREA_RANGE_METERS);
     if (offer !== offerAreaRef.current) {
@@ -892,6 +891,7 @@ export const DiscoveryMapCanvas: React.FC<{
       },
       onPanResponderTerminate: () => {
         gesture.current.mode = 'none';
+        flushBounds();
       },
     })
   ).current;
