@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import {
   CalendarClock,
+  CalendarPlus,
   Check,
   ChevronRight,
   Radar,
@@ -31,6 +32,7 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react-native';
+import * as Calendar from 'expo-calendar';
 import { CategoryBadge } from './CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import { ReportSheet, type ReportTarget } from '../safety/ReportSheet';
@@ -243,6 +245,32 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
     }
   };
 
+  // Add to the phone's calendar: opens the calendar app's own "new event" screen, filled in.
+  const canCalendar = view.startsAt != null && view.endsAt != null;
+  const addToCalendar = async () => {
+    if (!view.startsAt || !view.endsAt) return;
+    try {
+      if (Platform.OS === 'ios') {
+        const permission = await Calendar.requestCalendarPermissionsAsync();
+        if (permission.status !== 'granted') {
+          setNotice('Allow calendar access in Settings to add this Point.');
+          return;
+        }
+      }
+      const url = `${SHARE_BASE_URL}${encodeURIComponent(view.id)}`;
+      await Calendar.createEventInCalendarAsync({
+        title: view.title,
+        startDate: view.startsAt,
+        endDate: view.endsAt,
+        // A hidden spot stays hidden here too ("Somewhere in …").
+        location: hidden ? whereText : view.venue,
+        notes: [view.description, url].filter(Boolean).join('\n\n'),
+      });
+    } catch {
+      setNotice('Couldn’t open your calendar.');
+    }
+  };
+
   const directions = async () => {
     if (!canNavigate) return;
     const label = encodeURIComponent(view.venue || view.title);
@@ -448,6 +476,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
               {rsvpLabel}
             </Text>
           </TouchableOpacity>
+          {canCalendar ? <IconButton Icon={CalendarPlus} label="Calendar" onPress={addToCalendar} /> : null}
           <IconButton Icon={Share2} label="Share" onPress={share} />
           {canNavigate ? <IconButton Icon={Navigation} label="Directions" onPress={directions} /> : null}
         </View>
@@ -602,7 +631,7 @@ const createStyles = (c: ThemeColors) =>
   rsvpTextOn: { color: c.accent },
   rsvpTextFull: { color: c.textFaint },
   iconBtn: {
-    minWidth: 72,
+    minWidth: 66,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: c.border,
