@@ -47,7 +47,9 @@ export const EventCardList: React.FC<{
   resetSignal?: number;
   /** Tells the screen when the list covers the whole map (so it can hide things on the map). */
   onFullChange?: (full: boolean) => void;
-}> = ({ liveOnly = false, onOpenDetails, fullHeight = null, resetSignal = 0, onFullChange }) => {
+  /** Height the list is settling to (it sits over the map's bottom), as soon as a slide starts. */
+  onCoverChange?: (height: number) => void;
+}> = ({ liveOnly = false, onOpenDetails, fullHeight = null, resetSignal = 0, onFullChange, onCoverChange }) => {
   const styles = useThemedStyles(createStyles);
   const getVisibleNodes = useDiscoveryStore((s) => s.getVisibleNodes);
   const allNodes = useDiscoveryStore((s) => s.nodes);
@@ -154,6 +156,11 @@ export const EventCardList: React.FC<{
   useEffect(() => {
     onFullChange?.(isFull);
   }, [isFull, onFullChange]);
+
+  useEffect(() => {
+    onCoverChange?.(heightFor(mode));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, halfHeight, fullHeight, onCoverChange]);
 
   // Android back: full list → back to the map.
   useEffect(() => {
@@ -312,8 +319,12 @@ export const EventCardList: React.FC<{
 
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
+  // Over the map's bottom edge (the map fills the whole area and never resizes).
   drawerContainer: {
-    marginTop: -CARD_SHEET_RADIUS,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
     zIndex: 2,
     backgroundColor: c.sheet,
     borderTopLeftRadius: CARD_SHEET_RADIUS,

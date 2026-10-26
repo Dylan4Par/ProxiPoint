@@ -83,6 +83,8 @@ export const DiscoverScreen: React.FC = () => {
   const [searchRequest, setSearchRequest] = useState<{ key: number; text?: string } | null>(null);
   const [mapFocus, setMapFocus] = useState<{ latitude: number; longitude: number; key: number } | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
+  // How much of the Explore Map the card list covers (the map stays full size under it).
+  const [cardsCover, setCardsCover] = useState(0);
   // The bottom bar's +: Single Drop or Series.
   const [createChooser, setCreateChooser] = useState(false);
   const [newSeriesRequest, setNewSeriesRequest] = useState<number | null>(null);
@@ -622,8 +624,11 @@ export const DiscoverScreen: React.FC = () => {
             collapsable={false}
             style={styles.mapAndCards}
             onLayout={(event) => setCardsArea(event.nativeEvent.layout.height)}>
+            {/* The map fills the area; the card list slides over its bottom. */}
+            <View style={StyleSheet.absoluteFill}>
             <DiscoveryMapCanvas
               liveOnly={liveOnly}
+              coveredBottom={cardsCover}
               // Touching the map closes the detail sheet (the Point stays selected).
               onMapTouch={() => setDetailId(null)}
               coveredFromY={detailId ? detailTopY : null}
@@ -649,6 +654,7 @@ export const DiscoverScreen: React.FC = () => {
                 });
               }}
             />
+            </View>
             <MapFilterSheet
               visible={filtersOpen}
               title="When"
@@ -669,6 +675,7 @@ export const DiscoverScreen: React.FC = () => {
               fullHeight={cardsArea}
               resetSignal={cardsReset}
               onFullChange={setCardsFull}
+              onCoverChange={setCardsCover}
             />
           </View>
           <PointDetailSheet

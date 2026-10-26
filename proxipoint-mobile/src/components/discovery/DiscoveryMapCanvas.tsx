@@ -107,6 +107,12 @@ export const DiscoveryMapCanvas: React.FC<{
    * The selected Point is centered in the part of the map still showing.
    */
   coveredFromY?: number | null;
+  /**
+   * How much of the map's bottom the card list covers. The map fills the whole area and never
+   * resizes when the list slides; this only moves the "middle" used for centering, the card
+   * list's "in view", and the Search this area button.
+   */
+  coveredBottom?: number;
   /** Picking a Point from a cluster's list: select it and open its details. */
   onOpenPoint?: (id: string) => void;
   /**
@@ -131,6 +137,7 @@ export const DiscoveryMapCanvas: React.FC<{
   liveOnly = false,
   onMapTouch,
   coveredFromY = null,
+  coveredBottom = 0,
   onOpenPoint,
   cardRequest = null,
   onDropPoint,
@@ -428,7 +435,7 @@ export const DiscoveryMapCanvas: React.FC<{
     const minX = left - 40;
     const maxX = left + viewSize.current.width / z + 40;
     const minY = top - 40;
-    const maxY = top + viewSize.current.height / z + 40;
+    const maxY = top + visibleMapHeight() / z + 40;
     setViewportBounds({ minX, maxX, minY, maxY });
     // Far from the area's center (or zoomed well out)? Offer "Search this area".
     const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, AREA_RANGE_METERS);
@@ -579,15 +586,19 @@ export const DiscoveryMapCanvas: React.FC<{
   // Latest values for timers and layout callbacks (which can run after a render).
   const coveredRef = useRef<number | null>(coveredFromY);
   coveredRef.current = coveredFromY;
+  const coveredBottomRef = useRef(coveredBottom);
+  coveredBottomRef.current = coveredBottom;
   const selectedPosRef = useRef<{ x: number; y: number } | null>(null);
   selectedPosRef.current =
     selectedNode && selectedNode.x != null && selectedNode.y != null ? { x: selectedNode.x, y: selectedNode.y } : null;
 
   /** Height of the map not hidden by the detail sheet. */
-  const visibleMapHeight = () =>
-    coveredRef.current != null
-      ? Math.max(80, Math.min(viewSize.current.height, coveredRef.current - frameOrigin.current.top))
-      : viewSize.current.height;
+  const visibleMapHeight = () => {
+    const aboveCards = Math.max(80, viewSize.current.height - coveredBottomRef.current);
+    return coveredRef.current != null
+      ? Math.max(80, Math.min(aboveCards, coveredRef.current - frameOrigin.current.top))
+      : aboveCards;
+  };
 
   /** Slides the selected Point to the middle of what's visible (at the current zoom). */
   const focusSelected = () => {
@@ -668,14 +679,14 @@ export const DiscoveryMapCanvas: React.FC<{
           // Opened to show a spot (e.g. a pinned post): start there instead of on you.
           lastFocusKey.current = focusRequest.key;
           userMoved.current = true;
-          const target = focusTargetFor(focusRequest, h);
+          const target = focusTargetFor(focusRequest, Math.max(80, h - coveredBottomRef.current));
           pan.setValue(target);
           currentPan.current = target;
           calculateBounds(target.x, target.y);
         } else if (!userMoved.current && (firstLayout || previous.height < 200)) {
           // First layout: put you in the real middle of the map (no animation). Later size changes
           // (the card list opening or closing) keep the view where it is.
-          const home = homeTarget(currentZoom.current, h);
+          const home = homeTarget(currentZoom.current, Math.max(80, h - coveredBottomRef.current));
           pan.setValue(home);
           currentPan.current = home;
           calculateBounds(home.x, home.y);
@@ -750,6 +761,19 @@ export const DiscoveryMapCanvas: React.FC<{
       next,
     );
   };
+
+  // The card list slid to a new height: the map itself doesn't move (it isn't resized); refresh
+  // what counts as in view, and nudge up only if the selected Point would end up under the cards.
+  const lastCoveredBottom = useRef(coveredBottom);
+  useEffect(() => {
+    if (Math.abs(lastCoveredBottom.current - coveredBottom) < 1) return;
+    const grew = coveredBottom > lastCoveredBottom.current;
+    lastCoveredBottom.current = coveredBottom;
+    if (!laidOut.current) return;
+    calculateBounds(currentPan.current.x, currentPan.current.y);
+    if (grew) keepSelectedInView();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coveredBottom]);
 
   // Switching city: glide to the middle of the new place.
   const lastPlace = useRef(`${viewPlace.latitude},${viewPlace.longitude}`);
@@ -1103,7 +1127,7 @@ export const DiscoveryMapCanvas: React.FC<{
       />
 
       {/* Map credit (required by the tile provider) */}
-      <Text style={styles.attribution} pointerEvents="none">
+      <Text style={[styles.attribution, { bottom: 6 + coveredBottom }]} pointerEvents="none">
         © Esri
       </Text>
 
@@ -1122,7 +1146,7 @@ export const DiscoveryMapCanvas: React.FC<{
       {/* Search this area: once you've panned or zoomed out away from the area. Centered along the
           bottom of the map, clear of the zoom buttons. */}
       {onSearchArea && offerArea ? (
-        <View style={styles.searchAreaRow} pointerEvents="box-none">
+        <View style={[styles.searchAreaRow, { bottom: 22 + coveredBottom }]} pointerEvents="box-none">
           <TouchableOpacity
             style={styles.searchAreaBtn}
             activeOpacity={0.8}
