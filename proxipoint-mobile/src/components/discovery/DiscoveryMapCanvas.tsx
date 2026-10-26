@@ -611,20 +611,6 @@ export const DiscoveryMapCanvas: React.FC<{
     });
   };
 
-  /** The smallest vertical slide that keeps the selected Point inside the visible map. */
-  const keepSelectedInView = () => {
-    const spot = selectedPosRef.current;
-    if (!spot) return;
-    const z = currentZoom.current;
-    const screenY = currentPan.current.y - WORLD_OFFSET + z * spot.y;
-    const visibleH = visibleMapHeight();
-    const margin = 64; // room for the pin and its label
-    const dy =
-      screenY > visibleH - margin ? visibleH - margin - screenY : screenY < margin ? margin - screenY : 0;
-    if (Math.abs(dy) < 1) return;
-    animateTo({ x: currentPan.current.x, y: currentPan.current.y + dy });
-  };
-
   // When the map changes size (rotation, or the card list expanding or collapsing), keep the selected
   // Point once the resize settles, so it doesn't end up hidden behind the cards.
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -658,12 +644,10 @@ export const DiscoveryMapCanvas: React.FC<{
         viewSize.current = { width: w, height: h };
         setFrame({ top: y, width: w, height: h });
         const widthChanged = Math.abs(previous.width - w) > 2;
-        if (resized && selectedPosRef.current) {
+        if (resized && widthChanged && selectedPosRef.current) {
+          // Rotated: center the selected Point again. (Height-only changes leave the view alone.)
           if (resizeTimer.current) clearTimeout(resizeTimer.current);
-          // Rotated: center the selected Point again. The card list opening or closing only changes
-          // the height: hold the view, and nudge it up or down only if the selected Point would
-          // end up hidden behind the cards.
-          resizeTimer.current = setTimeout(widthChanged ? focusSelected : keepSelectedInView, 60);
+          resizeTimer.current = setTimeout(focusSelected, 60);
         } else if (resized && userMoved.current && Math.abs(previous.width - w) > 2) {
           // Rotated (the width changed): keep the same spot in the middle of the map.
           stopMove();
@@ -762,16 +746,14 @@ export const DiscoveryMapCanvas: React.FC<{
     );
   };
 
-  // The card list slid to a new height: the map itself doesn't move (it isn't resized); refresh
-  // what counts as in view, and nudge up only if the selected Point would end up under the cards.
+  // The card list slid to a new height (collapsed, half or full): the map never moves for it.
+  // Only refresh what counts as in view, so the cards match the pins above them.
   const lastCoveredBottom = useRef(coveredBottom);
   useEffect(() => {
     if (Math.abs(lastCoveredBottom.current - coveredBottom) < 1) return;
-    const grew = coveredBottom > lastCoveredBottom.current;
     lastCoveredBottom.current = coveredBottom;
     if (!laidOut.current) return;
     calculateBounds(currentPan.current.x, currentPan.current.y);
-    if (grew) keepSelectedInView();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coveredBottom]);
 
