@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -91,6 +91,46 @@ export const EventCardList: React.FC<{
     .sort((a, b) => Number(b.boosted) - Number(a.boosted) || a.index - b.index)
     .map((entry) => entry.node);
 
+  // What the cards show. Building the cards is the costly part, so while the map moves the list
+  // waits until the view has held still for LIST_SETTLE_MS, dims slightly in the meantime, then
+  // swaps in the new cards in one go. Opening or closing the full list updates right away.
+  // Ids only: each card reads its Point fresh from the store, so RSVPs etc. show at once.
+  const visibleKey = visibleNodes.map((node) => node.id).join(',');
+  const [shownKey, setShownKey] = useState(visibleKey);
+  const listFade = useRef(new Animated.Value(1)).current;
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFull = useRef(isFull);
+  useEffect(() => {
+    const fullChanged = lastFull.current !== isFull;
+    lastFull.current = isFull;
+    if (settleTimer.current) clearTimeout(settleTimer.current);
+    if (visibleKey === shownKey) {
+      listFade.setValue(1);
+      return;
+    }
+    if (fullChanged) {
+      setShownKey(visibleKey);
+      listFade.setValue(1);
+      return;
+    }
+    Animated.timing(listFade, { toValue: 0.55, duration: 120, useNativeDriver: true }).start();
+    settleTimer.current = setTimeout(() => {
+      setShownKey(visibleKey);
+      Animated.timing(listFade, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    }, LIST_SETTLE_MS);
+    return () => {
+      if (settleTimer.current) clearTimeout(settleTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleKey, isFull]);
+  const shownNodes = useMemo(
+    () =>
+      shownKey
+        ? (shownKey.split(',').map((id) => allNodes?.[id]).filter(Boolean) as DiscoveryNode[])
+        : [],
+    [shownKey, allNodes],
+  );
+
   const animatedHeight = useRef(new Animated.Value(EXPANDED_HEIGHT)).current;
   // Default size: up to 360, but never more than half the map + cards area (a phone held sideways
   // has little height). The full list covers the whole area.
@@ -101,8 +141,8 @@ export const EventCardList: React.FC<{
   heights.current.full = Math.max(halfHeight, fullHeight ?? EXPANDED_HEIGHT);
 
   const selectedNode =
-    visibleNodes.find((e) => e.id === selectedNodeId) ||
-    visibleNodes[0] || {
+    shownNodes.find((e) => e.id === selectedNodeId) ||
+    shownNodes[0] || {
       id: 'none',
       tag: '#Perimeter',
       title: 'No viewable nodes in sector',
@@ -188,7 +228,6 @@ export const EventCardList: React.FC<{
   const pickedInList = useRef<string | null>(null);
   const pickedAt = useRef(0);
   const lastPick = useRef<string | null>(null);
-  const visibleKey = visibleNodes.map((node) => node.id).join(',');
   useEffect(() => {
     if (!selectedNodeId) {
       lastPick.current = null;
@@ -202,7 +241,7 @@ export const EventCardList: React.FC<{
     } else if (pickedInList.current === selectedNodeId || Date.now() - pickedAt.current > 1500) {
       return;
     }
-    const index = visibleNodes.findIndex((node) => node.id === selectedNodeId);
+    const index = shownNodes.findIndex((node) => node.id === selectedNodeId);
     if (index < 0) return;
     const wasCollapsed = modeRef.current === 'collapsed';
     if (wasCollapsed) animateDrawer('half');
@@ -211,9 +250,9 @@ export const EventCardList: React.FC<{
       wasCollapsed ? 260 : 60,
     );
     return () => clearTimeout(timer);
-  }, [selectedNodeId, visibleKey]);
+  }, [selectedNodeId, shownKey]);
 
-  const renderCard = ({ item }: { item: DiscoveryNode }) => (
+  const renderCard = useCallback(({ item }: { item: DiscoveryNode }) => (
     <PointCard
       node={item}
       boosted={isBoosted(item.id, boostClock)}
@@ -227,7 +266,8 @@ export const EventCardList: React.FC<{
       }}
       onToggleRsvp={() => toggleRsvp(item.id)}
     />
-  );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  ), [boostClock, selectedNodeId, onOpenDetails, toggleRsvp, setSelectedNodeId]);
 
   return (
     <Animated.View ref={tourTarget('map-cards')} style={[styles.drawerContainer, { height: animatedHeight }]}>
@@ -260,7 +300,7 @@ export const EventCardList: React.FC<{
                   {viewPlace.name ? `ALL POINTS · ${viewPlace.name.toUpperCase()} AREA` : 'ALL POINTS NEARBY'}
                 </Text>
                 <Text numberOfLines={1} style={styles.collapsedTitle}>
-                  {visibleNodes.length} {visibleNodes.length === 1 ? 'Point' : 'Points'}
+                  {shownNodes.length} {shownNodes.length === 1 ? 'Point' : 'Points'}
                   {selectedTag && selectedTag !== 'All' ? ` · ${selectedTag}` : ''}
                   {liveOnly ? ' · Live now' : ''}
                 </Text>
@@ -301,6 +341,7 @@ export const EventCardList: React.FC<{
       </View>
 
       {isExpanded && (
+        <Animated.View style={[styles.listFadeWrap, { opacity: listFade }]}>
         <FlatList
           ref={listRef}
           // Cards not drawn yet: jump near it by the average card height, then center it.
@@ -309,7 +350,11 @@ export const EventCardList: React.FC<{
             setTimeout(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), 80);
           }}
           style={styles.list}
-          data={visibleNodes}
+          data={shownNodes}
+          extraData={selectedNodeId}
+          initialNumToRender={4}
+          maxToRenderPerBatch={4}
+          windowSize={5}
           keyExtractor={(item) => item.id}
           renderItem={renderCard}
           contentContainerStyle={styles.listContent}
@@ -333,13 +378,18 @@ export const EventCardList: React.FC<{
             </View>
           }
         />
+        </Animated.View>
       )}
     </Animated.View>
   );
 };
 
+/** How long the map has to hold still before the cards are rebuilt for what's on screen. */
+const LIST_SETTLE_MS = 500;
+
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
+  listFadeWrap: { flex: 1 },
   // Over the map's bottom edge (the map fills the whole area and never resizes).
   drawerContainer: {
     position: 'absolute',
