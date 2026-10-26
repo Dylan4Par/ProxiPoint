@@ -423,12 +423,6 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
             onChangeTracking={onChangeTracking}
           />
 
-          <Text style={[styles.sectionLabel, styles.sectionSpaced]}>CREATE DROP</Text>
-          <TouchableOpacity style={styles.createEventBtn} onPress={onDropPoint} accessibilityRole="button" testID="profile-create-event">
-            <Plus size={18} color={c.onAccent} strokeWidth={2.75} />
-            <Text style={styles.createEventText}>Drop Point</Text>
-          </TouchableOpacity>
-          <Text style={styles.createEventNote}>Put a show, game, meetup or pop-up on the map for people nearby.</Text>
           {/* Once one of your events has started: post a recap of it. */}
           <RecapComposer drops={drops} onPost={(recap) => onChangeRecaps([recap, ...recaps])} onDropPoint={onDropPoint} />
 
@@ -601,17 +595,6 @@ const createStyles = (c: ThemeColors) =>
   bioCount: { color: c.textFaint, fontSize: 11, fontWeight: '700', marginBottom: 8 },
   bioCountFull: { color: c.amber },
   sectionSpaced: { marginTop: 18 },
-  createEventBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: c.accent,
-  },
-  createEventText: { color: c.onAccent, fontSize: 16, fontWeight: '800' },
-  createEventNote: { color: c.textMuted, fontSize: 12, textAlign: 'center', marginTop: 6, marginBottom: 10 },
   dropsChip: {
     position: 'absolute',
     bottom: -4,
