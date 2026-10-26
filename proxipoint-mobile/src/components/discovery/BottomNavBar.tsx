@@ -84,9 +84,9 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
     >
       {TABS.map(({ id, label, Icon, testID }, index) => {
         const active = current === id;
-        // The + sits in the bar between Explore Map and Channels.
+        // The + sits at the right end of the bar, after Profile.
         const dropSlot =
-          onDrop && index === 2 ? (
+          onDrop && index === TABS.length - 1 ? (
             <View key="drop" style={styles.dropSlot} pointerEvents="box-none">
               <TouchableOpacity
                 style={[styles.dropButton, dropActive && styles.dropButtonActive]}
@@ -102,7 +102,6 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
           ) : null;
         const showBadge = id === 'channels' && unreadCount > 0;
         return [
-          dropSlot,
           <TouchableOpacity
             key={id}
             ref={
@@ -147,6 +146,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
             </Text>
             </View>
           </TouchableOpacity>,
+          dropSlot,
         ];
       })}
     </View>
@@ -193,7 +193,7 @@ const createStyles = (c: ThemeColors) =>
     shadowRadius: 12,
     elevation: 8,
   },
-  /* Middle slot: the + is set into the bar, same height as the tabs. */
+  /* Right end: the + is set into the bar, same height as the tabs. */
   dropSlot: {
     width: DROP_SIZE + 14,
     alignItems: 'center',
