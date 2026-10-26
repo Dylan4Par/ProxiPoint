@@ -68,3 +68,36 @@ export function areaName(
   }
   return best ? best.name : 'Map area';
 }
+
+/** "Boulder, CO" for the closest listed city within maxMeters, or '' (shown on Point cards). */
+export function nearestCityLabel(
+  spot: { latitude?: number; longitude?: number },
+  cities: Array<{ name: string; region?: string; latitude: number; longitude: number }>,
+  maxMeters = 25000,
+): string {
+  if (!Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return '';
+  let best: { label: string; meters: number } | null = null;
+  for (const city of cities) {
+    const meters = calculateDistanceMeters(spot.latitude as number, spot.longitude as number, city.latitude, city.longitude);
+    if (meters <= maxMeters && (!best || meters < best.meters)) {
+      best = { label: city.region ? `${city.name}, ${city.region}` : city.name, meters };
+    }
+  }
+  return best ? best.label : '';
+}
+
+/** How far around the area being explored (its city and metro) the Point list reaches. */
+export const METRO_RADIUS_METERS = 40000; // about 25 mi
+
+/** Inside the explored city / metro area. Points with no coordinates are kept. */
+export function inMetroArea(
+  spot: { latitude?: number; longitude?: number },
+  center: { latitude: number; longitude: number },
+  radiusMeters = METRO_RADIUS_METERS,
+): boolean {
+  if (!Number.isFinite(spot.latitude) || !Number.isFinite(spot.longitude)) return true;
+  return (
+    calculateDistanceMeters(spot.latitude as number, spot.longitude as number, center.latitude, center.longitude) <=
+    radiusMeters
+  );
+}

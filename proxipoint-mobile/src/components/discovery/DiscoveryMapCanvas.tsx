@@ -174,7 +174,7 @@ export const DiscoveryMapCanvas: React.FC<{
   useChannels(); // re-filter when you join or leave a channel
   // Boosted pins are drawn last so they sit on top of nearby pins.
   const nodeList = allNodes
-    .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly }))
+    .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace }))
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
 
   // Channel posts attached to a Point on the map, while their pin lasts, from channels you FOLLOW

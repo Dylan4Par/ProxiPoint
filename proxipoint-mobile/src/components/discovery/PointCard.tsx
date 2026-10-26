@@ -6,6 +6,8 @@ import { distanceLabel, goingLabel, pointTiming, type TimingKind } from '../../l
 import { useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
+import { nearestCityLabel } from '../../lib/mapArea';
+import { CITY_LIST } from '../../lib/places';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 /**
@@ -64,6 +66,8 @@ export const PointCard: React.FC<{
   const tag = node.tags?.[0] ?? node.tag;
   const where = node.locationPrivacy?.regionName ? `In ${node.locationPrivacy.regionName}` : node.venue;
   const timing = pointTiming(node, now);
+  // City, top right ("Boulder, CO"); the closest listed city within about 15 mi.
+  const city = nearestCityLabel(node, CITY_LIST);
   const distance = distanceLabel(distanceMeters ?? node.distanceMeters, distanceMeters == null ? node.eta : null);
   const going = goingLabel(node.attendeeCount);
   const TravelIcon = node.etaMode === 'drive' ? Car : PersonStanding;
@@ -79,10 +83,15 @@ export const PointCard: React.FC<{
       accessibilityHint="Opens the details"
       testID={testID ?? `point-card-${node.id}`}
     >
+      {city ? (
+        <Text style={styles.city} numberOfLines={1} testID="point-card-city">
+          {city}
+        </Text>
+      ) : null}
       <View style={styles.top}>
         <CategoryBadge tag={tag} title={node.title} photoUri={node.coverPhotoUri} size={46} />
         <View style={styles.copy}>
-          <View style={styles.tagRow}>
+          <View style={[styles.tagRow, city ? styles.tagRowWithCity : null]}>
             {tag ? (
               <Text style={styles.tag} numberOfLines={1}>
                 {tag}
@@ -187,6 +196,18 @@ const createStyles = (c: ThemeColors) =>
     top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     copy: { flex: 1, minWidth: 0, gap: 1 },
     tagRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+    // Leaves room for the city in the card's top-right corner.
+    tagRowWithCity: { paddingRight: 92 },
+    city: {
+      position: 'absolute',
+      top: 9,
+      right: 12,
+      maxWidth: 110,
+      zIndex: 1,
+      color: c.textMuted,
+      fontSize: 11,
+      fontWeight: '700',
+    },
     tag: { color: c.accent, fontSize: 12, fontWeight: '800', flexShrink: 1 },
     boosted: {
       flexDirection: 'row',

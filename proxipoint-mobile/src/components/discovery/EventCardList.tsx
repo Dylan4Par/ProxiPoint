@@ -55,6 +55,8 @@ export const EventCardList: React.FC<{
   const allNodes = useDiscoveryStore((s) => s.nodes);
   const toggleRsvp = useDiscoveryStore((s) => s.toggleRsvp);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
+  // The city / metro being explored: the list (even the full one) stays inside it.
+  const viewPlace = useDiscoveryStore((s) => s.viewPlace);
   const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
 
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
@@ -75,7 +77,7 @@ export const EventCardList: React.FC<{
     ? (Object.values(allNodes || {}) as DiscoveryNode[]).sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0))
     : getVisibleNodes();
   const visibleNodes = sortPoints(
-    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly })),
+    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace })),
     sort,
   )
     .map((node, index) => ({ node, index, boosted: isBoosted(node.id, boostClock) }))
@@ -237,7 +239,9 @@ export const EventCardList: React.FC<{
           >
             {isFull ? (
               <>
-                <Text style={styles.collapsedTag}>ALL POINTS</Text>
+                <Text style={styles.collapsedTag} numberOfLines={1}>
+                  {viewPlace.name ? `ALL POINTS · ${viewPlace.name.toUpperCase()} AREA` : 'ALL POINTS NEARBY'}
+                </Text>
                 <Text numberOfLines={1} style={styles.collapsedTitle}>
                   {visibleNodes.length} {visibleNodes.length === 1 ? 'Point' : 'Points'}
                   {selectedTag && selectedTag !== 'All' ? ` · ${selectedTag}` : ''}
