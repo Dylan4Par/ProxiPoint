@@ -601,13 +601,30 @@ export const DiscoveryMapCanvas: React.FC<{
   // When the map changes size (e.g. the card list expands or collapses), re-center the selected
   // Point once the resize settles, so it doesn't end up hidden behind the cards.
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const layoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const laidOut = useRef(false);
   useEffect(() => () => {
     if (resizeTimer.current) clearTimeout(resizeTimer.current);
+    if (layoutTimer.current) clearTimeout(layoutTimer.current);
   }, []);
+  // While the card list slides up or down, the map's size changes every frame. Measuring (and
+  // re-rendering the whole map) each frame made it flicker and jump, so after the first layout
+  // wait until the size stops changing. The streets and pins are drawn on a large world canvas,
+  // so the newly uncovered part is already there while the list moves.
   const measureFrame = () => {
+    if (!laidOut.current) {
+      measureNow();
+      return;
+    }
+    if (layoutTimer.current) clearTimeout(layoutTimer.current);
+    layoutTimer.current = setTimeout(measureNow, 140);
+  };
+  const measureNow = () => {
     containerRef.current?.measureInWindow((x, y, w, h) => {
       // Ignore the tiny sizes the map passes through while the card list covers it.
       if (Number.isFinite(y) && w > 0 && h >= 80) {
+        const firstLayout = !laidOut.current;
+        laidOut.current = true;
         const previous = viewSize.current;
         const resized = frame != null && (Math.abs(previous.height - h) > 2 || Math.abs(previous.width - w) > 2);
         frameOrigin.current = { left: x, top: y };
@@ -635,8 +652,9 @@ export const DiscoveryMapCanvas: React.FC<{
           pan.setValue(target);
           currentPan.current = target;
           calculateBounds(target.x, target.y);
-        } else if (!userMoved.current) {
-          // First layout: put you in the real middle of the map (no animation).
+        } else if (!userMoved.current && (firstLayout || previous.height < 200)) {
+          // First layout: put you in the real middle of the map (no animation). Later size changes
+          // (the card list opening or closing) keep the view where it is.
           const home = homeTarget(currentZoom.current, h);
           pan.setValue(home);
           currentPan.current = home;
