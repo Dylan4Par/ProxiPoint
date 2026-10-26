@@ -52,6 +52,12 @@ export const EventCardList: React.FC<{
 }> = ({ liveOnly = false, onOpenDetails, fullHeight = null, resetSignal = 0, onFullChange, onCoverChange }) => {
   const styles = useThemedStyles(createStyles);
   const getVisibleNodes = useDiscoveryStore((s) => s.getVisibleNodes);
+  // Re-render when the map moves or zooms, so the cards always match what's on screen. A coarse
+  // key (about a pin's width) keeps a drag from re-rendering the list on every frame.
+  useDiscoveryStore((s) => {
+    const b = s.viewportBounds;
+    return [b.minX, b.maxX, b.minY, b.maxY].map((v) => Math.round(v / 12)).join(',');
+  });
   const allNodes = useDiscoveryStore((s) => s.nodes);
   const toggleRsvp = useDiscoveryStore((s) => s.toggleRsvp);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);
