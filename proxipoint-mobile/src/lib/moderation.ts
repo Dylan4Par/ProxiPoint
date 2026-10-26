@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { LOCALRADAR_HANDLE } from './aggregated';
 
 /**
  * Reports and blocks, kept in memory for now. Reported content is hidden for the reporter right
@@ -75,9 +76,21 @@ export function isContentHidden(id: string | null | undefined): boolean {
   return id != null && hiddenIds.has(String(id));
 }
 
+/**
+ * @LocalRadar (ProxiPoint's own listings account) can't be blocked: its listings are reported one
+ * at a time instead. Everyone else can be.
+ */
+const UNBLOCKABLE = new Set([normalizeHandle(LOCALRADAR_HANDLE)]);
+
+export function canBeBlocked(handle: string | null | undefined): boolean {
+  if (!handle) return false;
+  const clean = normalizeHandle(handle);
+  return clean !== '' && !UNBLOCKABLE.has(clean);
+}
+
 export function blockUser(handle: string) {
   const clean = normalizeHandle(handle);
-  if (!clean) return;
+  if (!clean || !canBeBlocked(clean)) return;
   blockedHandles = new Set(blockedHandles).add(clean);
   changed();
 }
@@ -90,7 +103,7 @@ export function unblockUser(handle: string) {
 }
 
 export function isBlocked(handle: string | null | undefined): boolean {
-  return handle != null && blockedHandles.has(normalizeHandle(handle));
+  return handle != null && canBeBlocked(handle) && blockedHandles.has(normalizeHandle(handle));
 }
 
 export function getBlockedHandles(): string[] {

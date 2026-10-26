@@ -16,3 +16,12 @@ test('posts and comments hide when reported or when their author is blocked', ()
   unblockUser('@someone');
   assert.equal(isAuthoredAllowed(other), true);
 });
+
+test('@LocalRadar can never be blocked; anyone else can', async () => {
+  const { canBeBlocked, isBlocked } = await import('./moderation');
+  assert.equal(canBeBlocked('@LocalRadar'), false);
+  assert.equal(canBeBlocked('localradar'), false);
+  blockUser('@LocalRadar');
+  assert.equal(isBlocked('@localradar'), false);
+  assert.equal(canBeBlocked('@sam.plays.bass'), true);
+});

@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ban, Flag } from 'lucide-react-native';
 import {
   blockUser,
+  canBeBlocked,
   isBlocked,
   reportContent,
   reportReasonsFor,
@@ -49,7 +50,8 @@ export const ReportSheet: React.FC<{
   }, [target?.id]);
 
   if (!target) return null;
-  const canBlock = Boolean(target.ownerHandle) && !isBlocked(target.ownerHandle);
+  // Not offered for @LocalRadar, which can't be blocked.
+  const canBlock = canBeBlocked(target.ownerHandle) && !isBlocked(target.ownerHandle);
 
   const submit = () => {
     if (!reason) return;

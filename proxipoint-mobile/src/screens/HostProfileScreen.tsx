@@ -48,7 +48,7 @@ import {
   setFollowing,
   type ContactRequest,
 } from '../lib/hostProfiles';
-import { blockUser, isBlocked, isContentHidden, isNodeAllowed, unblockUser, useModeration } from '../lib/moderation';
+import { blockUser, canBeBlocked, isBlocked, isContentHidden, isNodeAllowed, unblockUser, useModeration } from '../lib/moderation';
 import { isLiveNode } from '../lib/liveStatus';
 import { useVisibleComments, useVisiblePosts } from '../lib/channels';
 import { computeSignal, contributionsOf } from '../lib/signalScore';
@@ -588,8 +588,8 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
                 <Text style={styles.menuHint}>Private. They won’t know it was you.</Text>
               </View>
             </TouchableOpacity>
-            <View style={styles.menuDivider} />
-            {blocked ? (
+            {canBeBlocked(profile.handle) ? <View style={styles.menuDivider} /> : null}
+            {!canBeBlocked(profile.handle) ? null : blocked ? (
               <TouchableOpacity
                 style={styles.menuRow}
                 onPress={() => {
