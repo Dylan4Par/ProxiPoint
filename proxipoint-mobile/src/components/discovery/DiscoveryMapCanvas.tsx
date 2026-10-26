@@ -20,7 +20,7 @@ import { MapTiles } from './MapTiles';
 import { MapPinGlyph } from './MapPinGlyph';
 import { MapRecenterButton, MapZoomStack, mapControlPositions } from './MapControls';
 import { CARD_SHEET_RADIUS } from './EventCardList';
-import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, type ClusterMember, type MapClusterData } from './MapCluster';
+import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, mainTagOf, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
 import { useChannels, useVisiblePosts, type ChannelPost } from '../../lib/channels';
 import { isPinLive } from '../../lib/postRanking';
@@ -239,11 +239,12 @@ export const DiscoveryMapCanvas: React.FC<{
     loop.start();
     return () => loop.stop();
   }, [reducedMotion, livePulse]);
-  const liveRingStyle = {
+  // Built once, so memoized pins see the same style object every render.
+  const liveRingStyle = useRef({
     opacity: livePulse.interpolate({ inputRange: [0, 1], outputRange: [0.8, 0] }),
     // Starts small at the point and spreads out.
     transform: [{ scale: livePulse.interpolate({ inputRange: [0, 1], outputRange: [0.3, 2.6] }) }],
-  };
+  }).current;
 
   // Zoom in coarse steps, so clusters are worked out again only when the zoom really changes.
   const zoomStep = (z: number) => Math.round(Math.log(z) / Math.log(1.15));
@@ -423,6 +424,18 @@ export const DiscoveryMapCanvas: React.FC<{
   const currentZoom = useRef(DEFAULT_ZOOM);
   const counterZoom = useRef(Animated.divide(1, zoom)).current;
 
+  const pendingBounds = useRef<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null);
+  const boundsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const flushBounds = () => {
+    if (boundsTimer.current) clearTimeout(boundsTimer.current);
+    boundsTimer.current = null;
+    if (pendingBounds.current) setViewportBounds(pendingBounds.current);
+    pendingBounds.current = null;
+  };
+  useEffect(() => () => {
+    if (boundsTimer.current) clearTimeout(boundsTimer.current);
+  }, []);
+
   /** Visible area in world coordinates, so the card list matches the pins on screen. */
   const calculateBounds = (offsetX: number, offsetY: number, z = currentZoom.current) => {
     const step = zoomStep(z);
@@ -437,7 +450,11 @@ export const DiscoveryMapCanvas: React.FC<{
     const maxX = left + viewSize.current.width / z + 40;
     const minY = top - 40;
     const maxY = top + visibleMapHeight() / z + 40;
-    setViewportBounds({ minX, maxX, minY, maxY });
+    // The card list follows these. While a finger is moving the map, hand them over at most every
+    // 120 ms (and once more when it lets go) instead of on every frame.
+    pendingBounds.current = { minX, maxX, minY, maxY };
+    if (gesture.current.mode === 'none') flushBounds();
+    else if (!boundsTimer.current) boundsTimer.current = setTimeout(flushBounds, 120);
     // Far from the area's center (or zoomed well out)? Offer "Search this area".
     const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, AREA_RANGE_METERS);
     if (offer !== offerAreaRef.current) {
@@ -709,7 +726,12 @@ export const DiscoveryMapCanvas: React.FC<{
   }, [selectedNodeId, coveredFromY]);
 
   // Recenter: back on you, at the default zoom.
+  // (openCluster is defined below; keep the ref pointing at the latest one.)
   const handleRecenter = () => animateTo(homeTarget(DEFAULT_ZOOM, visibleMapHeight()), DEFAULT_ZOOM);
+
+  // Same function every render (it calls the latest openCluster), so memoized bubbles keep it.
+  const openClusterRef = useRef<(cluster: MapClusterData) => void>(() => undefined);
+  const openClusterStable = useRef((cluster: MapClusterData) => openClusterRef.current(cluster)).current;
 
   /** Bubble tapped: same spot → pick list; just close together → zoom in until they split. */
   const openCluster = (cluster: MapClusterData) => {
@@ -746,6 +768,7 @@ export const DiscoveryMapCanvas: React.FC<{
       next,
     );
   };
+  openClusterRef.current = openCluster;
 
   // The card list slid to a new height (collapsed, half or full): the map never moves for it.
   // Only refresh what counts as in view, so the cards match the pins above them.
@@ -969,115 +992,31 @@ export const DiscoveryMapCanvas: React.FC<{
         {/* Interactive Event Nodes: pin + main hashtag */}
         {/* Cluster bubbles (several Points close together) */}
         {clusters.map((cluster) => (
-          <Animated.View
+          <ClusterPin
             key={cluster.key}
-            pointerEvents="box-none"
-            style={[
-              styles.nodeCluster,
-              { top: cluster.y - BUBBLE_SIZE / 2 - 6, left: cluster.x - PIN_COLUMN_WIDTH / 2 },
-              // Bubbles sit above single pins; boosted / selected bubbles above other bubbles.
-              { zIndex: cluster.selected ? 12 : cluster.members.some((m) => m.boosted) ? 10 : 8 },
-              {
-                transformOrigin: [PIN_COLUMN_WIDTH / 2, BUBBLE_SIZE / 2 + 6, 0],
-                transform: [{ scale: counterZoom }],
-              },
-            ]}
-          >
-            <ClusterBubble
-              cluster={cluster}
-              selected={cluster.selected}
-              showLabel={!hiddenLabels.has(cluster.key)}
-              postCount={postsByCluster[cluster.key]?.length ?? 0}
-              onPress={() => openCluster(cluster)}
-            />
-          </Animated.View>
+            cluster={cluster}
+            showLabel={!hiddenLabels.has(cluster.key)}
+            postCount={postsByCluster[cluster.key]?.length ?? 0}
+            counterZoom={counterZoom}
+            onOpen={openClusterStable}
+          />
         ))}
 
-        {singles.map((item) => {
-          const isSelected = item.id === selectedNodeId;
-          const posX = item.x ?? 480;
-          const posY = item.y ?? 480;
-          const hashtag = mainHashtag(item);
-          const live = isLiveNode(item);
-          const boosted = isBoosted(item.id, boostClock);
-          // Listed by @LocalRadar from a public source: its own (slate) pin color.
-          const aggregated = isAggregated(item);
-
-          return (
-            <Animated.View
-              key={item.id}
-              pointerEvents="box-none"
-              style={[
-                styles.nodeCluster,
-                { top: posY - PIN_HEAD_CENTER, left: posX - PIN_COLUMN_WIDTH / 2 },
-                // Same size on screen at any zoom, anchored on the pin head.
-                { transformOrigin: [PIN_COLUMN_WIDTH / 2, PIN_HEAD_CENTER, 0], transform: [{ scale: counterZoom }] },
-                isSelected && styles.nodeClusterSelected,
-              ]}
-            >
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => setSelectedNodeId(item.id)}
-                style={styles.pinWrapper}
-                accessibilityRole="button"
-                accessibilityLabel={`${hashtag ?? 'Point'}${live ? ', live now' : ''}${boosted ? ', boosted' : ''}`}
-              >
-                {/* Selected: no ring around it; the pin itself shows it (larger, brighter, white rim)
-                    along with its highlighted #tag label. */}
-                {live ? <Animated.View pointerEvents="none" style={[styles.liveRing, liveRingStyle]} /> : null}
-                {/* One vector teardrop with an even rim (View borders went thin and lopsided
-                    under the map's zoom scaling, and the tip used to cover the rim). */}
-                <MapPinGlyph
-                  fill={
-                    live && isSelected
-                      ? c.greenBright
-                      : live
-                        ? c.greenDeep
-                        : isSelected
-                          ? c.sky
-                          : aggregated
-                            ? AGGREGATED_PIN
-                            : c.accentDeep
-                  }
-                  rim={boosted ? BOOST_GOLD : isSelected ? c.white : live ? c.greenRim : c.pinRim}
-                  rimWidth={boosted ? 3 : 2.5}
-                  glow={boosted ? BOOST_GOLD : null}
-                  enlarged={isSelected}
-                  dotColor={c.white}
-                />
-                {/* Boosted: gold rim plus a bolt badge on the pin head */}
-                {boosted ? (
-                  <View pointerEvents="none" style={styles.boostBadge}>
-                    <Zap size={9} color="#1f1300" fill="#1f1300" strokeWidth={2} />
-                  </View>
-                ) : null}
-              </TouchableOpacity>
-              {hashtag && !hiddenLabels.has(item.id) ? (
-                <TouchableOpacity
-                  activeOpacity={0.8}
-                  onPress={() => setSelectedNodeId(item.id)}
-                  style={[
-                    styles.tagLabel,
-                    live && styles.tagLabelLive,
-                    isSelected && styles.tagLabelSelected,
-                    live && isSelected && styles.tagLabelLiveSelected,
-                    boosted && styles.tagLabelBoosted,
-                  ]}
-                >
-                  <Text
-                    // Always cyan; live / selected / boosted show in the label's border instead.
-                    style={styles.tagLabelText}
-                    numberOfLines={1}
-                  >
-                    {/* Quiet "#" so the eye goes to the word */}
-                    <Text style={styles.tagHash}>#</Text>
-                    {hashtag.replace(/^#+/, '')}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
-            </Animated.View>
-          );
-        })}
+        {/* Single pins. Each is memoized: a pin only re-renders when its own look changes, not on
+            every map update (selection elsewhere, labels, the card list, Search this area). */}
+        {singles.map((item) => (
+          <SinglePin
+            key={item.id}
+            item={item}
+            isSelected={item.id === selectedNodeId}
+            live={isLiveNode(item)}
+            boosted={isBoosted(item.id, boostClock)}
+            showLabel={!hiddenLabels.has(item.id)}
+            counterZoom={counterZoom}
+            liveRingStyle={liveRingStyle}
+            onSelect={setSelectedNodeId}
+          />
+        ))}
       </Animated.View>
 
       {/* A grouped post bubble: choose which post */}
@@ -1167,6 +1106,182 @@ export const DiscoveryMapCanvas: React.FC<{
     </View>
   );
 };
+
+/** A cluster bubble, memoized like SinglePin: re-renders only when what it shows changes. */
+const ClusterPin = React.memo(
+  function ClusterPin({
+    cluster,
+    showLabel,
+    postCount,
+    counterZoom,
+    onOpen,
+  }: {
+    cluster: MapClusterData;
+    showLabel: boolean;
+    postCount: number;
+    counterZoom: ReturnType<typeof Animated.divide>;
+    onOpen: (cluster: MapClusterData) => void;
+  }) {
+    const styles = useThemedStyles(createStyles);
+    return (
+      <Animated.View
+        pointerEvents="box-none"
+        style={[
+          styles.nodeCluster,
+          { top: cluster.y - BUBBLE_SIZE / 2 - 6, left: cluster.x - PIN_COLUMN_WIDTH / 2 },
+          // Bubbles sit above single pins; boosted / selected bubbles above other bubbles.
+          { zIndex: cluster.selected ? 12 : cluster.members.some((m) => m.boosted) ? 10 : 8 },
+          {
+            transformOrigin: [PIN_COLUMN_WIDTH / 2, BUBBLE_SIZE / 2 + 6, 0],
+            transform: [{ scale: counterZoom }],
+          },
+        ]}
+      >
+        <ClusterBubble
+          cluster={cluster}
+          selected={cluster.selected}
+          showLabel={showLabel}
+          postCount={postCount}
+          onPress={() => onOpen(cluster)}
+        />
+      </Animated.View>
+    );
+  },
+  (a, b) =>
+    a.cluster.key === b.cluster.key &&
+    a.cluster.x === b.cluster.x &&
+    a.cluster.y === b.cluster.y &&
+    a.cluster.selected === b.cluster.selected &&
+    a.cluster.samePlace === b.cluster.samePlace &&
+    clusterLook(a.cluster) === clusterLook(b.cluster) &&
+    a.showLabel === b.showLabel &&
+    a.postCount === b.postCount &&
+    a.counterZoom === b.counterZoom &&
+    a.onOpen === b.onOpen,
+);
+
+/** What a bubble draws from its members (count, live, boosted, label). */
+function clusterLook(cluster: MapClusterData): string {
+  return cluster.members.map((m) => `${m.id}:${m.live ? 1 : 0}${m.boosted ? 1 : 0}:${mainTagOf(m)}:${m.title ?? ''}`).join('|');
+}
+
+/** One single (unclustered) pin with its #tag label. */
+const SinglePin = React.memo(function SinglePin({
+  item,
+  isSelected,
+  live,
+  boosted,
+  showLabel,
+  counterZoom,
+  liveRingStyle,
+  onSelect,
+}: {
+  item: DiscoveryNode;
+  isSelected: boolean;
+  live: boolean;
+  boosted: boolean;
+  showLabel: boolean;
+  counterZoom: ReturnType<typeof Animated.divide>;
+  liveRingStyle: object;
+  onSelect: (id: string) => void;
+}) {
+  const { colors: c } = useTheme();
+  const styles = useThemedStyles(createStyles);
+  const posX = item.x ?? 480;
+  const posY = item.y ?? 480;
+  const hashtag = mainHashtag(item);
+  // Listed by @LocalRadar from a public source: its own (slate) pin color.
+  const aggregated = isAggregated(item);
+  const select = () => onSelect(item.id);
+  return (
+    <Animated.View
+      pointerEvents="box-none"
+      style={[
+        styles.nodeCluster,
+        { top: posY - PIN_HEAD_CENTER, left: posX - PIN_COLUMN_WIDTH / 2 },
+        // Same size on screen at any zoom, anchored on the pin head.
+        { transformOrigin: [PIN_COLUMN_WIDTH / 2, PIN_HEAD_CENTER, 0], transform: [{ scale: counterZoom }] },
+        isSelected && styles.nodeClusterSelected,
+      ]}
+    >
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={select}
+        style={styles.pinWrapper}
+        accessibilityRole="button"
+        accessibilityLabel={`${hashtag ?? 'Point'}${live ? ', live now' : ''}${boosted ? ', boosted' : ''}`}
+      >
+        {/* Selected: no ring around it; the pin itself shows it (larger, brighter, white rim)
+            along with its highlighted #tag label. */}
+        {live ? <Animated.View pointerEvents="none" style={[styles.liveRing, liveRingStyle]} /> : null}
+        {/* One vector teardrop with an even rim (View borders went thin and lopsided
+            under the map's zoom scaling, and the tip used to cover the rim). */}
+        <MapPinGlyph
+          fill={
+            live && isSelected
+              ? c.greenBright
+              : live
+                ? c.greenDeep
+                : isSelected
+                  ? c.sky
+                  : aggregated
+                    ? AGGREGATED_PIN
+                    : c.accentDeep
+          }
+          rim={boosted ? BOOST_GOLD : isSelected ? c.white : live ? c.greenRim : c.pinRim}
+          rimWidth={boosted ? 3 : 2.5}
+          glow={boosted ? BOOST_GOLD : null}
+          enlarged={isSelected}
+          dotColor={c.white}
+        />
+        {/* Boosted: gold rim plus a bolt badge on the pin head */}
+        {boosted ? (
+          <View pointerEvents="none" style={styles.boostBadge}>
+            <Zap size={9} color="#1f1300" fill="#1f1300" strokeWidth={2} />
+          </View>
+        ) : null}
+      </TouchableOpacity>
+      {hashtag && showLabel ? (
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={select}
+          style={[
+            styles.tagLabel,
+            live && styles.tagLabelLive,
+            isSelected && styles.tagLabelSelected,
+            live && isSelected && styles.tagLabelLiveSelected,
+            boosted && styles.tagLabelBoosted,
+          ]}
+        >
+          <Text
+            // Always cyan; live / selected / boosted show in the label's border instead.
+            style={styles.tagLabelText}
+            numberOfLines={1}
+          >
+            {/* Quiet "#" so the eye goes to the word */}
+            <Text style={styles.tagHash}>#</Text>
+            {hashtag.replace(/^#+/, '')}
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+    </Animated.View>
+  );
+},
+// Re-render only when something this pin shows changes (cluster updates hand over fresh objects).
+(a, b) =>
+  a.item.id === b.item.id &&
+  a.item.x === b.item.x &&
+  a.item.y === b.item.y &&
+  mainHashtag(a.item) === mainHashtag(b.item) &&
+  isAggregated(a.item) === isAggregated(b.item) &&
+  a.isSelected === b.isSelected &&
+  a.live === b.live &&
+  a.boosted === b.boosted &&
+  a.showLabel === b.showLabel &&
+  a.counterZoom === b.counterZoom &&
+  a.liveRingStyle === b.liveRingStyle &&
+  a.onSelect === b.onSelect,
+);
 
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
