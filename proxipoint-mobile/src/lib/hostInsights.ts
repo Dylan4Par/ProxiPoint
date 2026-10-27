@@ -282,3 +282,19 @@ export function pastAttendees(rsvpLists: Array<Array<{ id: string; label: string
 /** One update every 24 hours per host, so followers aren't spammed. */
 export const ATTENDEE_UPDATE_COOLDOWN_MS = 24 * 3600000;
 export const ATTENDEE_UPDATE_MAX = 160;
+
+/**
+ * Bar widths (0–1) for the funnel. Strict scaling would leave the later stages as slivers
+ * (opens are ~5% of impressions), so: impressions are 100%; the impressions → opens drop is drawn
+ * on a log scale (6.6% of views → a ~41% bar); after that each bar is the previous bar times the
+ * share that continued (34% of opens RSVP → 34% of the opens bar).
+ */
+export function funnelWidths(steps: Array<Pick<FunnelStep, 'fromPrev'>>, minWidth = 0.06): number[] {
+  const widths: number[] = [];
+  steps.forEach((step, i) => {
+    if (i === 0) widths.push(1);
+    else if (i === 1) widths.push(Math.min(0.95, Math.max(0.25, 1 + Math.log10(Math.max(step.fromPrev ?? 0, 0.001)) / 2)));
+    else widths.push(Math.max(minWidth, widths[i - 1] * Math.min(1, step.fromPrev ?? 0)));
+  });
+  return widths;
+}

@@ -10,6 +10,7 @@ import {
   MIN_CELL_COUNT,
   attendeeCsv,
   funnel,
+  funnelWidths,
   hexBin,
   pastAttendees,
   sampleOrigins,
@@ -100,6 +101,7 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
   }));
 
   const flow = useMemo(() => funnel(data), [data]);
+  const flowWidths = useMemo(() => funnelWidths(flow.steps), [flow]);
   const [mapOn, setMapOn] = useState(false);
   const [mapMode, setMapMode] = useState<'heat' | 'hex8' | 'hex9'>('hex8');
   const origins = useMemo(
@@ -187,11 +189,11 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
           <Text style={styles.muted}>No events in this period.</Text>
         ) : (
           <>
-            {/* 1. Conversion drop-off funnel: each stage in sequence, width = share of impressions. */}
+            {/* 1. Conversion drop-off funnel: each stage in sequence (widths: lib/hostInsights funnelWidths). */}
             <Text style={styles.section}>CONVERSION FUNNEL</Text>
             <View style={styles.card} testID="insights-funnel">
               {flow.steps.map((step, i) => {
-                const width = data.impressions ? Math.max(0.06, step.value / data.impressions) : 0;
+                const width = data.impressions ? flowWidths[i] : 0;
                 const weak = flow.bottleneck?.id === step.id;
                 return (
                   <View key={step.id}>
@@ -206,7 +208,7 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
                         <View
                           style={[
                             styles.funnelBar,
-                            { width: `${Math.round(Math.min(1, i === 0 ? 1 : width) * 100)}%`, opacity: 1 - i * 0.15 },
+                            { width: `${Math.round(width * 100)}%`, opacity: 1 - i * 0.15 },
                             weak && styles.funnelBarWeak,
                           ]}
                         />
@@ -219,6 +221,7 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
                   </View>
                 );
               })}
+              <Text style={styles.hint}>Each bar steps down from the one above it (views → opens on a log scale).</Text>
               {flow.bottleneck ? (
                 <View style={styles.tip}>
                   <Text style={styles.tipText}>{flow.bottleneck.tip}</Text>

@@ -59,3 +59,14 @@ test('origins bin into hexes and small cells are hidden', async () => {
   assert.equal(hexBin([{ x: 0, y: 0 }, { x: 1, y: 1 }], 100).length, 0, 'two people never show');
   assert.deepEqual(pastAttendees([[{ id: '1', label: '@a' }, { id: '2', label: '@b' }], [{ id: '1', label: '@a' }], undefined]), ['@a', '@b']);
 });
+
+test('funnel widths: log step for opens, then relative to the previous bar', async () => {
+  const { funnel, funnelWidths } = await import('./hostInsights');
+  const { steps } = funnel({ impressions: 11400, opens: 750, rsvps: 253, checkIns: 176 });
+  const w = funnelWidths(steps);
+  assert.equal(w[0], 1);
+  assert.ok(w[1] > 0.38 && w[1] < 0.45, String(w[1])); // ~41%
+  assert.ok(Math.abs(w[2] / w[1] - 253 / 750) < 1e-9); // 34% of stage 2
+  assert.ok(Math.abs(w[3] / w[2] - 176 / 253) < 1e-9); // 70% of stage 3
+  assert.equal(funnelWidths([{ fromPrev: null }, { fromPrev: 0 }, { fromPrev: 0 }])[2], 0.06);
+});
