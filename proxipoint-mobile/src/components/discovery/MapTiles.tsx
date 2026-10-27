@@ -23,6 +23,11 @@ const WIDE_MAX = 2800;
 const FAR_ZOOM = 12;
 const FAR_MIN = -5600;
 const FAR_MAX = 7000;
+/** Widest, coarsest: about 60 km across, so the 15-mile-wide furthest zoom (taller than it is
+ * wide on a phone) never runs off the edge of the map, even after panning a bit. */
+const OUTER_ZOOM = 11;
+const OUTER_MIN = -13000;
+const OUTER_MAX = 14000;
 /** Map world (same numbers as DiscoveryMapCanvas): 1400 × 1400, you / the city at (480, 480). */
 const WORLD_SIZE = 1400;
 const ORIGIN = 480;
@@ -105,8 +110,21 @@ export const MapTiles: React.FC<{
     () => tilesFor({ latitude, longitude }, mode, FAR_ZOOM, FAR_MIN, FAR_MAX),
     [latitude, longitude, mode],
   );
+  const outer = useMemo(
+    () => tilesFor({ latitude, longitude }, mode, OUTER_ZOOM, OUTER_MIN, OUTER_MAX),
+    [latitude, longitude, mode],
+  );
   return (
     <View style={styles.layer} pointerEvents="none">
+      {/* Outermost surroundings (the edges of the furthest zoom) */}
+      {outer.map((tile) => (
+        <Image
+          key={`o-${tile.key}`}
+          source={{ uri: tile.base }}
+          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
+          fadeDuration={150}
+        />
+      ))}
       {/* Far surroundings (only seen at the furthest zoom) */}
       {far.map((tile) => (
         <Image

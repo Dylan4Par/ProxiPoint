@@ -33,7 +33,7 @@ const AGGREGATED_PIN = '#52708f';
 const BOOST_GOLD = '#f59e0b';
 import { PostPickSheet } from './PostPickSheet';
 import { postMatchesMapFilter, useMapPostFilter } from '../../lib/mapFilters';
-import { fromCanvasCoordinates, shouldOfferAreaSearch, visibleRadiusMeters } from '../../lib/mapArea';
+import { fromCanvasCoordinates, shouldOfferAreaSearch, visibleRadiusMeters, WORLD_SCALE } from '../../lib/mapArea';
 import { setMapTouching } from '../../lib/mapGesture';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -52,7 +52,9 @@ const CENTER_OFFSET_Y = CANVAS_HEIGHT / 2 - (BEACON_WORLD_Y - WORLD_OFFSET);
 // Zoom: the map scales from its top-left corner, so a world point w is drawn at
 //   screen = pan - WORLD_OFFSET + zoom * w
 // Pins, labels and your own dot are counter-scaled so they stay the same size on screen.
-const MIN_ZOOM = 0.12; // far enough out to see a whole town's Points as a few bubbles
+/** Furthest out: the map shows this much across (15 miles), whatever the phone's width. */
+const MAX_VIEW_WIDTH_METERS = 15 * 1609.344;
+const MIN_ZOOM = width / (MAX_VIEW_WIDTH_METERS * WORLD_SCALE);
 const MAX_ZOOM = 3;
 
 // Live Points: green pins with a ripple, matching the LIVE badges.
