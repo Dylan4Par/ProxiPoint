@@ -325,23 +325,32 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   {activeTags.length} / {MAX_ACTIVE_TAGS} active
                 </Text>
               </View>
-              <View style={styles.addTagRow}>
-                <TextInput
-                  style={styles.addTagInput}
-                  placeholder={full ? 'Remove one to add another' : 'Add a hashtag, e.g. Pickleball'}
-                  placeholderTextColor={c.iconFaint}
-                  value={newTagInput}
-                  onChangeText={(text) => {
-                    setNewTagInput(text);
-                    setLimitNote(false);
-                  }}
-                  onSubmitEditing={handleAddNewTag}
-                  returnKeyType="done"
-                />
-                <TouchableOpacity style={[styles.addTagBtn, full && styles.addTagBtnOff]} onPress={handleAddNewTag}>
-                  <Text style={styles.addTagBtnText}>+ Add</Text>
-                </TouchableOpacity>
-              </View>
+              {full ? (
+                // At the limit: a badge where the input was, until a chip is taken off.
+                <View style={styles.maxBadge} testID="filter-max-badge" accessibilityRole="text">
+                  <Text style={styles.maxBadgeText}>
+                    {MAX_ACTIVE_TAGS} of {MAX_ACTIVE_TAGS} Selected (Max)
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.addTagRow}>
+                  <TextInput
+                    style={styles.addTagInput}
+                    placeholder="Add a hashtag, e.g. Pickleball"
+                    placeholderTextColor={c.iconFaint}
+                    value={newTagInput}
+                    onChangeText={(text) => {
+                      setNewTagInput(text);
+                      setLimitNote(false);
+                    }}
+                    onSubmitEditing={handleAddNewTag}
+                    returnKeyType="done"
+                  />
+                  <TouchableOpacity style={styles.addTagBtn} onPress={handleAddNewTag}>
+                    <Text style={styles.addTagBtnText}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
               {limitNote ? (
                 <Text style={styles.limitNote} testID="filter-limit-note">
                   {MAX_ACTIVE_TAGS} active filters at most. Remove one to add another.
@@ -675,7 +684,17 @@ const createStyles = (c: ThemeColors) =>
   activeCount: { color: c.textMuted, fontSize: 11, fontWeight: '700' },
   activeCountFull: { color: c.amber },
   limitNote: { color: c.amber, fontSize: 12, fontWeight: '600', marginTop: -2, marginBottom: 8 },
-  addTagBtnOff: { opacity: 0.45 },
+  maxBadge: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.green,
+    backgroundColor: c.greenTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  maxBadgeText: { color: c.green, fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
   tagPillActive: {
     backgroundColor: c.accentDeep,
     borderColor: c.accent,
