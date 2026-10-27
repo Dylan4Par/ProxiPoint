@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Bell, ChevronLeft, ChevronRight, Image as ImageIcon, Layers, Plus, Radio, Settings, X, type LucideIcon } from 'lucide-react-native';
+import { BarChart3, Bell, ChevronLeft, ChevronRight, Image as ImageIcon, Layers, Plus, Radio, Settings, X, type LucideIcon } from 'lucide-react-native';
 import { RecapCard } from '../components/profile/RecapCard';
 import { RecapComposer } from '../components/profile/RecapComposer';
 import { MyTagsTile } from '../components/profile/MyTagsTile';
@@ -42,8 +42,10 @@ interface ProfileScreenProps {
   /** Opens Create Event filled in with an earlier event's details. */
   onDropAgain: (id: string) => void;
   onOpenActivity: () => void;
-  /** Channels → Campaigns: your grouped events and their announcement settings. */
+  /** Manage My Series: your grouped events and their announcement settings. */
   onOpenCampaigns: () => void;
+  /** Host Insights & Analytics. */
+  onOpenInsights: () => void;
   onDropPoint: () => void;
   /** Saves a new banner, or null to go back to the dot pattern. */
   onChangeBanner: (uri: string | null) => void;
@@ -113,6 +115,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
   onDropAgain,
   onOpenActivity,
   onOpenCampaigns,
+  onOpenInsights,
   onDropPoint,
   onChangeAvatar,
   onChangeBio,
@@ -441,8 +444,9 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <View style={styles.rows}>
             <LinkRow Icon={Layers} label="View My Drops" onPress={onOpenMyDrops} testID="profile-my-drops" />
-            <LinkRow Icon={Bell} label="Notifications & Proximity Alerts" onPress={onOpenActivity} testID="profile-activity" />
             <LinkRow Icon={Radio} label="Manage My Series" onPress={onOpenCampaigns} testID="profile-campaigns" />
+            <LinkRow Icon={BarChart3} label="Host Insights & Analytics" onPress={onOpenInsights} testID="profile-insights" />
+            <LinkRow Icon={Bell} label="Notifications & Proximity Alerts" onPress={onOpenActivity} testID="profile-activity" />
           </View>
         </View>
       </KeyboardAwareScrollView>

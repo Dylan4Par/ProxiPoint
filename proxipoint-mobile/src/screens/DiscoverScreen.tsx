@@ -27,6 +27,7 @@ import { canPostIn } from '../lib/channelAccess';
 import { ActivityScreen } from './ActivityScreen';
 import { CampaignsView } from '../components/campaigns/CampaignsView';
 import { AlertsScreen } from '../components/profile/AlertsScreen';
+import { HostInsightsScreen } from '../components/profile/HostInsightsScreen';
 import { CalendarScreen } from './CalendarScreen';
 import { DiscoverFeedScreen } from './DiscoverFeedScreen';
 import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
@@ -70,7 +71,7 @@ export const DiscoverScreen: React.FC = () => {
   const [tab, setTab] = useState<ScreenTab>('discover');
   // Profile tab: the profile itself, or My Drops opened from it.
   // Profile tab: the profile itself, or a page opened from it (My Drops, alerts, My Series).
-  const [profileView, setProfileView] = useState<'main' | 'drops' | 'alerts' | 'series'>('main');
+  const [profileView, setProfileView] = useState<'main' | 'drops' | 'alerts' | 'series' | 'insights'>('main');
   // Profile opened to a section (e.g. MY #TAGS from Alerts' "Following #tags"). New key = new request.
   const [profileFocus, setProfileFocus] = useState<{ key: number; section: 'tags' } | null>(null);
   // Channels tab: which view (Feed / Alerts / My Channels) and which channel page is open.
@@ -783,6 +784,7 @@ export const DiscoverScreen: React.FC = () => {
           onDropAgain={openDropAgain}
           onOpenActivity={() => setProfileView('alerts')}
           onOpenCampaigns={() => setProfileView('series')}
+          onOpenInsights={() => setProfileView('insights')}
           onDropPoint={() => {
             setManagingId(null);
             setDropPrefill(null);
@@ -849,7 +851,7 @@ export const DiscoverScreen: React.FC = () => {
         </View>
       ) : null}
 
-      {tab === 'profile' && (profileView === 'alerts' || profileView === 'series') ? (
+      {tab === 'profile' && (profileView === 'alerts' || profileView === 'series' || profileView === 'insights') ? (
         <View style={styles.subPage}>
           <View style={styles.subHeaderRow}>
             <TouchableOpacity
@@ -863,10 +865,21 @@ export const DiscoverScreen: React.FC = () => {
               <Text style={styles.subBackText}>PROFILE</Text>
             </TouchableOpacity>
             <Text style={styles.subTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
-              {profileView === 'alerts' ? 'Notifications & Proximity Alerts' : 'My Series'}
+              {profileView === 'alerts'
+                ? 'Notifications & Proximity Alerts'
+                : profileView === 'insights'
+                  ? 'Host Insights & Analytics'
+                  : 'My Series'}
             </Text>
+            {profileView === 'insights' ? (
+              <View style={styles.proBadge}>
+                <Text style={styles.proText}>PRO</Text>
+              </View>
+            ) : null}
           </View>
-          {profileView === 'alerts' ? (
+          {profileView === 'insights' ? (
+            <HostInsightsScreen drops={myDrops} />
+          ) : profileView === 'alerts' ? (
             <AlertsScreen
               interestTags={profile.interestTags ?? []}
               onOpenPoint={openHostPoint}
@@ -1052,6 +1065,8 @@ const createStyles = (c: ThemeColors) =>
   subBackText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
   subHeaderRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 16 },
   subTitle: { flex: 1, textAlign: 'right', color: c.text, fontSize: 16, fontWeight: '800' },
+  proBadge: { marginLeft: 8, paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6, backgroundColor: '#f59e0b' },
+  proText: { color: '#1f1300', fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
   datePillText: { color: c.text, fontSize: 12, fontWeight: '800', flexShrink: 1 },
   /* Explore Map top row */
   dateChip: {
