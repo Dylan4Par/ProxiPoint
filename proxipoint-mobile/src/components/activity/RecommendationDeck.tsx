@@ -22,7 +22,13 @@ function shuffleKey(seed: number, id: string): number {
   }
   return (h >>> 0) / 4294967296;
 }
-const CARD_HEIGHT = 228;
+/** Card height without the reason chips, and with them (only when some card has any). */
+const CARD_HEIGHT = 170;
+const CARD_HEIGHT_WITH_REASONS = 206;
+
+/** Live / start time already show as the badge under the title, so they aren't repeated as chips. */
+const extraReasons = (pick: PriorityPick) =>
+  pick.reasons.filter((reason) => reason !== 'Live now' && reason !== pick.node.status).slice(0, 3);
 
 /**
  * Channels → Feed → RECOMMENDATIONS: a stack of picks that turns to the next card every 5 seconds,
@@ -47,6 +53,8 @@ export const RecommendationDeck: React.FC<{
     .sort((a, b) => a.key - b.key)
     .map((entry) => entry.pick);
   const count = cards.length;
+  const withReasons = cards.some((pick) => extraReasons(pick).length > 0);
+  const cardHeight = withReasons ? CARD_HEIGHT_WITH_REASONS : CARD_HEIGHT;
 
   const [index, setIndex] = useState(0);
   const [held, setHeld] = useState(false);
@@ -156,10 +164,10 @@ export const RecommendationDeck: React.FC<{
 
   return (
     <View testID="activity-recs">
-      <View style={styles.stack}>
+      <View style={[styles.stack, { height: cardHeight + 14 }]}>
         {/* The cards "behind", peeking out under the front one */}
-        {count > 2 ? <View style={[styles.card, styles.ghost, styles.ghostBack]} /> : null}
-        {count > 1 ? <View style={[styles.card, styles.ghost, styles.ghostMid]} /> : null}
+        {count > 2 ? <View style={[styles.card, styles.ghost, styles.ghostBack, { height: cardHeight }]} /> : null}
+        {count > 1 ? <View style={[styles.card, styles.ghost, styles.ghostMid, { height: cardHeight }]} /> : null}
 
         <Animated.View style={[styles.front, frontStyle]} {...(count > 1 ? swipe.panHandlers : {})}>
           <TouchableOpacity
@@ -167,7 +175,7 @@ export const RecommendationDeck: React.FC<{
             onPress={() => onOpenPoint(node.id)}
             onPressIn={() => setHeld(true)}
             onPressOut={() => setHeld(false)}
-            style={[styles.card, styles.frontCard, pick.boosted && styles.cardBoosted]}
+            style={[styles.card, styles.frontCard, { height: cardHeight }, pick.boosted && styles.cardBoosted]}
             accessibilityRole="button"
             accessibilityLabel={`Recommendation ${index + 1} of ${count}: ${node.title}. ${pick.reasons.join(', ')}`}
             accessibilityHint="Opens the Point on Discover"
@@ -201,8 +209,9 @@ export const RecommendationDeck: React.FC<{
               </View>
             </View>
 
+            {extraReasons(pick).length ? (
             <View style={styles.reasons}>
-              {pick.reasons.slice(0, 3).map((reason) => (
+              {extraReasons(pick).map((reason) => (
                 <View key={reason} style={styles.reason}>
                   <Text style={styles.reasonText} numberOfLines={1}>
                     {reason}
@@ -210,6 +219,7 @@ export const RecommendationDeck: React.FC<{
                 </View>
               ))}
             </View>
+            ) : null}
 
             <View style={styles.actions}>
               <TouchableOpacity
@@ -264,7 +274,7 @@ export const RecommendationDeck: React.FC<{
 
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
-    stack: { height: CARD_HEIGHT + 14 },
+    stack: {},
     card: {
       backgroundColor: c.surface,
       borderRadius: 18,
@@ -272,11 +282,11 @@ const createStyles = (c: ThemeColors) =>
       borderColor: c.accentBorder,
     },
     // Peeking cards: narrower and lower, so the stack reads as a deck.
-    ghost: { position: 'absolute', height: CARD_HEIGHT, left: 0, right: 0 },
+    ghost: { position: 'absolute', left: 0, right: 0 },
     ghostMid: { top: 7, transform: [{ scaleX: 0.95 }], opacity: 0.7, borderColor: c.border },
     ghostBack: { top: 14, transform: [{ scaleX: 0.9 }], opacity: 0.45, borderColor: c.border },
     front: { position: 'absolute', top: 0, left: 0, right: 0 },
-    frontCard: { height: CARD_HEIGHT, padding: 14, gap: 12, justifyContent: 'space-between' },
+    frontCard: { padding: 14, gap: 12, justifyContent: 'space-between' },
     cardBoosted: { borderColor: GOLD },
     emptyCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderWidth: 1, borderColor: c.border },
     emptyText: { flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 18 },
