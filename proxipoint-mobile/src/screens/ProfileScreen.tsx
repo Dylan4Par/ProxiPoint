@@ -397,7 +397,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
               setLayout((l) => ({ ...l, tags: { y, height } }));
             }}
           >
-            <Text style={[styles.sectionLabel, styles.sectionSpaced]}>MY #TAGS</Text>
+            <Text style={[styles.sectionLabel, styles.sectionSpaced]}>FOLLOWED TAGS</Text>
             <MyTagsTile
               tags={profile.interestTags ?? []}
               isPublic={profile.interestTagsPublic ?? false}

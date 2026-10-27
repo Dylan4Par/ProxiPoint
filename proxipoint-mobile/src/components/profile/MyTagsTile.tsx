@@ -83,7 +83,7 @@ export const MyTagsTile: React.FC<{
           onValueChange={(value) => onChange(tags, value)}
           trackColor={{ false: c.borderStrong, true: c.accentTrack }}
           thumbColor={isPublic ? c.accent : c.textMuted}
-          accessibilityLabel="Show my #tags on my public profile"
+          accessibilityLabel="Show my followed tags on my public profile"
           testID="profile-tags-public"
         />
       </View>

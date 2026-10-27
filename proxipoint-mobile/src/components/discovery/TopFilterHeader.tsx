@@ -14,7 +14,14 @@ import {
 import { tourTarget } from '../tour/tourTargets';
 import { CalendarDays, ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react-native';
 import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort, type PointSort } from '../../lib/pointSort';
-import { setMapRange, setMyChannelsOnly, useMapRange, useMyChannelsOnly } from '../../lib/discoverFilters';
+import {
+  setFollowedOnly,
+  setMapRange,
+  setMyChannelsOnly,
+  useFollowedTagsFilter,
+  useMapRange,
+  useMyChannelsOnly,
+} from '../../lib/discoverFilters';
 import { searchRanges, useUnits } from '../../lib/units';
 
 /** Short labels for the three Sort by buttons. */
@@ -86,10 +93,11 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   // Badge on the filter button: how many choices differ from the defaults.
   const myChannelsOnly = useMyChannelsOnly();
   const rangeMeters = useMapRange();
+  const followed = useFollowedTagsFilter();
   const units = useUnits();
   const ranges = searchRanges(units);
   const activeCount =
-    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (liveOnly ? 1 : 0) + (myChannelsOnly ? 1 : 0) + (rangeMeters != null ? 1 : 0);
+    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (liveOnly ? 1 : 0) + (myChannelsOnly ? 1 : 0) + (rangeMeters != null ? 1 : 0) + (followed.on ? 1 : 0);
   const [newTagInput, setNewTagInput] = useState('');
 
   const handleAddNewTag = () => {
@@ -382,6 +390,25 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 ) : null}
                 <View style={[styles.showRow, onToggleLiveOnly ? styles.showRowDivider : null]}>
                   <View style={styles.sortCopy}>
+                    <Text style={styles.sortLabel}>Include my Followed Tags</Text>
+                    <Text style={styles.sortHint}>
+                      {followed.tags.length
+                        ? `Points with ${followed.tags.slice(0, 3).join(', ')}${followed.tags.length > 3 ? ` +${followed.tags.length - 3}` : ''}`
+                        : 'Follow #tags on your Profile to use this'}
+                    </Text>
+                  </View>
+                  <Switch
+                    value={followed.on}
+                    onValueChange={setFollowedOnly}
+                    disabled={!followed.tags.length && !followed.on}
+                    trackColor={{ false: c.borderStrong, true: c.accentTrack }}
+                    thumbColor={followed.on ? c.accent : c.textMuted}
+                    accessibilityLabel="Include my followed tags"
+                    testID="filter-sheet-followed-tags"
+                  />
+                </View>
+                <View style={[styles.showRow, styles.showRowDivider]}>
+                  <View style={styles.sortCopy}>
                     <Text style={styles.sortLabel}>My channels</Text>
                     <Text style={styles.sortHint}>Points from channels you've joined</Text>
                   </View>
@@ -406,6 +433,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   if (liveOnly) onToggleLiveOnly?.();
                   setMyChannelsOnly(false);
                   setMapRange(null);
+                  setFollowedOnly(false);
                 }}
                 accessibilityRole="button"
               >

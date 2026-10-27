@@ -11,7 +11,7 @@ import {
   AccessibilityInfo,
 } from 'react-native';
 import { toCanvasCoordinates, useDiscoveryStore, type DiscoveryNode } from '../../stores/useDiscoveryStore';
-import { matchesDiscoverFilters, useMapRange, useMyChannelsOnly } from '../../lib/discoverFilters';
+import { matchesDiscoverFilters, useFollowedTagsFilter, useMapRange, useMyChannelsOnly } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
@@ -178,13 +178,14 @@ export const DiscoveryMapCanvas: React.FC<{
   useTimeWindow(); // re-filter when the date window changes (3 days, or Calendar dates)
   const myChannelsOnly = useMyChannelsOnly(); // Filter & sort → Show only → My channels
   const rangeMeters = useMapRange(); // Filter & sort → Distance
+  const followed = useFollowedTagsFilter(); // Filter & sort → Show only → Include my Followed Tags
   useChannels(); // re-filter when you join or leave a channel
   // Boosted pins are drawn last so they sit on top of nearby pins.
   const nodeList = allNodes
     .filter(
       (node) =>
         node.id === showAlwaysId ||
-        matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace, rangeMeters }),
+        matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters }),
     )
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
 

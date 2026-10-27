@@ -48,6 +48,7 @@ import { planAutoChannels } from '../lib/autoChannels';
 import { useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
 import { myTagSuggestions } from '../lib/tagInput';
+import { setFollowedTags } from '../lib/discoverFilters';
 import { DEFAULT_PROFILE, DEFAULT_SETTINGS, type MyProfile, type MySettings } from '../lib/myProfile';
 import type { PointRecap } from '../lib/pointRecap';
 import type { DroppedPoint } from '../lib/droppedPoint';
@@ -369,7 +370,9 @@ export const DiscoverScreen: React.FC = () => {
     setOverlay('settings');
   };
 
-  // Tags you use most (your Drops, then MY #TAGS), offered on Create Drop.
+  // Explore Map's "Include my Followed Tags" filter uses your followed #tags.
+  useEffect(() => setFollowedTags(profile.interestTags), [profile.interestTags]);
+  // Tags you use most (your Drops, then Followed Tags), offered on Create Drop.
   const myTags = useMemo(() => myTagSuggestions(profile.interestTags, myDrops), [profile.interestTags, myDrops]);
   const recentPlaces = useMemo(() => recentDropPlaces(myDrops), [myDrops]);
   const managing = myDrops.find((drop) => drop.id === managingId) ?? null;

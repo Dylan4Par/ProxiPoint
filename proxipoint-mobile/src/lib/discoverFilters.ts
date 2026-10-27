@@ -17,6 +17,11 @@ export interface DiscoverFilters {
   activeTab?: string | null;
   /** Show only → My channels: Points listed in, or tagged like, a channel you've joined. */
   myChannelsOnly?: boolean;
+  /**
+   * Show only → Include my Followed Tags: your followed #tags (Profile → Followed Tags), or null
+   * when off. With My channels also on, a Point matching either one shows.
+   */
+  followedTags?: string[] | null;
   /** The city / metro being explored: Points farther than METRO_RADIUS_METERS are left out. */
   area?: { latitude: number; longitude: number } | null;
   /** Filter & sort → Distance: only Points this close to the area's middle (null = any). */
@@ -83,7 +88,13 @@ export function matchesDiscoverFilters(node: unknown, filters: DiscoverFilters):
   const tag = filters.selectedTag ? normalizeTag(filters.selectedTag) : '';
   if (tag && tag !== 'all' && !nodeTags(node).includes(tag)) return false;
   if (filters.liveOnly && !isLiveNode(node)) return false;
-  if (filters.myChannelsOnly && !inMyChannels(node)) return false;
+  // My channels and Followed Tags each widen what's kept: a Point needs to match one of those on.
+  if (filters.myChannelsOnly || filters.followedTags) {
+    const followed = filters.followedTags ? new Set(filters.followedTags.map(normalizeTag)) : null;
+    const inChannels = filters.myChannelsOnly ? inMyChannels(node) : false;
+    const inFollowed = followed ? nodeTags(node).some((tag) => followed.has(tag)) : false;
+    if (!inChannels && !inFollowed) return false;
+  }
   if (
     filters.area &&
     !inMetroArea(
@@ -126,4 +137,37 @@ export function useMapRange(): number | null {
     };
   }, []);
   return range;
+}
+
+// ---- Include my Followed Tags (Filter & sort → Show only) ----------------------------------------
+
+let followedOnly = false;
+let followedTags: string[] = [];
+const followedListeners = new Set<() => void>();
+const notifyFollowed = () => followedListeners.forEach((listener) => listener());
+
+export function setFollowedOnly(on: boolean): void {
+  if (on === followedOnly) return;
+  followedOnly = on;
+  notifyFollowed();
+}
+
+/** Your followed #tags, kept in step by the screen that owns your profile. */
+export function setFollowedTags(tags: string[]): void {
+  if (tags.join('|') === followedTags.join('|')) return;
+  followedTags = tags;
+  notifyFollowed();
+}
+
+/** { on, tags, filter }: `filter` is what to pass as DiscoverFilters.followedTags. */
+export function useFollowedTagsFilter(): { on: boolean; tags: string[]; filter: string[] | null } {
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    const listener = () => setTick((n) => n + 1);
+    followedListeners.add(listener);
+    return () => {
+      followedListeners.delete(listener);
+    };
+  }, []);
+  return { on: followedOnly, tags: followedTags, filter: followedOnly ? followedTags : null };
 }
