@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { BarChart3, Bell, ChevronLeft, ChevronRight, Image as ImageIcon, Layers, Plus, Radio, Settings, X, type LucideIcon } from 'lucide-react-native';
+import { Bell, ChevronLeft, TrendingUp, ChevronRight, Image as ImageIcon, Layers, Plus, Radio, Settings, X, type LucideIcon } from 'lucide-react-native';
 import { RecapCard } from '../components/profile/RecapCard';
 import { RecapComposer } from '../components/profile/RecapComposer';
 import { MyTagsTile } from '../components/profile/MyTagsTile';
@@ -445,7 +445,7 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
           <View style={styles.rows}>
             <LinkRow Icon={Layers} label="View My Drops" onPress={onOpenMyDrops} testID="profile-my-drops" />
             <LinkRow Icon={Radio} label="Manage My Series" onPress={onOpenCampaigns} testID="profile-campaigns" />
-            <LinkRow Icon={BarChart3} label="Host Insights & Analytics" onPress={onOpenInsights} testID="profile-insights" />
+            <LinkRow Icon={TrendingUp} label="Host Insights & Analytics" onPress={onOpenInsights} testID="profile-insights" />
             <LinkRow Icon={Bell} label="Notifications & Proximity Alerts" onPress={onOpenActivity} testID="profile-activity" />
           </View>
         </View>
