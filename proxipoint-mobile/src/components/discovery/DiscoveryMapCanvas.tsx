@@ -34,6 +34,7 @@ const BOOST_GOLD = '#f59e0b';
 import { PostPickSheet } from './PostPickSheet';
 import { postMatchesMapFilter, useMapPostFilter } from '../../lib/mapFilters';
 import { fromCanvasCoordinates, shouldOfferAreaSearch, visibleRadiusMeters } from '../../lib/mapArea';
+import { setMapTouching } from '../../lib/mapGesture';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const { width, height } = Dimensions.get('window');
@@ -916,10 +917,12 @@ export const DiscoveryMapCanvas: React.FC<{
       },
       onPanResponderRelease: () => {
         gesture.current.mode = 'none';
+        setMapTouching(false);
         calculateBounds(currentPan.current.x, currentPan.current.y);
       },
       onPanResponderTerminate: () => {
         gesture.current.mode = 'none';
+        setMapTouching(false);
         flushBounds();
       },
     })
@@ -933,8 +936,15 @@ export const DiscoveryMapCanvas: React.FC<{
       {...panResponder.panHandlers}
       // onTouchStart sees every touch without taking it, so panning and pin taps still work.
       onTouchStart={() => {
-        if (!sheetOpen.current) onMapTouch?.();
+        if (sheetOpen.current) return;
+        setMapTouching(true);
+        onMapTouch?.();
       }}
+      // Last finger up: the card list may rebuild now (see lib/mapGesture).
+      onTouchEnd={(evt) => {
+        if (evt.nativeEvent.touches.length === 0) setMapTouching(false);
+      }}
+      onTouchCancel={() => setMapTouching(false)}
     >
       <Animated.View
         style={[

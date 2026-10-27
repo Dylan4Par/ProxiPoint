@@ -18,6 +18,7 @@ import { matchesDiscoverFilters, useFollowedTagsFilter, useMapRange, useMyChanne
 import { useTimeWindow } from '../../lib/timeWindow';
 import { useModeration } from '../../lib/moderation';
 import { isBoosted, useBoosts } from '../../lib/boost';
+import { isMapTouching, onMapTouchingChange } from '../../lib/mapGesture';
 import { useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const EXPANDED_HEIGHT = 360;
@@ -115,12 +116,29 @@ export const EventCardList: React.FC<{
       return;
     }
     Animated.timing(listFade, { toValue: 0.55, duration: 120, useNativeDriver: true }).start();
-    settleTimer.current = setTimeout(() => {
+    let unsubscribe: (() => void) | null = null;
+    const swap = () => {
       setShownKey(visibleKey);
       Animated.timing(listFade, { toValue: 1, duration: 180, useNativeDriver: true }).start();
-    }, LIST_SETTLE_MS);
+    };
+    // Rebuilding the cards takes the JS thread for a moment, so never do it while a finger is on
+    // the map (it made a fresh drag stall). Wait for the map to be let go, then a short beat.
+    const swapWhenFree = () => {
+      if (!isMapTouching()) {
+        swap();
+        return;
+      }
+      unsubscribe = onMapTouchingChange((touching) => {
+        if (touching) return;
+        unsubscribe?.();
+        unsubscribe = null;
+        settleTimer.current = setTimeout(swapWhenFree, LIST_AFTER_RELEASE_MS);
+      });
+    };
+    settleTimer.current = setTimeout(swapWhenFree, LIST_SETTLE_MS);
     return () => {
       if (settleTimer.current) clearTimeout(settleTimer.current);
+      unsubscribe?.();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleKey, isFull]);
@@ -253,22 +271,27 @@ export const EventCardList: React.FC<{
     return () => clearTimeout(timer);
   }, [selectedNodeId, shownKey]);
 
+  // Card taps go through a ref so the handlers never change (that keeps ListCard's memo working).
+  const openRef = useRef<(id: string) => void>(() => {});
+  openRef.current = (id: string) => {
+    pickedInList.current = id;
+    setSelectedNodeId(id);
+    // From the full list, drop back to the map so the Point can be shown on it.
+    if (modeRef.current === 'full') animateDrawer('half');
+    onOpenDetails?.(id);
+  };
+  const onOpenId = useCallback((id: string) => openRef.current(id), []);
+  const onRsvpId = useCallback((id: string) => toggleRsvp(id), [toggleRsvp]);
+
   const renderCard = useCallback(({ item }: { item: DiscoveryNode }) => (
-    <PointCard
+    <ListCard
       node={item}
       boosted={isBoosted(item.id, boostClock)}
       selected={item.id === selectedNodeId}
-      onOpen={() => {
-        pickedInList.current = item.id;
-        setSelectedNodeId(item.id);
-        // From the full list, drop back to the map so the Point can be shown on it.
-        if (modeRef.current === 'full') animateDrawer('half');
-        onOpenDetails?.(item.id);
-      }}
-      onToggleRsvp={() => toggleRsvp(item.id)}
+      onOpenId={onOpenId}
+      onRsvpId={onRsvpId}
     />
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  ), [boostClock, selectedNodeId, onOpenDetails, toggleRsvp, setSelectedNodeId]);
+  ), [boostClock, selectedNodeId, onOpenId, onRsvpId]);
 
   return (
     <Animated.View ref={tourTarget('map-cards')} style={[styles.drawerContainer, { height: animatedHeight }]}>
@@ -387,6 +410,30 @@ export const EventCardList: React.FC<{
 
 /** How long the map has to hold still before the cards are rebuilt for what's on screen. */
 const LIST_SETTLE_MS = 500;
+/** If the map was still held when that time ran out: how long after it's let go to rebuild. */
+const LIST_AFTER_RELEASE_MS = 250;
+
+/**
+ * One card in the list. Memoized so swapping in a new set of cards only draws the cards that are
+ * new or changed (the handlers take an id, so they stay the same from render to render).
+ */
+const ListCard = React.memo(function ListCard({
+  node,
+  boosted,
+  selected,
+  onOpenId,
+  onRsvpId,
+}: {
+  node: DiscoveryNode;
+  boosted: boolean;
+  selected: boolean;
+  onOpenId: (id: string) => void;
+  onRsvpId: (id: string) => void;
+}) {
+  const open = useCallback(() => onOpenId(node.id), [onOpenId, node.id]);
+  const rsvp = useCallback(() => onRsvpId(node.id), [onRsvpId, node.id]);
+  return <PointCard node={node} boosted={boosted} selected={selected} onOpen={open} onToggleRsvp={rsvp} />;
+});
 
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
