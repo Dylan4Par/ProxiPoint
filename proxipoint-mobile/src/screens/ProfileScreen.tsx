@@ -441,8 +441,8 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({
 
           <View style={styles.rows}>
             <LinkRow Icon={Layers} label="View My Drops" onPress={onOpenMyDrops} testID="profile-my-drops" />
-            <LinkRow Icon={Radio} label="View My Series" onPress={onOpenCampaigns} testID="profile-campaigns" />
             <LinkRow Icon={Bell} label="View alerts" onPress={onOpenActivity} testID="profile-activity" />
+            <LinkRow Icon={Radio} label="Manage My Series" onPress={onOpenCampaigns} testID="profile-campaigns" />
           </View>
         </View>
       </KeyboardAwareScrollView>

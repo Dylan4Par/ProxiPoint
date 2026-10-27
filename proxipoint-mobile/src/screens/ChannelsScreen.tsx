@@ -152,10 +152,9 @@ const snippet = (text: string) => (text.length > 60 ? `${text.slice(0, 57).trimE
 const sameHandle = (a: string, b: string) => a.replace(/^@+/, '').toLowerCase() === b.replace(/^@+/, '').toLowerCase();
 
 const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
+  // Alerts and Series live on the Profile tab (View alerts, Manage My Series).
   { id: 'feed', label: 'Feed' },
-  { id: 'alerts', label: 'Alerts' },
   { id: 'manage', label: 'My Channels' },
-  { id: 'campaigns', label: 'Series' },
 ];
 
 /**

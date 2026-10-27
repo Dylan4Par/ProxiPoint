@@ -25,6 +25,7 @@ import { SettingsScreen } from './SettingsScreen';
 import { HostProfileScreen } from './HostProfileScreen';
 import { canPostIn } from '../lib/channelAccess';
 import { ActivityScreen } from './ActivityScreen';
+import { CampaignsView } from '../components/campaigns/CampaignsView';
 import { CalendarScreen } from './CalendarScreen';
 import { DiscoverFeedScreen } from './DiscoverFeedScreen';
 import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
@@ -67,7 +68,8 @@ export const DiscoverScreen: React.FC = () => {
   // Opens on the Discover feed; the map lives on Explore Map.
   const [tab, setTab] = useState<ScreenTab>('discover');
   // Profile tab: the profile itself, or My Drops opened from it.
-  const [profileView, setProfileView] = useState<'main' | 'drops'>('main');
+  // Profile tab: the profile itself, or a page opened from it (My Drops, alerts, My Series).
+  const [profileView, setProfileView] = useState<'main' | 'drops' | 'alerts' | 'series'>('main');
   // Profile opened to a section (e.g. MY #TAGS from Alerts' "Following #tags"). New key = new request.
   const [profileFocus, setProfileFocus] = useState<{ key: number; section: 'tags' } | null>(null);
   // Channels tab: which view (Feed / Alerts / My Channels) and which channel page is open.
@@ -355,9 +357,9 @@ export const DiscoverScreen: React.FC = () => {
     return () => sub.remove();
   }, [overlay]);
 
-  // Android back on My Drops returns to the Profile it was opened from.
+  // Android back on a Profile page (My Drops, alerts, My Series) returns to the Profile.
   useEffect(() => {
-    if (tab !== 'profile' || profileView !== 'drops') return;
+    if (tab !== 'profile' || profileView === 'main') return;
     const sub = BackHandler.addEventListener('hardwareBackPress', () => {
       setProfileView('main');
       return true;
@@ -778,14 +780,8 @@ export const DiscoverScreen: React.FC = () => {
             setManagingId(id);
           }}
           onDropAgain={openDropAgain}
-          onOpenActivity={() => {
-            goTo('channels');
-            setChannelsSegment('alerts');
-          }}
-          onOpenCampaigns={() => {
-            goTo('channels');
-            setChannelsSegment('campaigns');
-          }}
+          onOpenActivity={() => setProfileView('alerts')}
+          onOpenCampaigns={() => setProfileView('series')}
           onDropPoint={() => {
             setManagingId(null);
             setDropPrefill(null);
@@ -852,6 +848,46 @@ export const DiscoverScreen: React.FC = () => {
         </View>
       ) : null}
 
+      {tab === 'profile' && (profileView === 'alerts' || profileView === 'series') ? (
+        <View style={styles.subPage}>
+          <TouchableOpacity
+            style={styles.subBack}
+            onPress={() => setProfileView('main')}
+            accessibilityRole="button"
+            accessibilityLabel="Back to Profile"
+            testID="profile-subpage-back"
+          >
+            <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
+            <Text style={styles.subBackText}>PROFILE</Text>
+          </TouchableOpacity>
+          {profileView === 'alerts' ? (
+            <ActivityScreen
+              embedded
+              interestTags={profile.interestTags ?? []}
+              onOpenPoint={openHostPoint}
+              onEditTags={() => {
+                setProfileView('main');
+                setProfileFocus({ key: Date.now(), section: 'tags' });
+              }}
+              onToggleRsvp={(id) => toggleRsvp(id)}
+              onOpenTag={showTagOnMap}
+            />
+          ) : (
+            <CampaignsView
+              drops={myDrops}
+              onCreatePoints={createCampaignPoints}
+              onAnnounce={announceCampaign}
+              onOpenPoint={(id) => {
+                setJustDroppedId(null);
+                setManagingId(id);
+              }}
+              newRequest={newSeriesRequest}
+              onNewHandled={clearNewSeriesRequest}
+            />
+          )}
+        </View>
+      ) : null}
+
       <DropPointModal
         visible={dropOpen}
         prefill={dropPrefill}
@@ -895,7 +931,9 @@ export const DiscoverScreen: React.FC = () => {
         }}
         onChannels={() => goTo('channels')}
         onProfile={() => goTo('profile')}
-        unreadCount={tab === 'channels' && channelsSegment === 'alerts' ? 0 : unread}
+        // Unread alerts now sit on Profile (View alerts).
+        badgeTab="profile"
+        unreadCount={tab === 'profile' && profileView === 'alerts' ? 0 : unread}
         dropActive={dropOpen || createChooser}
         onDrop={() => setCreateChooser(true)}
       />
@@ -913,10 +951,10 @@ export const DiscoverScreen: React.FC = () => {
           setDropOpen(true);
         }}
         onSeries={() => {
-          // Channels → Series, with a new series open.
+          // Profile → Manage My Series, with a new series open.
           setCreateChooser(false);
-          goTo('channels');
-          setChannelsSegment('campaigns');
+          goTo('profile');
+          setProfileView('series');
           setNewSeriesRequest(Date.now());
         }}
       />

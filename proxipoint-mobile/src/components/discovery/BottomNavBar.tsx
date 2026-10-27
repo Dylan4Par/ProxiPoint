@@ -27,8 +27,10 @@ interface BottomNavBarProps {
   onMap?: () => void;
   onChannels?: () => void;
   onProfile?: () => void;
-  /** Unread alerts. Shows a yellow dot (1–9) or "9+" on the Channels icon. */
+  /** Unread alerts. Shows a yellow dot (1–9) or "9+" on the badgeTab's icon. */
   unreadCount?: number;
+  /** Which tab carries the unread dot (Profile, where View alerts lives). */
+  badgeTab?: NavTab;
   /** The raised + in the middle: start a new Drop. Hidden when not given. */
   onDrop?: () => void;
   /** Create Drop is open (the + gets a ring). */
@@ -64,6 +66,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
   unreadCount = 0,
   onDrop,
   dropActive = false,
+  badgeTab = 'channels',
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -101,7 +104,7 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
               </TouchableOpacity>
             </View>
           ) : null;
-        const showBadge = id === 'channels' && unreadCount > 0;
+        const showBadge = id === badgeTab && unreadCount > 0;
         return [
           <TouchableOpacity
             key={id}
