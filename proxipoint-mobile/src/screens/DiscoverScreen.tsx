@@ -862,8 +862,8 @@ export const DiscoverScreen: React.FC = () => {
               <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
               <Text style={styles.subBackText}>PROFILE</Text>
             </TouchableOpacity>
-            <Text style={styles.subTitle} numberOfLines={1}>
-              {profileView === 'alerts' ? 'Alerts & Notifications' : 'My Series'}
+            <Text style={styles.subTitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>
+              {profileView === 'alerts' ? 'Notifications & Proximity Alerts' : 'My Series'}
             </Text>
           </View>
           {profileView === 'alerts' ? (
