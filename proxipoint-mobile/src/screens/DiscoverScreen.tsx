@@ -26,6 +26,7 @@ import { HostProfileScreen } from './HostProfileScreen';
 import { canPostIn } from '../lib/channelAccess';
 import { ActivityScreen } from './ActivityScreen';
 import { CampaignsView } from '../components/campaigns/CampaignsView';
+import { AlertsScreen } from '../components/profile/AlertsScreen';
 import { CalendarScreen } from './CalendarScreen';
 import { DiscoverFeedScreen } from './DiscoverFeedScreen';
 import { ChannelsScreen, type ChannelsSegment } from './ChannelsScreen';
@@ -850,27 +851,29 @@ export const DiscoverScreen: React.FC = () => {
 
       {tab === 'profile' && (profileView === 'alerts' || profileView === 'series') ? (
         <View style={styles.subPage}>
-          <TouchableOpacity
-            style={styles.subBack}
-            onPress={() => setProfileView('main')}
-            accessibilityRole="button"
-            accessibilityLabel="Back to Profile"
-            testID="profile-subpage-back"
-          >
-            <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
-            <Text style={styles.subBackText}>PROFILE</Text>
-          </TouchableOpacity>
+          <View style={styles.subHeaderRow}>
+            <TouchableOpacity
+              style={styles.subBack}
+              onPress={() => setProfileView('main')}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Profile"
+              testID="profile-subpage-back"
+            >
+              <ChevronLeft size={20} color={c.text} strokeWidth={2.5} />
+              <Text style={styles.subBackText}>PROFILE</Text>
+            </TouchableOpacity>
+            <Text style={styles.subTitle} numberOfLines={1}>
+              {profileView === 'alerts' ? 'Alerts & Notifications' : 'My Series'}
+            </Text>
+          </View>
           {profileView === 'alerts' ? (
-            <ActivityScreen
-              embedded
+            <AlertsScreen
               interestTags={profile.interestTags ?? []}
               onOpenPoint={openHostPoint}
               onEditTags={() => {
                 setProfileView('main');
                 setProfileFocus({ key: Date.now(), section: 'tags' });
               }}
-              onToggleRsvp={(id) => toggleRsvp(id)}
-              onOpenTag={showTagOnMap}
             />
           ) : (
             <CampaignsView
@@ -1047,6 +1050,8 @@ const createStyles = (c: ThemeColors) =>
   subPage: { flex: 1 },
   subBack: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 12, paddingTop: 12, paddingBottom: 4, alignSelf: 'flex-start' },
   subBackText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1.2 },
+  subHeaderRow: { flexDirection: 'row', alignItems: 'center', paddingRight: 16 },
+  subTitle: { flex: 1, textAlign: 'right', color: c.text, fontSize: 16, fontWeight: '800' },
   datePillText: { color: c.text, fontSize: 12, fontWeight: '800', flexShrink: 1 },
   /* Explore Map top row */
   dateChip: {
