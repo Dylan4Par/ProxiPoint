@@ -171,3 +171,114 @@ export function attendeeCsv(rows: Array<{ event: string; label: string; status: 
 export function formatCount(n: number): string {
   return n >= 10000 ? `${(n / 1000).toFixed(1)}K` : n.toLocaleString('en-US');
 }
+
+// ---- Conversion funnel ----------------------------------------------------------------------------
+
+export interface FunnelStep {
+  id: 'impressions' | 'opens' | 'rsvps' | 'checkIns';
+  label: string;
+  value: number;
+  /** Share of the previous step that made it here (null for the first step). */
+  fromPrev: number | null;
+}
+
+/** Typical step rates; the step furthest below its benchmark is the bottleneck. */
+export const FUNNEL_BENCHMARKS = { opens: 0.05, rsvps: 0.3, checkIns: 0.65 } as const;
+
+const BOTTLENECK_TIPS: Record<'opens' | 'rsvps' | 'checkIns', string> = {
+  opens: 'Few people who see your pin open it. Try a stronger photo, title or #tags.',
+  rsvps: 'People open your card but don’t RSVP. Tighten the description, time or price.',
+  checkIns: 'RSVPs aren’t turning up. Send a reminder before it starts.',
+};
+
+export function funnel(data: Pick<HostInsights, 'impressions' | 'opens' | 'rsvps' | 'checkIns'>): {
+  steps: FunnelStep[];
+  bottleneck: { id: 'opens' | 'rsvps' | 'checkIns'; tip: string } | null;
+} {
+  const raw: Array<[FunnelStep['id'], string, number]> = [
+    ['impressions', 'Map Impressions', data.impressions],
+    ['opens', 'Card Opens', data.opens],
+    ['rsvps', 'RSVPs / Going', data.rsvps],
+    ['checkIns', 'Live Check-Ins', data.checkIns],
+  ];
+  const steps = raw.map(([id, label, value], i) => ({
+    id,
+    label,
+    value,
+    fromPrev: i === 0 ? null : raw[i - 1][2] > 0 ? value / raw[i - 1][2] : 0,
+  }));
+  if (!data.impressions) return { steps, bottleneck: null };
+  let worst: { id: 'opens' | 'rsvps' | 'checkIns'; score: number } | null = null;
+  for (const step of steps.slice(1)) {
+    const id = step.id as 'opens' | 'rsvps' | 'checkIns';
+    const score = (step.fromPrev ?? 0) / FUNNEL_BENCHMARKS[id];
+    if (!worst || score < worst.score) worst = { id, score };
+  }
+  return { steps, bottleneck: worst && worst.score < 1 ? { id: worst.id, tip: BOTTLENECK_TIPS[worst.id] } : null };
+}
+
+// ---- Audience origins (anonymized) --------------------------------------------------------------
+
+/**
+ * H3-style hexagon sizes. Real H3 cells come from the server (h3 library, resolution 8 or 9); here
+ * the app bins sample origins into flat hexagons of the same edge length, in meters around the
+ * event, so the picture matches.
+ */
+export const HEX_EDGE_METERS = { 8: 461, 9: 174 } as const;
+/** Cells with fewer people than this are hidden, so nobody can be singled out. */
+export const MIN_CELL_COUNT = 3;
+
+/** Sample home spots for the crowd, in meters east / north of the event (deterministic). */
+export function sampleOrigins(seedKey: string, travel: HostInsights['travel'], count: number): Array<{ x: number; y: number }> {
+  const out: Array<{ x: number; y: number }> = [];
+  for (let i = 0; i < count; i++) {
+    const r1 = seeded(seedKey, 100 + i);
+    const r2 = seeded(seedKey, 5000 + i);
+    const band = r1 < travel.walk ? 0 : r1 < travel.walk + travel.short ? 1 : 2;
+    const [lo, hi] = band === 0 ? [80, 1600] : band === 1 ? [1600, 4800] : [4800, 9000];
+    // A couple of neighborhoods pull the crowd one way, so the map isn't a perfect ring.
+    const lobe = seeded(seedKey, 9000 + (i % 3)) * Math.PI * 2;
+    const angle = (r2 < 0.55 ? lobe + (r2 - 0.27) * 1.6 : r2 * Math.PI * 2);
+    const dist = lo + seeded(seedKey, 12000 + i) * (hi - lo);
+    out.push({ x: Math.cos(angle) * dist, y: Math.sin(angle) * dist });
+  }
+  return out;
+}
+
+/** Flat-topped hex bins (axial coordinates) with counts; small cells are dropped. */
+export function hexBin(points: Array<{ x: number; y: number }>, edge: number, minCount = MIN_CELL_COUNT) {
+  const cells = new Map<string, { q: number; r: number; count: number }>();
+  for (const p of points) {
+    const qf = ((2 / 3) * p.x) / edge;
+    const rf = ((-1 / 3) * p.x + (Math.sqrt(3) / 3) * p.y) / edge;
+    // Cube rounding.
+    let q = Math.round(qf);
+    let r = Math.round(rf);
+    const s = Math.round(-qf - rf);
+    const dq = Math.abs(q - qf);
+    const dr = Math.abs(r - rf);
+    const ds = Math.abs(s - (-qf - rf));
+    if (dq > dr && dq > ds) q = -r - s;
+    else if (dr > ds) r = -q - s;
+    const key = `${q},${r}`;
+    const cell = cells.get(key) ?? { q, r, count: 0 };
+    cell.count += 1;
+    cells.set(key, cell);
+  }
+  return [...cells.values()]
+    .filter((c) => c.count >= minCount)
+    .map((c) => ({ ...c, x: edge * 1.5 * c.q, y: edge * Math.sqrt(3) * (c.r + c.q / 2) }));
+}
+
+// ---- Past attendees (1-tap update) ----------------------------------------------------------------
+
+/** Everyone who RSVP'd (or was waiting) to any of these events, once each. */
+export function pastAttendees(rsvpLists: Array<Array<{ id: string; label: string }> | undefined>): string[] {
+  const seen = new Map<string, string>();
+  rsvpLists.forEach((list) => list?.forEach((r) => seen.set(r.id || r.label, r.label)));
+  return [...seen.values()];
+}
+
+/** One update every 24 hours per host, so followers aren't spammed. */
+export const ATTENDEE_UPDATE_COOLDOWN_MS = 24 * 3600000;
+export const ATTENDEE_UPDATE_MAX = 160;

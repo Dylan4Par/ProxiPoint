@@ -1,10 +1,18 @@
 import React, { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
-import { Check, ChevronDown, Download, Info } from 'lucide-react-native';
+import { Modal, Pressable, ScrollView, Share, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import Svg, { Circle, Polygon, Rect } from 'react-native-svg';
+import { BellRing, Check, ChevronDown, Download, Info, Send } from 'lucide-react-native';
 import {
+  ATTENDEE_UPDATE_COOLDOWN_MS,
+  ATTENDEE_UPDATE_MAX,
+  HEX_EDGE_METERS,
   INSIGHT_RANGES,
+  MIN_CELL_COUNT,
   attendeeCsv,
+  funnel,
+  hexBin,
+  pastAttendees,
+  sampleOrigins,
   buildInsights,
   eventsInRange,
   formatCount,
@@ -15,6 +23,7 @@ import {
 import { BOOST_PRICE_CENTS, isBoosted, useBoosts } from '../../lib/boost';
 import { useChannels } from '../../lib/channels';
 import { formatDistanceIn, useUnits } from '../../lib/units';
+import { OFFENSIVE_MESSAGE, containsOffensive } from '../../lib/profanity';
 import type { DroppedPoint } from '../../lib/droppedPoint';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -90,6 +99,38 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
     pct: Math.round(15 + seeded(ch.id + selected.length, i) * 35),
   }));
 
+  const flow = useMemo(() => funnel(data), [data]);
+  const [mapOn, setMapOn] = useState(false);
+  const [mapMode, setMapMode] = useState<'heat' | 'hex8' | 'hex9'>('hex8');
+  const origins = useMemo(
+    () => sampleOrigins(selected.map((e) => e.id).join('|') || 'none', data.travel, Math.max(40, Math.min(600, data.rsvps * 3))),
+    [data],
+  );
+  const mapCells = useMemo(
+    () => hexBin(origins, mapMode === 'heat' ? 900 : HEX_EDGE_METERS[mapMode === 'hex9' ? 9 : 8]),
+    [origins, mapMode],
+  );
+  // Everyone who RSVP'd to your events (demo: a sample count). Sending needs the server.
+  const subscribers = demo
+    ? Math.round(data.rsvps * 0.8)
+    : pastAttendees(drops.filter((d) => selected.some((e) => e.id === d.id)).map((d) => d.rsvps)).length;
+  const [update, setUpdate] = useState('');
+  const [sentAt, setSentAt] = useState<number | null>(null);
+  const [notifyError, setNotifyError] = useState('');
+  const sendUpdate = () => {
+    const text = update.trim();
+    if (!text) return;
+    if (containsOffensive(text)) {
+      setNotifyError(OFFENSIVE_MESSAGE);
+      return;
+    }
+    // Server side: POST /host/attendee-updates { eventIds, text } → push to each past attendee
+    // (respecting their quiet hours and alert settings), at most once per 24 hours per host.
+    setNotifyError('');
+    setSentAt(Date.now());
+    setUpdate('');
+  };
+
   const exportList = () => {
     const rows = (demo ? [] : drops)
       .filter((d) => selected.some((e) => e.id === d.id))
@@ -146,12 +187,47 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
           <Text style={styles.muted}>No events in this period.</Text>
         ) : (
           <>
-            {/* 1. Conversion funnel */}
+            {/* 1. Conversion drop-off funnel: each stage in sequence, width = share of impressions. */}
+            <Text style={styles.section}>CONVERSION FUNNEL</Text>
+            <View style={styles.card} testID="insights-funnel">
+              {flow.steps.map((step, i) => {
+                const width = data.impressions ? Math.max(0.06, step.value / data.impressions) : 0;
+                const weak = flow.bottleneck?.id === step.id;
+                return (
+                  <View key={step.id}>
+                    {step.fromPrev != null ? (
+                      <Text style={[styles.dropOff, weak && styles.dropOffWeak]}>
+                        ↓ {(step.fromPrev * 100).toFixed(step.fromPrev < 0.1 ? 1 : 0)}% continue
+                        {weak ? '  ·  bottleneck' : ''}
+                      </Text>
+                    ) : null}
+                    <View style={styles.funnelRow}>
+                      <View style={styles.funnelTrack}>
+                        <View
+                          style={[
+                            styles.funnelBar,
+                            { width: `${Math.round(Math.min(1, i === 0 ? 1 : width) * 100)}%`, opacity: 1 - i * 0.15 },
+                            weak && styles.funnelBarWeak,
+                          ]}
+                        />
+                      </View>
+                      <View style={styles.funnelCopy}>
+                        <Text style={styles.funnelValue}>{formatCount(step.value)}</Text>
+                        <Text style={styles.funnelLabel} numberOfLines={1}>{step.label}</Text>
+                      </View>
+                    </View>
+                  </View>
+                );
+              })}
+              {flow.bottleneck ? (
+                <View style={styles.tip}>
+                  <Text style={styles.tipText}>{flow.bottleneck.tip}</Text>
+                </View>
+              ) : (
+                <Text style={styles.hint}>Every step is at or above typical rates.</Text>
+              )}
+            </View>
             <View style={styles.grid}>
-              <Kpi value={formatCount(data.impressions)} label="Map Impressions" />
-              <Kpi value={formatCount(data.opens)} label="Card Opens" />
-              <Kpi value={formatCount(data.rsvps)} label="RSVPs / Going" sub={`${pct(data.rsvpRate)} of opens`} />
-              <Kpi value={formatCount(data.checkIns)} label="Live Check-Ins" sub="In the geofence while live" />
               <Kpi value={`${(data.tapThroughRate * 100).toFixed(1)}%`} label="Tap-Through Rate" />
               <Kpi value={formatDistanceIn(data.avgTravelMeters, units) ?? '—'} label="Avg Travel Distance" />
             </View>
@@ -173,6 +249,43 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
                 </View>
               </View>
               <Text style={styles.hint}>Rings show where people who saved or went came from.</Text>
+
+              {/* Optional map: anonymized density, as a heatmap or a hexagon grid. */}
+              <View style={styles.mapToggleRow}>
+                <Text style={styles.subLabel}>Origin map</Text>
+                <Switch
+                  value={mapOn}
+                  onValueChange={setMapOn}
+                  trackColor={{ false: c.borderStrong, true: c.accentTrack }}
+                  thumbColor={mapOn ? c.accent : c.textMuted}
+                  accessibilityLabel="Show origin map"
+                  testID="insights-map-toggle"
+                />
+              </View>
+              {mapOn ? (
+                <>
+                  <View style={styles.segment}>
+                    {(['heat', 'hex8', 'hex9'] as const).map((m) => (
+                      <TouchableOpacity
+                        key={m}
+                        style={[styles.segBtn, mapMode === m && styles.segBtnOn]}
+                        onPress={() => setMapMode(m)}
+                        accessibilityRole="radio"
+                        accessibilityState={{ selected: mapMode === m }}
+                      >
+                        <Text style={[styles.segText, mapMode === m && styles.segTextOn]}>
+                          {m === 'heat' ? 'Heatmap' : m === 'hex8' ? 'Hex · res 8' : 'Hex · res 9'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <OriginMap mode={mapMode} cells={mapCells} />
+                  <Text style={styles.hint}>
+                    Anonymized: areas with fewer than {MIN_CELL_COUNT} people aren’t shown. Hexagons match H3
+                    resolution {mapMode === 'hex9' ? '9 (~174 m edge)' : '8 (~461 m edge)'}; the server will send real H3 cells.
+                  </Text>
+                </>
+              ) : null}
             </View>
 
             {/* 3. Boost ROI */}
@@ -258,6 +371,50 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
               <Download size={16} color={c.onAccent} strokeWidth={2.5} />
               <Text style={styles.exportText}>Export Attendee Check-in List (CSV)</Text>
             </TouchableOpacity>
+
+            {/* 1-tap update to everyone who RSVP'd or checked in to your events / series. */}
+            <View style={styles.notifyCard} testID="insights-notify">
+              <View style={styles.notifyHead}>
+                <BellRing size={18} color={c.accent} strokeWidth={2.25} />
+                <View style={styles.notifyCopy}>
+                  <Text style={styles.notifyTitle}>Message past attendees</Text>
+                  <Text style={styles.hint}>
+                    {subscribers} {subscribers === 1 ? 'person' : 'people'} who RSVP’d or checked in to your events get a push.
+                  </Text>
+                </View>
+              </View>
+              {sentAt && now - sentAt < ATTENDEE_UPDATE_COOLDOWN_MS ? (
+                <Text style={styles.sentNote}>
+                  Sent. You can send another update {Math.ceil((ATTENDEE_UPDATE_COOLDOWN_MS - (now - sentAt)) / 3600000)}h from now.
+                </Text>
+              ) : (
+                <>
+                  <TextInput
+                    value={update}
+                    onChangeText={(t) => setUpdate(t.slice(0, ATTENDEE_UPDATE_MAX))}
+                    placeholder="e.g. We’re back next Tuesday, same spot!"
+                    placeholderTextColor={c.textFaint}
+                    style={styles.notifyInput}
+                    multiline
+                    testID="insights-notify-text"
+                  />
+                  <View style={styles.notifyFoot}>
+                    <Text style={styles.hint}>{update.length} / {ATTENDEE_UPDATE_MAX} · one update per 24 hours</Text>
+                    <TouchableOpacity
+                      style={[styles.sendBtn, (!update.trim() || subscribers === 0) && styles.sendBtnOff]}
+                      disabled={!update.trim() || subscribers === 0}
+                      onPress={sendUpdate}
+                      accessibilityRole="button"
+                      testID="insights-notify-send"
+                    >
+                      <Send size={14} color={c.onAccent} strokeWidth={2.5} />
+                      <Text style={styles.sendText}>Send</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {notifyError ? <Text style={styles.notifyError}>{notifyError}</Text> : null}
+                </>
+              )}
+            </View>
           </>
         )}
       </ScrollView>
@@ -295,6 +452,57 @@ export const HostInsightsScreen: React.FC<{ drops: DroppedPoint[] }> = ({ drops 
         <Text style={styles.kpiValue} numberOfLines={1} adjustsFontSizeToFit>{value}</Text>
         <Text style={styles.kpiLabel}>{label}</Text>
         {sub ? <Text style={styles.kpiSub}>{sub}</Text> : null}
+      </View>
+    );
+  }
+  function OriginMap({ mode, cells }: { mode: 'heat' | 'hex8' | 'hex9'; cells: ReturnType<typeof hexBin> }) {
+    const size = 260;
+    const half = size / 2;
+    const scale = (half - 8) / 9500; // px per meter (the farthest crowd is ~9 km out)
+    const max = Math.max(1, ...cells.map((cell) => cell.count));
+    const edge = (mode === 'hex9' ? HEX_EDGE_METERS[9] : HEX_EDGE_METERS[8]) * scale;
+    const hex = (cx: number, cy: number) =>
+      Array.from({ length: 6 }, (_, k) => {
+        const a = (Math.PI / 3) * k;
+        return `${(cx + edge * Math.cos(a)).toFixed(1)},${(cy + edge * Math.sin(a)).toFixed(1)}`;
+      }).join(' ');
+    return (
+      <View style={styles.mapBox}>
+        <Svg width="100%" height={size} viewBox={`0 0 ${size} ${size}`}>
+          <Rect x={0} y={0} width={size} height={size} fill={c.mapBase} />
+          {[1600, 4800, 9000].map((m) => (
+            <Circle key={m} cx={half} cy={half} r={m * scale} fill="none" stroke={c.border} strokeDasharray="3 4" />
+          ))}
+          {mode === 'heat'
+            ? cells.map((cell, i) => {
+                const t = cell.count / max;
+                return [3, 2, 1].map((k) => (
+                  <Circle
+                    key={`${i}-${k}`}
+                    cx={half + cell.x * scale}
+                    cy={half - cell.y * scale}
+                    r={(6 + t * 16) * k * 0.6}
+                    fill={t > 0.66 ? '#ef4444' : t > 0.33 ? GOLD : c.green}
+                    opacity={0.12 + t * 0.18}
+                  />
+                ));
+              })
+            : cells.map((cell, i) => {
+                const t = cell.count / max;
+                return (
+                  <Polygon
+                    key={i}
+                    points={hex(half + cell.x * scale, half - cell.y * scale)}
+                    fill={c.accent}
+                    opacity={0.15 + t * 0.75}
+                    stroke={c.sheet}
+                    strokeWidth={0.6}
+                  />
+                );
+              })}
+          <Circle cx={half} cy={half} r={5} fill={c.text} stroke={c.sheet} strokeWidth={2} />
+        </Svg>
+        <Text style={styles.mapLegend}>● Your event · rings at 1, 3 and 5.6 mi</Text>
       </View>
     );
   }
@@ -396,6 +604,55 @@ const createStyles = (c: ThemeColors) =>
     arrivalBars: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, height: 84 },
     arrivalCol: { flex: 1, alignItems: 'center', gap: 4 },
     arrivalBar: { width: '100%', borderRadius: 4, backgroundColor: c.green },
+    dropOff: { color: c.textFaint, fontSize: 11, fontWeight: '700', marginLeft: 4, marginVertical: 3 },
+    dropOffWeak: { color: c.red },
+    funnelRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+    funnelTrack: { flex: 1, height: 22, borderRadius: 6, backgroundColor: c.border, overflow: 'hidden' },
+    funnelBar: { height: 22, borderRadius: 6, backgroundColor: c.accent },
+    funnelBarWeak: { backgroundColor: c.red },
+    funnelCopy: { width: 108 },
+    funnelValue: { color: c.text, fontSize: 15, fontWeight: '800' },
+    funnelLabel: { color: c.textMuted, fontSize: 11, fontWeight: '600' },
+    tip: { marginTop: 6, padding: 10, borderRadius: 10, backgroundColor: c.amberTint, borderWidth: 1, borderColor: c.amberBorder },
+    tipText: { color: c.textSecondary, fontSize: 12, lineHeight: 17, fontWeight: '600' },
+    mapToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 4 },
+    segment: { flexDirection: 'row', gap: 6 },
+    segBtn: { flex: 1, alignItems: 'center', paddingVertical: 7, borderRadius: 9, borderWidth: 1, borderColor: c.border },
+    segBtnOn: { borderColor: c.accent, backgroundColor: c.accentTint },
+    segText: { color: c.textSecondary, fontSize: 12, fontWeight: '700' },
+    segTextOn: { color: c.accent, fontWeight: '800' },
+    mapBox: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: c.border },
+    mapLegend: { color: c.textFaint, fontSize: 10, padding: 6, backgroundColor: c.surface },
+    notifyCard: {
+      marginTop: 12,
+      padding: 14,
+      gap: 10,
+      borderRadius: 16,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.accentBorder,
+    },
+    notifyHead: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+    notifyCopy: { flex: 1, gap: 2 },
+    notifyTitle: { color: c.text, fontSize: 15, fontWeight: '800' },
+    notifyInput: {
+      minHeight: 64,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.base,
+      color: c.text,
+      fontSize: 14,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      textAlignVertical: 'top',
+    },
+    notifyFoot: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+    sendBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 16, height: 36, borderRadius: 18, backgroundColor: c.accent },
+    sendBtnOff: { opacity: 0.45 },
+    sendText: { color: c.onAccent, fontSize: 13, fontWeight: '800' },
+    sentNote: { color: c.green, fontSize: 13, fontWeight: '700' },
+    notifyError: { color: c.red, fontSize: 12, fontWeight: '600' },
     exportBtn: {
       marginTop: 20,
       flexDirection: 'row',

@@ -37,3 +37,25 @@ test('range, CSV and counts', () => {
   assert.equal(formatCount(4820), '4,820');
   assert.equal(formatCount(12400), '12.4K');
 });
+
+test('funnel finds the weakest step', async () => {
+  const { funnel } = await import('./hostInsights');
+  const f = funnel({ impressions: 10000, opens: 600, rsvps: 60, checkIns: 50 });
+  assert.deepEqual(f.steps.map((s) => s.id), ['impressions', 'opens', 'rsvps', 'checkIns']);
+  assert.equal(f.steps[1].fromPrev, 0.06);
+  assert.equal(f.bottleneck?.id, 'rsvps'); // 10% vs 30% typical
+  assert.equal(funnel({ impressions: 1000, opens: 100, rsvps: 50, checkIns: 45 }).bottleneck, null);
+  assert.equal(funnel({ impressions: 0, opens: 0, rsvps: 0, checkIns: 0 }).bottleneck, null);
+});
+
+test('origins bin into hexes and small cells are hidden', async () => {
+  const { hexBin, sampleOrigins, HEX_EDGE_METERS, pastAttendees } = await import('./hostInsights');
+  const pts = sampleOrigins('evt', { walk: 0.5, short: 0.3, regional: 0.2 }, 300);
+  assert.equal(pts.length, 300);
+  assert.deepEqual(sampleOrigins('evt', { walk: 0.5, short: 0.3, regional: 0.2 }, 300), pts);
+  const cells = hexBin(pts, HEX_EDGE_METERS[8]);
+  assert.ok(cells.length > 0 && cells.every((c) => c.count >= 3));
+  assert.ok(cells.reduce((n, c) => n + c.count, 0) <= 300);
+  assert.equal(hexBin([{ x: 0, y: 0 }, { x: 1, y: 1 }], 100).length, 0, 'two people never show');
+  assert.deepEqual(pastAttendees([[{ id: '1', label: '@a' }, { id: '2', label: '@b' }], [{ id: '1', label: '@a' }], undefined]), ['@a', '@b']);
+});
