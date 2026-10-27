@@ -4,10 +4,8 @@ import { Bell, ChevronRight, MapPin, Zap } from 'lucide-react-native';
 import { markAllActivityRead, timeAgo, useActivity, type ActivityItem } from '../lib/activity';
 import { activeBoost, useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
-import { deckPicks, tagTracker, type RecNode } from '../lib/recommend';
-import { useUnits } from '../lib/units';
+import { tagTracker, type RecNode } from '../lib/recommend';
 import { useDiscoveryStore } from '../stores/useDiscoveryStore';
-import { RecommendationDeck } from '../components/activity/RecommendationDeck';
 import { TagTrackerTile } from '../components/activity/TagTrackerTile';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
@@ -35,8 +33,6 @@ export const ActivityScreen: React.FC<{
   const now = useBoosts(); // ticks every 30s so "5m" ages move
   const moderation = useModeration();
   const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, RecNode>;
-  const units = useUnits(); // "316m away" or "0.2 mi away" on the cards
-  const deck = useMemo(() => deckPicks(nodes, interestTags, now), [nodes, interestTags, now, moderation, units]);
 
   // Recent: alerts for boosts that are still running stay on top; everything else keeps its order.
   const sortedItems = useMemo(() => {
@@ -74,7 +70,7 @@ export const ActivityScreen: React.FC<{
     </View>
   );
 
-  // No #tags yet: invite them to add some (the deck still shows boosted / popular Points).
+  // No #tags yet: invite them to add some (Recommendations on the Feed work without them).
   const followEmpty = (
     <View style={styles.empty}>
       <View style={styles.emptyIcon}>
@@ -99,16 +95,10 @@ export const ActivityScreen: React.FC<{
         ListHeaderComponent={
           <>
             {header}
-            <Text style={styles.sectionLabel}>RECOMMENDATIONS</Text>
-            <RecommendationDeck
-              picks={deck.picks}
-              mode={deck.mode}
-              onOpenPoint={onOpenPoint}
-              onToggleRsvp={onToggleRsvp}
-            />
+            {/* Recommendations live on Channels → Feed now. */}
             {interestTags.length ? (
               <>
-                <Text style={[styles.sectionLabel, styles.sectionSpaced]}>TAG TRACKER</Text>
+                <Text style={styles.sectionLabel}>TAG TRACKER</Text>
                 <TagTrackerTile stats={tracker} onOpenTag={onOpenTag} />
               </>
             ) : null}

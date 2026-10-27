@@ -25,7 +25,7 @@ function shuffleKey(seed: number, id: string): number {
 const CARD_HEIGHT = 228;
 
 /**
- * Activity → RECOMMENDATIONS: a stack of picks that turns to the next card every 5 seconds,
+ * Channels → Feed → RECOMMENDATIONS: a stack of picks that turns to the next card every 5 seconds,
  * in a new random order each time you open Activity. ‹ › flip by hand (the timer restarts after a flip), holding a card pauses it, and
  * it stays still when the phone's Reduce motion setting is on.
  */
@@ -38,7 +38,7 @@ export const RecommendationDeck: React.FC<{
 }> = ({ picks, mode = 'boosted', onOpenPoint, onToggleRsvp }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
-  // Shuffled once per visit to Activity (this deck remounts each time), and kept in that order
+  // Shuffled once per visit to the Feed (this deck remounts each time), and kept in that order
   // while you're here, even as the list refreshes.
   const [seed] = useState(() => Math.random());
   const cards = picks
