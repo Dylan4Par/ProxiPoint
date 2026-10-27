@@ -77,13 +77,17 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   // Chip row: arrows on whichever side has more chips hidden (tap to scroll that way).
   const chipScroll = useRef<ScrollView | null>(null);
   const [chipView, setChipView] = useState({ x: 0, width: 0, content: 0 });
-  const moreLeft = chipView.x > 4;
-  const moreRight = chipView.content - chipView.width - chipView.x > 4;
+  const moreLeft = chipView.x > 8;
+  const moreRight = chipView.content - chipView.width - chipView.x > 8;
   const nudgeChips = (direction: 1 | -1) => {
     const max = Math.max(0, chipView.content - chipView.width);
     const x = Math.min(max, Math.max(0, chipView.x + direction * chipView.width * 0.7));
     chipScroll.current?.scrollTo({ x, animated: true });
+    // An animated scroll doesn't always report its last position, so set where it ends up
+    // (otherwise the arrow could stay showing at the very start or end).
+    setChipView((v) => ({ ...v, x }));
   };
+  const trackChipX = (x: number) => setChipView((v) => (Math.abs(v.x - x) < 1 ? v : { ...v, x }));
 
   // Explore Map's own top row has no Nearby / RSVP'd switch, so it always shows Nearby.
   React.useEffect(() => {
@@ -210,10 +214,10 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tagScrollContainer}
         scrollEventThrottle={32}
-        onScroll={(e) => {
-          const x = e.nativeEvent.contentOffset.x;
-          setChipView((v) => (Math.abs(v.x - x) < 1 ? v : { ...v, x }));
-        }}
+        onScroll={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
+        // The final position (onScroll is throttled and can miss the last few pixels).
+        onScrollEndDrag={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
+        onMomentumScrollEnd={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
         onLayout={(e) => {
           const width = e.nativeEvent.layout.width;
           setChipView((v) => (v.width === width ? v : { ...v, width }));
