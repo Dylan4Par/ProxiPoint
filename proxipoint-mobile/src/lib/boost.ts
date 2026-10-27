@@ -148,6 +148,19 @@ const SAMPLE_BOOSTS: Array<{ pointId: string; minutesLeft: number }> = [
   { pointId: 'pt-farmers-market', minutesLeft: 95 },
   { pointId: 'pt-pub-trivia', minutesLeft: 232 },
   { pointId: 'pt-sunset-pickleball', minutesLeft: 48 },
+  // More, across #tags people may not follow, so Discover's local spots and the Recommendations
+  // deck show Boosts beyond your own #tags.
+  { pointId: 'pt-x-porch-blues', minutesLeft: 120 },
+  { pointId: 'pt-x-dumpling-truck', minutesLeft: 80 },
+  { pointId: 'pt-x-catan-night', minutesLeft: 170 },
+  { pointId: 'pt-x-power-yoga', minutesLeft: 40 },
+  { pointId: 'pt-x-honey-stand', minutesLeft: 140 },
+  { pointId: 'pt-x-mural-tour', minutesLeft: 100 },
+  { pointId: 'pt-x-hack-night', minutesLeft: 200 },
+  { pointId: 'pt-x-poetry-open-mic', minutesLeft: 225 },
+  { pointId: 'pt-fc-oldtown-jazz', minutesLeft: 130 },
+  { pointId: 'pt-fc-truck-rally', minutesLeft: 160 },
+  { pointId: 'pt-fc-game-cafe', minutesLeft: 185 },
 ];
 SAMPLE_BOOSTS.forEach(({ pointId, minutesLeft }) => {
   const endsAt = Date.now() + minutesLeft * 60 * 1000;

@@ -30,12 +30,16 @@ const key = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
 const show = (tag: string) => `#${tag.replace(/^#+/, '').trim()}`;
 
 /** Points others are hosting that haven't ended and aren't hidden by a report or block. */
+/** Recommendations stay around you (your city / metro): about 25 mi. */
+const DECK_RANGE_METERS = 40000;
+
 function candidates(nodes: Record<string, RecNode> | null | undefined, now: number): RecNode[] {
   return Object.values(nodes ?? {}).filter(
     (node) =>
       node &&
       node.origin !== 'local' &&
       isNodeAllowed(node) &&
+      !(typeof node.distanceMeters === 'number' && node.distanceMeters > DECK_RANGE_METERS) &&
       !(node.endsAt && new Date(node.endsAt).getTime() <= now),
   );
 }
@@ -113,7 +117,7 @@ export function deckPicks(
   nodes: Record<string, RecNode> | null | undefined,
   interestTags: string[],
   now = Date.now(),
-  max = 6,
+  max = 10,
 ): { mode: DeckMode; picks: PriorityPick[] } {
   const followed = new Map(interestTags.map((tag) => [key(tag), show(tag)]));
   const list = candidates(nodes, now);
