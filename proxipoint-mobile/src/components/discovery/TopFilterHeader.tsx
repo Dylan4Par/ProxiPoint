@@ -43,6 +43,8 @@ interface TopFilterHeaderProps {
   showAvatar?: boolean;
   /** Replaces the default top row (avatar, Nearby / RSVP'd, calendar). Explore Map uses its own. */
   topRow?: React.ReactNode;
+  /** Inside a page (Discover): no glass background, less padding on top. */
+  embedded?: boolean;
 }
 
 export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
@@ -54,6 +56,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   onOpenCalendar,
   showAvatar = true,
   topRow,
+  embedded = false,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -108,7 +111,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   };
 
   return (
-    <View style={styles.headerContainer}>
+    <View style={[styles.headerContainer, embedded && styles.headerEmbedded]}>
       {/* Top row: a custom one (Explore Map), or avatar + Nearby / RSVP'd + calendar. */}
       {topRow ? (
         <View style={styles.topRow}>{topRow}</View>
@@ -526,6 +529,7 @@ const createStyles = (c: ThemeColors) =>
     backgroundColor: c.headerGlass,
     zIndex: 10,
   },
+  headerEmbedded: { paddingTop: 10, paddingBottom: 4, backgroundColor: 'transparent', marginHorizontal: -16 },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',

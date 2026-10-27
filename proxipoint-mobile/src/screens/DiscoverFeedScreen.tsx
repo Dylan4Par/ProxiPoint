@@ -3,13 +3,18 @@ import { Alert, Image, Linking, Platform, ScrollView, useWindowDimensions, Style
 import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, MapPin, Search, Settings, Store, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { PointCard } from '../components/discovery/PointCard';
-import { defaultRangeMeters, searchRanges, useUnits } from '../lib/units';
+import { searchRanges, useUnits } from '../lib/units';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
 import { localSpots, matchesInterests, placeBoosts, spotsLabel, upNextPlans, type PlanRole } from '../lib/discoverSlots';
 import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
+import {
+  matchesDiscoverFilters,
+  setMapRange,
+  useFollowedTagsFilter,
+  useMapRange,
+  useMyChannelsOnly,
+} from '../lib/discoverFilters';
 import { formatRange } from '../lib/calendarRange';
-import { MapFilterSheet } from '../components/discovery/MapFilterSheet';
-import { useMapPostFilter } from '../lib/mapFilters';
 import { isBusinessHost } from '../lib/hostProfiles';
 import { canSeePoint, toggleMembership, useChannels, useVisiblePosts, type Channel } from '../lib/channels';
 import { MEMBERSHIP_LABEL, accessOf, membershipAction } from '../lib/channelAccess';
@@ -42,6 +47,10 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeConte
 
 interface DiscoverFeedScreenProps {
   interestTags: string[];
+  /** Explore Map's filter header (city · dates, Filter & sort, All, Live Now, #tags), shared. */
+  filterHeader?: React.ReactNode;
+  /** Live Now (shared with Explore Map). */
+  liveOnly?: boolean;
   /** e.g. "Erie, CO" — the area Discover (and Explore Map) is looking at. */
   placeLabel: string;
   /** Pick a different area (the same city picker Explore Map uses). */
@@ -83,6 +92,8 @@ const MAX_CHANNEL_ROWS = 3;
  */
 export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   interestTags,
+  filterHeader = null,
+  liveOnly = false,
   placeLabel,
   onPickLocation,
   onOpenPoint,
@@ -120,32 +131,40 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   // Distance units from Settings: range chips are km or miles, and switching keeps the closest range.
   const units = useUnits();
   const ranges = useMemo(() => searchRanges(units), [units]);
-  const [rangeMeters, setRangeMeters] = useState<number | null>(() => defaultRangeMeters(units));
-  useEffect(() => {
-    setRangeMeters((current) => {
-      if (current == null || ranges.some((r) => r.meters === current)) return current;
-      const options = ranges.filter((r): r is { label: string; meters: number } => r.meters != null);
-      return options.reduce((best, r) => (Math.abs(r.meters - current) < Math.abs(best.meters - current) ? r : best)).meters;
-    });
-  }, [ranges]);
+  // Distance, #tag, Live Now, My channels and Followed Tags: the same filters as Explore Map
+  // (Filter & sort), so the two always show the same Points.
+  const rangeMeters = useMapRange();
+  const setRangeMeters = setMapRange;
+  const selectedTag = useDiscoveryStore((state) => state.selectedTag);
+  const myChannelsOnly = useMyChannelsOnly();
+  const followed = useFollowedTagsFilter();
   const center = { latitude: viewPlace.latitude, longitude: viewPlace.longitude };
   const searching = query.trim().length > 0;
   const rangeLabel = ranges.find((r) => r.meters === rangeMeters)?.label ?? 'Any';
   const visible = (node: FeedNode) => isNodeAllowed(node) && canSeePoint(node);
   // When: the same time window as Explore Map (next 3 days by default, a preset, or Calendar dates).
   const timeWindow = useTimeWindow();
-  const postFilter = useMapPostFilter();
-  const [whenOpen, setWhenOpen] = useState(false);
   const whenLabel = timeWindowLabel(timeWindow) ?? formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) });
   // Only times that reach now count as "happening nearby" (Tomorrow or This weekend skip it).
   const windowIncludesNow = timeWindow.start <= now + 60000;
-  const allowed = (node: FeedNode) => visible(node) && inRange(center, node, rangeMeters) && inTimeWindow(node, timeWindow);
+  const allowed = (node: FeedNode) =>
+    visible(node) &&
+    inRange(center, node, rangeMeters) &&
+    matchesDiscoverFilters(node, {
+      selectedTag,
+      liveOnly,
+      myChannelsOnly,
+      followedTags: followed.filter,
+      area: center,
+      rangeMeters,
+    });
+  const filterKey = `${selectedTag}|${liveOnly}|${myChannelsOnly}|${followed.filter?.join(',') ?? ''}`;
 
   // ---- Feed (no search) ----
   const { nearby, upcoming } = useMemo(
     () => splitFeed(nodes, now, allowed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, timeWindow.start, timeWindow.end],
+    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, timeWindow.start, timeWindow.end, filterKey],
   );
   const upcomingDays = useMemo(() => groupByDay(upcoming, now), [upcoming, now]);
   // Businesses on Discover: Boosted Points in fixed, labeled slots (never re-ranking the rest), and
@@ -165,7 +184,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         window: timeWindow.custom ? timeWindow : null,
       }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, hiddenBoosts, timeWindow.start, timeWindow.end],
+    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, hiddenBoosts, timeWindow.start, timeWindow.end, filterKey],
   );
   // Up next: your own plans that are live or start within 3 hours (any distance, any When).
   const plans = useMemo(
@@ -269,70 +288,8 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         ) : null}
       </View>
 
-      {/* ---- Where and how far ---- */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.filterScroll}
-        contentContainerStyle={styles.filterRow}
-        keyboardShouldPersistTaps="handled"
-      >
-        <TouchableOpacity
-          style={[styles.placeChip, !timeWindow.custom && styles.whenChipQuiet]}
-          onPress={() => setWhenOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={`Showing ${whenLabel}. Change when`}
-          testID="discover-when"
-        >
-          <CalendarDays size={14} color={c.accent} strokeWidth={2.5} />
-          <Text style={styles.placeChipText} numberOfLines={1}>
-            {whenLabel}
-          </Text>
-          <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={styles.placeChip}
-          onPress={onPickLocation}
-          accessibilityRole="button"
-          accessibilityLabel={`Searching near ${placeLabel || 'your area'}. Change location`}
-          testID="discover-location"
-        >
-          <MapPin size={14} color={c.accent} strokeWidth={2.5} />
-          <Text style={styles.placeChipText} numberOfLines={1}>
-            {placeLabel || 'Your area'}
-          </Text>
-          <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
-        </TouchableOpacity>
-        {ranges.map((range) => {
-          const active = range.meters === rangeMeters;
-          return (
-            <TouchableOpacity
-              key={range.label}
-              style={[styles.rangeChip, active && styles.rangeChipActive]}
-              onPress={() => setRangeMeters(range.meters)}
-              accessibilityRole="button"
-              accessibilityState={{ selected: active }}
-              accessibilityLabel={range.meters == null ? 'Any distance' : `Within ${range.label}`}
-              testID={`discover-range-${range.label.replace(' ', '')}`}
-            >
-              <Text style={[styles.rangeText, active && styles.rangeTextActive]}>{range.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-
-      <MapFilterSheet
-        visible={whenOpen}
-        title="When"
-        showPostFilters={false}
-        window={timeWindow}
-        postFilter={postFilter}
-        onClose={() => setWhenOpen(false)}
-        onPickDates={() => {
-          setWhenOpen(false);
-          onPickDates();
-        }}
-      />
+      {/* ---- Where, when and filters: the same header as Explore Map ---- */}
+      {filterHeader}
 
       {searching ? (
         <>

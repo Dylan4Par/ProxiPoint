@@ -537,6 +537,37 @@ export const DiscoverScreen: React.FC = () => {
     setJustDroppedId(null);
   };
 
+  // City · dates row, shared by Explore Map and Discover (same area, same dates, same sheet).
+  const exploreTopRow = (
+    <>
+      <CityPill
+        inline
+        label={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
+        exploring={viewPlace.kind === 'search'}
+        tracking={Boolean(profile.trackLocation)}
+        onPress={() => setCityPickerOpen(true)}
+        onReturn={returnHome}
+      />
+      {/* Dates, like Discover's: opens the When sheet, which has the quick
+          ranges and Pick dates (the Calendar). Next 3 days there puts it back. */}
+      <TouchableOpacity
+        ref={tourTarget('map-date-chip')}
+        style={[styles.dateChip, timeWindow.custom && styles.dateChipOn]}
+        onPress={() => setFiltersOpen(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Showing ${timeWindowLabel(timeWindow) ?? 'Calendar dates'}. Change dates`}
+        testID="discover-date-window"
+      >
+        <CalendarDays size={13} color={c.accent} strokeWidth={2.5} />
+        <Text style={styles.datePillText} numberOfLines={1}>
+          {timeWindowLabel(timeWindow) ??
+            formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
+        </Text>
+        <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
+      </TouchableOpacity>
+    </>
+  );
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       {/* Edge-to-edge: the status bar is always see-through; only its icon color is set.
@@ -546,6 +577,16 @@ export const DiscoverScreen: React.FC = () => {
       {tab === 'discover' ? (
         <DiscoverFeedScreen
           interestTags={profile.interestTags ?? []}
+          // Same filters as Explore Map: city · dates, then Filter & sort, All, Live Now and #tags.
+          liveOnly={liveOnly}
+          filterHeader={
+            <TopFilterHeader
+              embedded
+              liveOnly={liveOnly}
+              onToggleLiveOnly={() => setLiveOnly((on) => !on)}
+              topRow={exploreTopRow}
+            />
+          }
           placeLabel={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
           onOpenPoint={openHostPoint}
           onToggleRsvp={(id) => toggleRsvp(id)}
@@ -591,35 +632,7 @@ export const DiscoverScreen: React.FC = () => {
             onToggleLiveOnly={() => setLiveOnly((on) => !on)}
             // Top row: city (fills the row) · dates (Next 3 days by default; ⌄ opens When → Calendar).
             // Creating a Drop is the + in the bottom bar.
-            topRow={
-              <>
-                <CityPill
-                  inline
-                  label={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
-                  exploring={viewPlace.kind === 'search'}
-                  tracking={Boolean(profile.trackLocation)}
-                  onPress={() => setCityPickerOpen(true)}
-                  onReturn={returnHome}
-                />
-                {/* Dates, like Discover's: opens the When sheet, which has the quick
-                    ranges and Pick dates (the Calendar). Next 3 days there puts it back. */}
-                <TouchableOpacity
-                  ref={tourTarget('map-date-chip')}
-                  style={[styles.dateChip, timeWindow.custom && styles.dateChipOn]}
-                  onPress={() => setFiltersOpen(true)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Showing ${timeWindowLabel(timeWindow) ?? 'Calendar dates'}. Change dates`}
-                  testID="discover-date-window"
-                >
-                  <CalendarDays size={13} color={c.accent} strokeWidth={2.5} />
-                  <Text style={styles.datePillText} numberOfLines={1}>
-                    {timeWindowLabel(timeWindow) ??
-                      formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
-                  </Text>
-                  <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
-                </TouchableOpacity>
-              </>
-            }
+            topRow={exploreTopRow}
           />
           {/* Map + cards share this area; the cards can grow to cover all of it (full list). */}
           <View
@@ -660,19 +673,6 @@ export const DiscoverScreen: React.FC = () => {
               }}
             />
             </View>
-            <MapFilterSheet
-              visible={filtersOpen}
-              title="When"
-              showPostFilters={false}
-              window={timeWindow}
-              postFilter={postFilter}
-              onClose={() => setFiltersOpen(false)}
-              onPickDates={() => {
-                setFiltersOpen(false);
-                setDetailId(null);
-                setOverlay('calendar');
-              }}
-            />
             <EventCardList
               liveOnly={liveOnly}
               // Cards always open the Point's details (even if it's inside a map bubble).
@@ -867,6 +867,23 @@ export const DiscoverScreen: React.FC = () => {
         onChange={updateDrop}
         onClose={closeManage}
         onDropAgain={openDropAgain}
+      />
+
+      {/* When sheet (Next 3 days, presets, Pick dates): opened by the dates chip on either tab. */}
+      <MapFilterSheet
+        visible={filtersOpen}
+        title="When"
+        showPostFilters={false}
+        window={timeWindow}
+        postFilter={postFilter}
+        onClose={() => setFiltersOpen(false)}
+        onPickDates={() => {
+          setFiltersOpen(false);
+          setDetailId(null);
+          // From Discover, the Calendar's button comes back to Discover.
+          if (tab === 'discover') setCalendarFromDiscover(true);
+          setOverlay('calendar');
+        }}
       />
 
       <BottomNavBar
