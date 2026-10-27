@@ -100,7 +100,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const units = useUnits();
   const ranges = searchRanges(units);
   const activeCount =
-    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (liveOnly ? 1 : 0) + (myChannelsOnly ? 1 : 0) + (rangeMeters != null ? 1 : 0) + (followed.on ? 1 : 0);
+    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (myChannelsOnly ? 1 : 0) + (rangeMeters != null ? 1 : 0) + (followed.on ? 1 : 0);
   const [newTagInput, setNewTagInput] = useState('');
 
   const handleAddNewTag = () => {
@@ -375,28 +375,13 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               {/* Show only: switches. */}
               <Text style={styles.sectionSubtitle}>Show only</Text>
               <View style={styles.showCard}>
-                {onToggleLiveOnly ? (
-                  <View style={styles.showRow}>
-                    <View style={styles.sortCopy}>
-                      <Text style={styles.sortLabel}>Live now only</Text>
-                      <Text style={styles.sortHint}>Points happening right now</Text>
-                    </View>
-                    <Switch
-                      value={liveOnly}
-                      onValueChange={onToggleLiveOnly}
-                      trackColor={{ false: c.borderStrong, true: c.accentTrack }}
-                      thumbColor={liveOnly ? c.accent : c.textMuted}
-                      accessibilityLabel="Live now only"
-                      testID="filter-sheet-live"
-                    />
-                  </View>
-                ) : null}
-                <View style={[styles.showRow, onToggleLiveOnly ? styles.showRowDivider : null]}>
+                {/* Live now has its own chip in the filter row, so it isn't repeated here. */}
+                <View style={styles.showRow}>
                   <View style={styles.sortCopy}>
                     <Text style={styles.sortLabel}>Include my Followed Tags</Text>
                     <Text style={styles.sortHint}>
                       {followed.tags.length
-                        ? `Points with ${followed.tags.slice(0, 3).join(', ')}${followed.tags.length > 3 ? ` +${followed.tags.length - 3}` : ''}`
+                        ? `Drops with ${followed.tags.slice(0, 3).join(', ')}${followed.tags.length > 3 ? ` +${followed.tags.length - 3}` : ''}`
                         : 'Follow #tags on your Profile to use this'}
                     </Text>
                   </View>
@@ -413,7 +398,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 <View style={[styles.showRow, styles.showRowDivider]}>
                   <View style={styles.sortCopy}>
                     <Text style={styles.sortLabel}>My channels</Text>
-                    <Text style={styles.sortHint}>Points from channels you've joined</Text>
+                    <Text style={styles.sortHint}>Drops from channels you've joined</Text>
                   </View>
                   <Switch
                     value={myChannelsOnly}
@@ -433,7 +418,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 disabled={activeCount === 0}
                 onPress={() => {
                   setPointSort(DEFAULT_POINT_SORT);
-                  if (liveOnly) onToggleLiveOnly?.();
                   setMyChannelsOnly(false);
                   setMapRange(null);
                   setFollowedOnly(false);
