@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { ChevronRight, MessageCircle, Zap } from 'lucide-react-native';
+import { ChevronRight, MessageCircle, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import { timeAgo } from '../../lib/activity';
@@ -192,9 +192,20 @@ export const ClusterPickSheet: React.FC<{
       <Pressable style={styles.backdrop} onPress={onClose}>
         <Pressable style={[styles.sheet, { paddingBottom: insets.bottom + 16 }]} testID="cluster-pick-sheet">
           <View style={styles.handle} />
-          <Text style={styles.sheetTitle}>
-            {members.length} Points{postsLabel}{cluster.samePlace && place ? ` at ${place}` : ' here'}
-          </Text>
+          <View style={styles.titleRow}>
+            <Text style={[styles.sheetTitle, styles.titleFlex]}>
+              {members.length} Points{postsLabel}{cluster.samePlace && place ? ` at ${place}` : ' here'}
+            </Text>
+            <TouchableOpacity
+              onPress={onClose}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Close"
+              testID="cluster-pick-close"
+            >
+              <X size={20} color={c.textMuted} strokeWidth={2.5} />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.sheetSub}>
             {cluster.samePlace ? 'Same spot' : 'Right next to each other'} · tap one to see it
           </Text>
@@ -320,6 +331,8 @@ const createStyles = (c: ThemeColors) =>
     },
     handle: { width: 42, height: 4, borderRadius: 2, backgroundColor: c.borderStrong, alignSelf: 'center', marginBottom: 10 },
     sheetTitle: { color: c.text, fontSize: 17, fontWeight: '800' },
+    titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12 },
+    titleFlex: { flex: 1 },
     sheetSub: { color: c.textMuted, fontSize: 12, marginTop: 2, marginBottom: 10 },
     list: { flexGrow: 0 },
     listContent: { gap: 8, paddingBottom: 4 },
