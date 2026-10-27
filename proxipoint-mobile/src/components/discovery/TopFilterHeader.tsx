@@ -97,6 +97,14 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const myChannelsOnly = useMyChannelsOnly();
   const rangeMeters = useMapRange();
   const followed = useFollowedTagsFilter();
+  // Your followed #tags (Profile → Followed Tags): marked in cyan, and added after the hashtag
+  // list when they aren't in it already.
+  const keyOf = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
+  const followedKeys = new Set(followed.tags.map(keyOf));
+  const listKeys = new Set(tags.map(keyOf));
+  const followedExtra = followed.tags
+    .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
+    .filter((tag) => !listKeys.has(keyOf(tag)));
   const units = useUnits();
   const ranges = searchRanges(units);
   const activeCount =
@@ -217,13 +225,17 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           const pill = (
             <TouchableOpacity
               key={tag}
-              style={[styles.tagPill, isActive && styles.tagPillActive]}
+              style={[
+                styles.tagPill,
+                followedKeys.has(keyOf(tag)) && styles.followedPill,
+                isActive && styles.tagPillActive,
+              ]}
               onPress={() => {
                 setSelectedTag(tag);
                 if (isAll && liveOnly) onToggleLiveOnly?.();
               }}
             >
-              <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
+              <Text style={[styles.tagText, followedKeys.has(keyOf(tag)) && styles.followedText, isActive && styles.tagTextActive]}>
                 {tag}
               </Text>
             </TouchableOpacity>
@@ -244,6 +256,22 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 <Text style={[styles.tagText, styles.liveText, liveOnly && styles.liveTextActive]}>Live Now</Text>
               </TouchableOpacity>
             </React.Fragment>
+          );
+        })}
+        {/* Followed #tags from your Profile, after the list, in cyan. */}
+        {followedExtra.map((tag) => {
+          const isActive = keyOf(selectedTag) === keyOf(tag);
+          return (
+            <TouchableOpacity
+              key={`followed-${tag}`}
+              style={[styles.tagPill, styles.followedPill, isActive && styles.tagPillActive]}
+              onPress={() => setSelectedTag(tag)}
+              accessibilityRole="button"
+              accessibilityLabel={`${tag}, followed`}
+              testID={`filter-followed-${keyOf(tag)}`}
+            >
+              <Text style={[styles.tagText, styles.followedText, isActive && styles.tagTextActive]}>{tag}</Text>
+            </TouchableOpacity>
           );
         })}
       </ScrollView>
@@ -310,8 +338,8 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               </View>
               <View style={styles.chipWrap}>
                 {tags.map((tag) => (
-                  <View key={tag} style={styles.editorChip}>
-                    <Text style={styles.editorChipText}>{tag}</Text>
+                  <View key={tag} style={[styles.editorChip, followedKeys.has(keyOf(tag)) && styles.followedChip]}>
+                    <Text style={[styles.editorChipText, followedKeys.has(keyOf(tag)) && styles.followedText]}>{tag}</Text>
                     {tag !== 'All' && (
                       <TouchableOpacity
                         onPress={() => removeTag(tag)}
@@ -324,7 +352,19 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                     )}
                   </View>
                 ))}
+                {/* Followed on your Profile: shown here in cyan; change them on the Profile page. */}
+                {followedExtra.map((tag) => (
+                  <View key={`followed-${tag}`} style={[styles.editorChip, styles.followedChip]}>
+                    <Text style={[styles.editorChipText, styles.followedText]}>{tag}</Text>
+                  </View>
+                ))}
               </View>
+              {followed.tags.length ? (
+                <View style={styles.followedNoteRow}>
+                  <View style={styles.followedSwatch} />
+                  <Text style={styles.followedNote}>Followed tags from your Profile</Text>
+                </View>
+              ) : null}
 
               {/* Distance from the middle of the area being explored. */}
               <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Distance</Text>
@@ -587,6 +627,20 @@ const createStyles = (c: ThemeColors) =>
     borderWidth: 1,
     borderColor: c.borderStrong,
   },
+  // Followed #tags (Profile → Followed Tags): the Profile's cyan chip colors.
+  followedPill: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
+  followedChip: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
+  followedText: { color: c.accent, fontWeight: '800' },
+  followedNoteRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
+  followedSwatch: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: c.accentTint,
+    borderWidth: 1,
+    borderColor: c.accentBorder,
+  },
+  followedNote: { color: c.textFaint, fontSize: 11 },
   tagPillActive: {
     backgroundColor: c.accentDeep,
     borderColor: c.accent,
