@@ -62,9 +62,12 @@ test('map area: world point back to lat/lon', () => {
 test('map area: offer a search once you have moved or zoomed out far enough', () => {
   const screen = 400; // world units across (about 890 m at zoom 1)
   assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 50, y: CENTER_WORLD }, screen, 1500), false); // ~110 m
-  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 200, y: CENTER_WORLD }, screen, 1500), true); // ~440 m
-  // Zoomed far out (screen ~6.7 km across) over the same spot.
-  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD, y: CENTER_WORLD }, 3000, 1500), true);
+  // Moving among the Points already loaded (~440 m) doesn't bring it up; ~1.5 km does.
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 200, y: CENTER_WORLD }, screen, 1500), false);
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 700, y: CENTER_WORLD }, screen, 1500), true);
+  // Zoomed out: ~6.7 km across isn't enough any more; ~11 km is.
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD, y: CENTER_WORLD }, 3000, 1500), false);
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD, y: CENTER_WORLD }, 5000, 1500), true);
   assert.equal(visibleRadiusMeters(450, 0), 500);
 });
 

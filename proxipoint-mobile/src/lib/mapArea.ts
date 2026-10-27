@@ -30,10 +30,13 @@ export function fromCanvasCoordinates(
   };
 }
 
-/** Moved at least this far (or a quarter of the screen's width, if more) before offering. */
-export const MIN_AREA_SHIFT_METERS = 300;
+/**
+ * Moved at least this far (or half the screen's width, if more) before offering. Generous, so
+ * moving around among the Points already loaded doesn't keep bringing the button up.
+ */
+export const MIN_AREA_SHIFT_METERS = 1200;
 /** Zoomed out so far that the screen is this many times wider than the area's range. */
-export const ZOOM_OUT_FACTOR = 2;
+export const ZOOM_OUT_FACTOR = 3;
 
 /**
  * Should the map offer "Search this area"? When the middle of the screen is far from the area's
@@ -46,7 +49,7 @@ export function shouldOfferAreaSearch(
 ): boolean {
   const shiftMeters = Math.hypot(center.x - CENTER_WORLD, center.y - CENTER_WORLD) / WORLD_SCALE;
   const widthMeters = visibleWidthWorld / WORLD_SCALE;
-  if (shiftMeters > Math.max(MIN_AREA_SHIFT_METERS, widthMeters / 4)) return true;
+  if (shiftMeters > Math.max(MIN_AREA_SHIFT_METERS, widthMeters / 2)) return true;
   return widthMeters > areaRangeMeters * 2 * ZOOM_OUT_FACTOR;
 }
 

@@ -481,6 +481,19 @@ export const DiscoveryMapCanvas: React.FC<{
 
   const [offerArea, setOfferArea] = useState(false);
   const offerAreaRef = useRef(false);
+  // "Search this area" fades in when offered and out when tapped (or no longer offered).
+  const searchFade = useRef(new Animated.Value(0)).current;
+  const [searchShown, setSearchShown] = useState(false);
+  useEffect(() => {
+    if (offerArea) {
+      setSearchShown(true);
+      Animated.timing(searchFade, { toValue: 1, duration: 180, useNativeDriver: true }).start();
+    } else {
+      Animated.timing(searchFade, { toValue: 0, duration: 200, useNativeDriver: true }).start(({ finished }) => {
+        if (finished) setSearchShown(false);
+      });
+    }
+  }, [offerArea, searchFade]);
   // Set while the area moves to where you're looking, so the map stays put instead of gliding.
   const keepViewOnPlaceChange = useRef(false);
   const searchThisArea = () => {
@@ -490,8 +503,13 @@ export const DiscoveryMapCanvas: React.FC<{
     const spot = fromCanvasCoordinates(center.x, center.y, viewPlace.latitude, viewPlace.longitude);
     keepViewOnPlaceChange.current = true;
     offerAreaRef.current = false;
+    // Fade the button out right away (on the UI thread), then load the new area a frame later so
+    // the fade has started before the heavy update.
+    searchFade.stopAnimation();
+    Animated.timing(searchFade, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setSearchShown(false));
     setOfferArea(false);
-    onSearchArea({ ...spot, radiusMeters: visibleRadiusMeters(viewSize.current.width / z, visibleMapHeight() / z) });
+    const radiusMeters = visibleRadiusMeters(viewSize.current.width / z, visibleMapHeight() / z);
+    setTimeout(() => onSearchArea({ ...spot, radiusMeters }), 32);
   };
 
   // ---- Animated moves -----------------------------------------------------------------------
@@ -1078,8 +1096,11 @@ export const DiscoveryMapCanvas: React.FC<{
 
       {/* Search this area: once you've panned or zoomed out away from the area. Centered along the
           bottom of the map, clear of the zoom buttons. */}
-      {onSearchArea && offerArea ? (
-        <View style={[styles.searchAreaRow, { bottom: 22 + coveredBottom }]} pointerEvents="box-none">
+      {onSearchArea && searchShown ? (
+        <Animated.View
+          style={[styles.searchAreaRow, { bottom: 22 + coveredBottom, opacity: searchFade }]}
+          pointerEvents={offerArea ? 'box-none' : 'none'}
+        >
           <TouchableOpacity
             style={styles.searchAreaBtn}
             activeOpacity={0.8}
@@ -1091,7 +1112,7 @@ export const DiscoveryMapCanvas: React.FC<{
             <Search size={15} color={c.base} strokeWidth={2.75} />
             <Text style={styles.searchAreaText}>Search this area</Text>
           </TouchableOpacity>
-        </View>
+        </Animated.View>
       ) : null}
 
       {/* Drop Point: same size and look as the recenter button, just left of it. */}
