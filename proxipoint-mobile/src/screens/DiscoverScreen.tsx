@@ -629,6 +629,8 @@ export const DiscoverScreen: React.FC = () => {
             <DiscoveryMapCanvas
               liveOnly={liveOnly}
               coveredBottom={cardsCover}
+              // The open Point stays on the map even if the filters hide it (until it's closed).
+              showAlwaysId={detailId}
               // Touching the map closes the detail sheet (the Point stays selected).
               onMapTouch={() => setDetailId(null)}
               coveredFromY={detailId ? detailTopY : null}

@@ -113,6 +113,11 @@ export const DiscoveryMapCanvas: React.FC<{
    * list's "in view", and the Search this area button.
    */
   coveredBottom?: number;
+  /**
+   * A Point whose details are open (e.g. tapped on Discover): drawn even when the filters
+   * (#tag, Live now, distance…) would hide it, until the details close.
+   */
+  showAlwaysId?: string | null;
   /** Picking a Point from a cluster's list: select it and open its details. */
   onOpenPoint?: (id: string) => void;
   /**
@@ -138,6 +143,7 @@ export const DiscoveryMapCanvas: React.FC<{
   onMapTouch,
   coveredFromY = null,
   coveredBottom = 0,
+  showAlwaysId = null,
   onOpenPoint,
   cardRequest = null,
   onDropPoint,
@@ -175,7 +181,11 @@ export const DiscoveryMapCanvas: React.FC<{
   useChannels(); // re-filter when you join or leave a channel
   // Boosted pins are drawn last so they sit on top of nearby pins.
   const nodeList = allNodes
-    .filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace, rangeMeters }))
+    .filter(
+      (node) =>
+        node.id === showAlwaysId ||
+        matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, area: viewPlace, rangeMeters }),
+    )
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
 
   // Channel posts attached to a Point on the map, while their pin lasts, from channels you FOLLOW
