@@ -365,7 +365,17 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                     </TouchableOpacity>
                   </View>
                 ))}
-                {/* Followed on your Profile: always listed. Gray + adds it, green − takes it off. */}
+                {addedTags.length === 0 ? (
+                  <Text style={styles.followedNote}>No added hashtags yet.</Text>
+                ) : null}
+              </View>
+
+              {/* Followed on your Profile: always listed. Gray + adds it, green − takes it off. */}
+              {followedList.length ? (
+              <>
+              <View style={styles.tagDivider} />
+              <Text style={styles.sectionSubtitle}>Followed tags</Text>
+              <View style={styles.chipWrap}>
                 {followedList.map((tag) => {
                   const on = activeKeys.has(keyOf(tag));
                   return (
@@ -388,8 +398,8 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   );
                 })}
               </View>
-              {followedList.length ? (
-                <Text style={styles.followedNote}>Gray: your followed tags. Tap + to add one, − to take it off.</Text>
+              <Text style={styles.followedNote}>From your Profile. Tap + to use one as a filter, − to take it off.</Text>
+              </>
               ) : null}
 
               {/* Distance from the middle of the area being explored. */}
@@ -659,6 +669,7 @@ const createStyles = (c: ThemeColors) =>
   followedOffChip: { backgroundColor: c.border, borderColor: c.borderStrong },
   chipDisabled: { opacity: 0.45 },
   followedNote: { color: c.textFaint, fontSize: 11, marginTop: 8 },
+  tagDivider: { height: 1, backgroundColor: c.border, marginTop: 16, marginBottom: 14 },
   sectionHeadRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 },
   sectionSubtitleInline: { marginBottom: 0 },
   activeCount: { color: c.textMuted, fontSize: 11, fontWeight: '700' },
