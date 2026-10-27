@@ -1987,7 +1987,8 @@ const createStyles = (c: ThemeColors) =>
     },
     segmentBadgeText: { color: '#0a1120', fontSize: 10, fontWeight: '900' },
     sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8, marginTop: 4 },
-    recommendations: { marginBottom: 14 },
+    // Tucks the sort row (which has its own 14 top margin) up under the deck's dots.
+    recommendations: { marginBottom: -6 },
     sectionSpaced: { marginTop: 20 },
     list: { gap: 10 },
     emptyText: { color: c.textFaint, fontSize: 13, lineHeight: 19 },
