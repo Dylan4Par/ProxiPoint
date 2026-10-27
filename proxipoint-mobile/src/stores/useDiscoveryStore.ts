@@ -242,6 +242,9 @@ const enrichNodeMetadata = (rawId: string, distanceMeters: number) => {
 // ---------------------------------------------------------------------------
 const DEFAULT_SELF = { latitude: 40.061708, longitude: -105.038292 };
 
+/** Most #tags active as filter chips at once (Filter & sort → Your hashtags). */
+export const MAX_ACTIVE_TAGS = 5;
+
 interface SeedPoint {
   id: string;
   title: string;
@@ -668,7 +671,6 @@ function placeLocalBeacon(
   id: string,
   draft: BeaconDraft,
 ): string {
-  parseBeaconTags(draft.tags).forEach((tag) => get().addTag(tag));
   const timing = describeBeaconTiming(draft);
 
   set((state) => {
@@ -744,21 +746,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   selectedEventId: FIRST_SEED_ID,
   activeTab: 'Nearby',
   selectedTag: 'All',
-  tags: [
-    'All',
-    '#LiveMusic',
-    '#FoodTrucks',
-    '#FarmersMarket',
-    '#TechMeetup',
-    '#Pickleball',
-    '#BoardGames',
-    '#TriviaNight',
-    '#OpenMic',
-    '#ArtWalk',
-    '#Yoga',
-    '#Volunteer',
-    '#Hiking',
-  ],
+  // The filter chips: 'All' plus up to MAX_ACTIVE_TAGS active #tags.
+  tags: ['All', '#LiveMusic', '#FoodTrucks', '#FarmersMarket', '#TechMeetup', '#Pickleball'],
   previewGeofence: null,
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
@@ -786,7 +775,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     const cleanTag = tag.trim().startsWith('#') ? tag.trim() : `#${tag.trim()}`;
     if (!cleanTag || cleanTag === '#') return;
     set((state) => {
-      if (state.tags.includes(cleanTag)) return state;
+      if (state.tags.some((known) => normalizeTag(known) === normalizeTag(cleanTag))) return state;
+      // At most MAX_ACTIVE_TAGS active filters (not counting 'All'); full = nothing is added.
+      if (state.tags.filter((known) => known !== 'All').length >= MAX_ACTIVE_TAGS) return state;
       return { tags: [...state.tags, cleanTag] };
     });
   },
@@ -820,10 +811,6 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
   syncMyPoint: (point) => {
     const tags = point.tags.filter((tag) => tag.replace(/^#+/, '').trim()).slice(0, 3).map(hashtag);
-    // New hashtags join the filter chips (addTag skips ones already there).
-    tags.forEach((tag) => {
-      if (!get().tags.some((known) => normalizeTag(known) === normalizeTag(tag))) get().addTag(tag);
-    });
     set((state) => {
       const existing = state.nodes[point.id];
       if (!existing) return {};
@@ -902,7 +889,6 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       longitude: saved.longitude,
       radiusMeters: saved.radius_meters,
     });
-    (saved.channels ?? []).forEach((tag) => get().addTag(tag));
     return placeLocalBeacon(set, get, saved.id, adopted);
   },
 

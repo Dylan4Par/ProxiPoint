@@ -12,7 +12,7 @@ import {
   Switch,
 } from 'react-native';
 import { tourTarget } from '../tour/tourTargets';
-import { CalendarDays, ChevronLeft, ChevronRight, SlidersHorizontal, X } from 'lucide-react-native';
+import { CalendarDays, ChevronLeft, ChevronRight, Minus, Plus, SlidersHorizontal, X } from 'lucide-react-native';
 import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort, type PointSort } from '../../lib/pointSort';
 import {
   setFollowedOnly,
@@ -26,7 +26,7 @@ import { searchRanges, useUnits } from '../../lib/units';
 
 /** Short labels for the three Sort by buttons. */
 const SORT_SHORT: Record<PointSort, string> = { closest: 'Nearest First', soonest: 'Soonest', popular: 'Most Going' };
-import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { MAX_ACTIVE_TAGS, useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 interface TopFilterHeaderProps {
@@ -97,14 +97,18 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const myChannelsOnly = useMyChannelsOnly();
   const rangeMeters = useMapRange();
   const followed = useFollowedTagsFilter();
-  // Your followed #tags (Profile → Followed Tags): marked in cyan, and added after the hashtag
-  // list when they aren't in it already.
+  // Active filter #tags (the chip row, besides All): at most MAX_ACTIVE_TAGS. Added ones are green
+  // with ×; your followed #tags (Profile → Followed Tags) are always listed: gray with + while
+  // off, green with − while active.
   const keyOf = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
   const followedKeys = new Set(followed.tags.map(keyOf));
-  const listKeys = new Set(tags.map(keyOf));
-  const followedExtra = followed.tags
-    .map((tag) => (tag.startsWith('#') ? tag : `#${tag}`))
-    .filter((tag) => !listKeys.has(keyOf(tag)));
+  const activeTags = tags.filter((tag) => tag !== 'All');
+  const activeKeys = new Set(activeTags.map(keyOf));
+  const addedTags = activeTags.filter((tag) => !followedKeys.has(keyOf(tag)));
+  const followedList = followed.tags.map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
+  const full = activeTags.length >= MAX_ACTIVE_TAGS;
+  const [limitNote, setLimitNote] = useState(false);
+  const activeTagFor = (tag: string) => tags.find((t) => keyOf(t) === keyOf(tag)) ?? tag;
   const units = useUnits();
   const ranges = searchRanges(units);
   const activeCount =
@@ -112,9 +116,23 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const [newTagInput, setNewTagInput] = useState('');
 
   const handleAddNewTag = () => {
-    if (newTagInput.trim()) {
-      addTag(newTagInput);
-      setNewTagInput('');
+    if (!newTagInput.trim()) return;
+    if (full && !activeKeys.has(keyOf(newTagInput))) {
+      setLimitNote(true);
+      return;
+    }
+    addTag(newTagInput);
+    setNewTagInput('');
+    setLimitNote(false);
+  };
+  const toggleFollowed = (tag: string) => {
+    if (activeKeys.has(keyOf(tag))) {
+      removeTag(activeTagFor(tag));
+      setLimitNote(false);
+    } else if (full) {
+      setLimitNote(true);
+    } else {
+      addTag(tag);
     }
   };
 
@@ -225,17 +243,13 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           const pill = (
             <TouchableOpacity
               key={tag}
-              style={[
-                styles.tagPill,
-                followedKeys.has(keyOf(tag)) && styles.followedPill,
-                isActive && styles.tagPillActive,
-              ]}
+              style={[styles.tagPill, isActive && styles.tagPillActive]}
               onPress={() => {
                 setSelectedTag(tag);
                 if (isAll && liveOnly) onToggleLiveOnly?.();
               }}
             >
-              <Text style={[styles.tagText, followedKeys.has(keyOf(tag)) && styles.followedText, isActive && styles.tagTextActive]}>
+              <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
                 {tag}
               </Text>
             </TouchableOpacity>
@@ -256,22 +270,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 <Text style={[styles.tagText, styles.liveText, liveOnly && styles.liveTextActive]}>Live Now</Text>
               </TouchableOpacity>
             </React.Fragment>
-          );
-        })}
-        {/* Followed #tags from your Profile, after the list, in cyan. */}
-        {followedExtra.map((tag) => {
-          const isActive = keyOf(selectedTag) === keyOf(tag);
-          return (
-            <TouchableOpacity
-              key={`followed-${tag}`}
-              style={[styles.tagPill, styles.followedPill, isActive && styles.tagPillActive]}
-              onPress={() => setSelectedTag(tag)}
-              accessibilityRole="button"
-              accessibilityLabel={`${tag}, followed`}
-              testID={`filter-followed-${keyOf(tag)}`}
-            >
-              <Text style={[styles.tagText, styles.followedText, isActive && styles.tagTextActive]}>{tag}</Text>
-            </TouchableOpacity>
           );
         })}
       </ScrollView>
@@ -320,50 +318,78 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             </View>
 
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
-              {/* Hashtag chips */}
-              <Text style={styles.sectionSubtitle}>Your hashtags</Text>
+              {/* Hashtag chips: up to MAX_ACTIVE_TAGS active at once. */}
+              <View style={styles.sectionHeadRow}>
+                <Text style={[styles.sectionSubtitle, styles.sectionSubtitleInline]}>Your hashtags</Text>
+                <Text style={[styles.activeCount, full && styles.activeCountFull]} testID="filter-active-count">
+                  {activeTags.length} / {MAX_ACTIVE_TAGS} active
+                </Text>
+              </View>
               <View style={styles.addTagRow}>
                 <TextInput
                   style={styles.addTagInput}
-                  placeholder="Add a hashtag, e.g. Pickleball"
+                  placeholder={full ? 'Remove one to add another' : 'Add a hashtag, e.g. Pickleball'}
                   placeholderTextColor={c.iconFaint}
                   value={newTagInput}
-                  onChangeText={setNewTagInput}
+                  onChangeText={(text) => {
+                    setNewTagInput(text);
+                    setLimitNote(false);
+                  }}
                   onSubmitEditing={handleAddNewTag}
                   returnKeyType="done"
                 />
-                <TouchableOpacity style={styles.addTagBtn} onPress={handleAddNewTag}>
+                <TouchableOpacity style={[styles.addTagBtn, full && styles.addTagBtnOff]} onPress={handleAddNewTag}>
                   <Text style={styles.addTagBtnText}>+ Add</Text>
                 </TouchableOpacity>
               </View>
+              {limitNote ? (
+                <Text style={styles.limitNote} testID="filter-limit-note">
+                  {MAX_ACTIVE_TAGS} active filters at most. Remove one to add another.
+                </Text>
+              ) : null}
               <View style={styles.chipWrap}>
-                {tags.map((tag) => (
-                  <View key={tag} style={[styles.editorChip, followedKeys.has(keyOf(tag)) && styles.followedChip]}>
-                    <Text style={[styles.editorChipText, followedKeys.has(keyOf(tag)) && styles.followedText]}>{tag}</Text>
-                    {tag !== 'All' && (
-                      <TouchableOpacity
-                        onPress={() => removeTag(tag)}
-                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove ${tag}`}
-                      >
-                        <Text style={styles.removeChipText}>✕</Text>
-                      </TouchableOpacity>
-                    )}
+                {/* Added (typed or searched): green, × removes it. */}
+                {addedTags.map((tag) => (
+                  <View key={tag} style={[styles.editorChip, styles.activeChip]}>
+                    <Text style={[styles.editorChipText, styles.activeChipText]}>{tag}</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        removeTag(tag);
+                        setLimitNote(false);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${tag}`}
+                    >
+                      <X size={14} color={c.green} strokeWidth={3} />
+                    </TouchableOpacity>
                   </View>
                 ))}
-                {/* Followed on your Profile: shown here in cyan; change them on the Profile page. */}
-                {followedExtra.map((tag) => (
-                  <View key={`followed-${tag}`} style={[styles.editorChip, styles.followedChip]}>
-                    <Text style={[styles.editorChipText, styles.followedText]}>{tag}</Text>
-                  </View>
-                ))}
+                {/* Followed on your Profile: always listed. Gray + adds it, green − takes it off. */}
+                {followedList.map((tag) => {
+                  const on = activeKeys.has(keyOf(tag));
+                  return (
+                    <TouchableOpacity
+                      key={`followed-${tag}`}
+                      style={[styles.editorChip, on ? styles.activeChip : styles.followedOffChip, !on && full && styles.chipDisabled]}
+                      onPress={() => toggleFollowed(tag)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={on ? `Take ${tag} off the filters` : `Add ${tag} to the filters`}
+                      testID={`filter-followed-${keyOf(tag)}`}
+                    >
+                      <Text style={[styles.editorChipText, on && styles.activeChipText]}>{tag}</Text>
+                      {on ? (
+                        <Minus size={14} color={c.green} strokeWidth={3} />
+                      ) : (
+                        <Plus size={14} color={c.textMuted} strokeWidth={3} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
-              {followed.tags.length ? (
-                <View style={styles.followedNoteRow}>
-                  <View style={styles.followedSwatch} />
-                  <Text style={styles.followedNote}>Followed tags from your Profile</Text>
-                </View>
+              {followedList.length ? (
+                <Text style={styles.followedNote}>Gray: your followed tags. Tap + to add one, − to take it off.</Text>
               ) : null}
 
               {/* Distance from the middle of the area being explored. */}
@@ -627,20 +653,18 @@ const createStyles = (c: ThemeColors) =>
     borderWidth: 1,
     borderColor: c.borderStrong,
   },
-  // Followed #tags (Profile → Followed Tags): the Profile's cyan chip colors.
-  followedPill: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
-  followedChip: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
-  followedText: { color: c.accent, fontWeight: '800' },
-  followedNoteRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8 },
-  followedSwatch: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: c.accentTint,
-    borderWidth: 1,
-    borderColor: c.accentBorder,
-  },
-  followedNote: { color: c.textFaint, fontSize: 11 },
+  // Filter & sort chips: active = green (× or −), followed but off = gray with +.
+  activeChip: { backgroundColor: c.greenTint, borderColor: c.green },
+  activeChipText: { color: c.green, fontWeight: '800' },
+  followedOffChip: { backgroundColor: c.border, borderColor: c.borderStrong },
+  chipDisabled: { opacity: 0.45 },
+  followedNote: { color: c.textFaint, fontSize: 11, marginTop: 8 },
+  sectionHeadRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 },
+  sectionSubtitleInline: { marginBottom: 0 },
+  activeCount: { color: c.textMuted, fontSize: 11, fontWeight: '700' },
+  activeCountFull: { color: c.amber },
+  limitNote: { color: c.amber, fontSize: 12, fontWeight: '600', marginTop: -2, marginBottom: 8 },
+  addTagBtnOff: { opacity: 0.45 },
   tagPillActive: {
     backgroundColor: c.accentDeep,
     borderColor: c.accent,
