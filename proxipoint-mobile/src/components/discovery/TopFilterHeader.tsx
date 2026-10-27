@@ -100,7 +100,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const units = useUnits();
   const ranges = searchRanges(units);
   const activeCount =
-    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (myChannelsOnly ? 1 : 0) + (rangeMeters != null ? 1 : 0) + (followed.on ? 1 : 0);
+    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (rangeMeters != null ? 1 : 0);
   const [newTagInput, setNewTagInput] = useState('');
 
   const handleAddNewTag = () => {
@@ -371,45 +371,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 })}
               </View>
               <Text style={styles.sortNote}>Boosted Points stay at the top, labeled.</Text>
-
-              {/* Show only: switches. */}
-              <Text style={styles.sectionSubtitle}>Show only</Text>
-              <View style={styles.showCard}>
-                {/* Live now has its own chip in the filter row, so it isn't repeated here. */}
-                <View style={styles.showRow}>
-                  <View style={styles.sortCopy}>
-                    <Text style={styles.sortLabel}>Include my Followed Tags</Text>
-                    <Text style={styles.sortHint}>
-                      {followed.tags.length
-                        ? `Drops with ${followed.tags.slice(0, 3).join(', ')}${followed.tags.length > 3 ? ` +${followed.tags.length - 3}` : ''}`
-                        : 'Follow #tags on your Profile to use this'}
-                    </Text>
-                  </View>
-                  <Switch
-                    value={followed.on}
-                    onValueChange={setFollowedOnly}
-                    disabled={!followed.tags.length && !followed.on}
-                    trackColor={{ false: c.borderStrong, true: c.accentTrack }}
-                    thumbColor={followed.on ? c.accent : c.textMuted}
-                    accessibilityLabel="Include my followed tags"
-                    testID="filter-sheet-followed-tags"
-                  />
-                </View>
-                <View style={[styles.showRow, styles.showRowDivider]}>
-                  <View style={styles.sortCopy}>
-                    <Text style={styles.sortLabel}>My channels</Text>
-                    <Text style={styles.sortHint}>Drops from channels you've joined</Text>
-                  </View>
-                  <Switch
-                    value={myChannelsOnly}
-                    onValueChange={setMyChannelsOnly}
-                    trackColor={{ false: c.borderStrong, true: c.accentTrack }}
-                    thumbColor={myChannelsOnly ? c.accent : c.textMuted}
-                    accessibilityLabel="My channels only"
-                    testID="filter-sheet-my-channels"
-                  />
-                </View>
-              </View>
             </ScrollView>
 
             <View style={styles.sheetButtons}>
