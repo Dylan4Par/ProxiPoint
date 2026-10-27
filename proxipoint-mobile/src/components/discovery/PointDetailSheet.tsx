@@ -18,6 +18,8 @@ import {
   CalendarPlus,
   Check,
   ChevronRight,
+  ExternalLink,
+  Link2,
   Radar,
   EyeOff,
   Footprints,
@@ -40,6 +42,7 @@ import { hostOf } from '../../lib/moderation';
 import { useNavBarHeight } from './BottomNavBar';
 import { formatBeaconDate, formatBeaconTime } from '../../lib/beaconWindow';
 import { SHARE_BASE_URL } from '../../lib/droppedPoint';
+import { displayEventUrl, normalizeEventUrl } from '../../lib/eventLink';
 import { isLiveNode } from '../../lib/liveStatus';
 import { hereCountNow, hereLabel } from '../../lib/nearbyInterest';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
@@ -104,6 +107,8 @@ interface NodeView {
   live: boolean;
   hereCount: number;
   imHere: boolean;
+  /** Optional link (tickets, event page, venue site), https only. */
+  url: string | null;
 }
 
 function str(value: unknown): string {
@@ -116,6 +121,13 @@ function date(value: unknown): Date | null {
   if (typeof value !== 'string' && typeof value !== 'number') return null;
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+/** A web link from the data, or null (only http/https, so nothing odd gets opened). */
+function safeUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const url = normalizeEventUrl(value);
+  return url ? url : null;
 }
 
 function readNode(node: unknown): NodeView {
@@ -148,6 +160,7 @@ function readNode(node: unknown): NodeView {
     live: isLiveNode(node),
     hereCount: num(n.hereCount) ?? 0,
     imHere: n.imHere === true,
+    url: safeUrl(n.url ?? n.link ?? n.website),
   };
 }
 
@@ -453,6 +466,24 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
             Icon={ShieldCheck}
             text={view.requiresApproval ? 'The host approves each RSVP' : 'Anyone can RSVP'}
           />
+          {/* The Point's link (tickets, event page, venue site): tap to open it. */}
+          {view.url ? (
+            <TouchableOpacity
+              style={styles.row}
+              onPress={() => {
+                Linking.openURL(view.url as string).catch(() => setNotice('Couldn’t open that link.'));
+              }}
+              accessibilityRole="link"
+              accessibilityLabel={`Open ${displayEventUrl(view.url)}`}
+              testID="point-detail-url"
+            >
+              <Link2 size={16} color={c.accent} strokeWidth={2.25} />
+              <Text style={[styles.rowText, styles.linkText]} numberOfLines={1}>
+                {displayEventUrl(view.url)}
+              </Text>
+              <ExternalLink size={14} color={c.accent} strokeWidth={2.25} />
+            </TouchableOpacity>
+          ) : null}
         </View>
 
         {view.description ? (
@@ -611,6 +642,7 @@ const createStyles = (c: ThemeColors) =>
   },
   row: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   rowText: { flex: 1, color: c.textSecondary, fontSize: 13 },
+  linkText: { color: c.accent, fontWeight: '700' },
   subNote: { color: c.textMuted, fontSize: 11, lineHeight: 15, marginTop: -4, marginLeft: 26 },
   sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   description: { color: c.textBody, fontSize: 14, lineHeight: 20 },

@@ -11,6 +11,8 @@ export interface DroppedPoint {
   id: string;
   title: string;
   description: string;
+  /** Optional link: tickets, the event page or the venue's site. */
+  url?: string | null;
   tags: string[];
   visibility: BeaconVisibility;
   /** Channel it was posted to, if any. */

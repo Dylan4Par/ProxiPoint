@@ -33,6 +33,8 @@ export interface DiscoveryNode {
   tag: string;
   title: string;
   description?: string;
+  /** Optional link (tickets, event page, venue site). */
+  url?: string | null;
   venue: string;
   latitude: number;
   longitude: number;
@@ -261,11 +263,14 @@ interface SeedPoint {
   isRsvpd?: boolean;
   radiusMeters: number;
   locationPrivacy?: { level: 'street' | 'neighborhood' | 'city'; regionName: string };
+  /** Sample link (example.com, a reserved demo domain). */
+  url?: string;
 }
 
 const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-midnight-owls',
+    url: 'https://example.com/rusty-anchor/midnight-owls',
     title: 'Late Set: The Midnight Owls',
     tags: ['#LiveMusic', '#Jazz'],
     venue: 'The Rusty Anchor',
@@ -281,6 +286,7 @@ const SEED_POINTS: SeedPoint[] = [
   },
   {
     id: 'pt-taco-rally',
+    url: 'https://example.com/taco-truck-rally',
     title: 'Taco Tuesday Truck Rally',
     tags: ['#FoodTrucks', '#TacoTuesday'],
     venue: 'Central Park Plaza',
@@ -295,6 +301,7 @@ const SEED_POINTS: SeedPoint[] = [
   },
   {
     id: 'pt-sunset-pickleball',
+    url: 'https://example.com/dink-crew/open-play',
     title: 'Sunset Open Play (All Levels)',
     tags: ['#Pickleball', '#OpenPlay'],
     venue: 'Meadow Park Courts',
@@ -446,6 +453,7 @@ const SEED_POINTS: SeedPoint[] = [
   },
   {
     id: 'pt-art-walk',
+    url: 'https://example.com/first-wednesday-art-walk',
     title: 'First Wednesday Art Walk',
     tags: ['#ArtWalk', '#Gallery', '#LocalArtists'],
     venue: 'Old Town Square',
@@ -477,6 +485,7 @@ const SEED_POINTS: SeedPoint[] = [
   },
   {
     id: 'pt-pub-trivia',
+    url: 'https://example.com/brickhouse-trivia',
     title: 'Wednesday Pub Trivia',
     tags: ['#TriviaNight', '#Pub'],
     venue: 'The Brickhouse Tap',
@@ -493,6 +502,7 @@ const SEED_POINTS: SeedPoint[] = [
   },
   {
     id: 'pt-go-kotlin',
+    url: 'https://example.com/go-kotlin-social',
     title: 'Go & Kotlin Devs Monthly Social',
     tags: ['#TechMeetup', '#Kotlin', '#GIS'],
     venue: 'Downtown Tech Lab',
@@ -587,6 +597,7 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
       tags: point.tags,
       title: point.title,
       description: point.description,
+      url: point.url ?? null,
       venue: point.venue,
       // Development samples are aggregated events: listed by @LocalRadar, linked to the venue's
       // page (unclaimed until the venue claims it), never shown as posted by the venue.
@@ -678,6 +689,7 @@ function placeLocalBeacon(
       tags: parseBeaconTags(draft.tags).slice(0, 3).map(hashtag),
       title: draft.title,
       description: draft.description,
+      url: draft.url ?? null,
       venue: draft.venue,
       latitude: draft.latitude,
       longitude: draft.longitude,
@@ -846,6 +858,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         ...existing,
         title: point.title,
         description: point.description,
+        url: point.url ?? null,
         tag: tags[0] ?? existing.tag,
         tags,
         venue: point.venue,

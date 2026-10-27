@@ -85,6 +85,7 @@ import { PhotoRulesNote } from '../safety/PhotoRulesNote';
 import { rememberTags, tagsToInput } from '../../lib/tagInput';
 import { SpotNameInput } from './SpotNameInput';
 import { TagPicker } from './TagPicker';
+import { EVENT_URL_MAX, normalizeEventUrl } from '../../lib/eventLink';
 import { OFFENSIVE_MESSAGE, containsOffensive } from '../../lib/profanity';
 import { DiscoveryLeafletMap, type DropAnimation, type PrivacyMapPreview } from './DiscoveryLeafletMap';
 import {
@@ -324,6 +325,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const whenCardRef = useRef<View>(null);
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  // Optional link: tickets, the event page or the venue's site.
+  const [link, setLink] = useState('');
   const [tags, setTags] = useState('');
   const [locationSearch, setLocationSearch] = useState('');
   const [coords, setCoords] = useState<{ lat: number; lon: number } | null>(null);
@@ -485,6 +488,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setRepeatOpen(false);
     setTitle('');
     setDescription('');
+    setLink('');
     setTags('');
     setLocationSearch('');
     spotNameRef.current = '';
@@ -535,6 +539,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setChannelId(source.channelId ?? null);
     setTitle(source.title);
     setDescription(source.description);
+    setLink(source.url ?? '');
     setTags(tagsToInput(source.tags));
     setRequiresApproval(source.requiresApproval);
     setMaxAttendance(source.maxAttendance);
@@ -811,8 +816,13 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
     // Built-in language check on everything people will see.
-    if ([title, tags, description, placeText].some(containsOffensive)) {
+    if ([title, tags, description, placeText, link].some(containsOffensive)) {
       setFormError(OFFENSIVE_MESSAGE);
+      return;
+    }
+    const url = normalizeEventUrl(link);
+    if (url === null) {
+      setFormError('That link doesn’t look right. Use a web address like rustyanchor.com/events.');
       return;
     }
 
@@ -857,6 +867,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     const draft = createBeaconDraft({
       title: trimmedTitle,
       description,
+      url: url || null,
       tags,
       visibility,
       channelId: listedChannelId,
@@ -910,6 +921,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       id: id ?? `local-${Date.now()}`,
       title: trimmedTitle,
       description: description.trim(),
+      url: url || null,
       tags: parseBeaconTags(tags).map((tag) => tag.replace(/^#+/, '')),
       visibility,
       channelId: listedChannelId,
@@ -1506,6 +1518,25 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 multiline
                 textAlignVertical="top"
                 testID="drop-description"
+              />
+            </View>
+            <View style={styles.hairline} />
+            <View style={styles.inputRow}>
+              <Text style={styles.inputLabel}>Link</Text>
+              <TextInput
+                placeholder="Tickets or event page (optional)"
+                placeholderTextColor={c.textFaint}
+                style={styles.textInput}
+                value={link}
+                onChangeText={(value) => {
+                  setLink(value);
+                  setFormError(null);
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+                maxLength={EVENT_URL_MAX}
+                testID="drop-url"
               />
             </View>
           </View>

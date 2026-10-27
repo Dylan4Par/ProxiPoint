@@ -125,6 +125,7 @@ export function toBeaconCreatePayload(draft: BeaconDraft): BeaconCreatePayload {
     ...(draft.channelId ? { channel_id: draft.channelId } : {}),
     duration_hours: resolveDurationHours(draft),
     ...(description ? { description } : {}),
+    ...(draft.url ? { url: draft.url } : {}),
   };
 }
 

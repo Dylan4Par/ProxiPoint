@@ -47,6 +47,8 @@ export interface PreviewGeofence {
 export interface DropBeaconInput {
   title: string;
   description?: string;
+  /** Optional link: tickets, the event page or the venue's site (https). */
+  url?: string | null;
   tags: string;
   visibility: BeaconVisibility;
   /** Channel the Point is posted to. Required for 'channel' visibility, optional otherwise. */
@@ -80,6 +82,7 @@ export interface BeaconCreatePayload {
   /** Present when the Point is posted to a channel. */
   channel_id?: string;
   duration_hours: number;
+  url?: string;
 }
 
 export interface PersistedBeacon extends BeaconCreatePayload {
