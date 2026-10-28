@@ -20,6 +20,9 @@ export interface RecNode {
   endsAt?: string;
   origin?: string;
   distanceMeters?: number;
+  /** "6 min drive" and how (the card's travel line). */
+  eta?: string;
+  etaMode?: 'walk' | 'drive' | string;
   isRsvpd?: boolean;
   attendeeCount?: number;
   coverPhotoUri?: string | null;

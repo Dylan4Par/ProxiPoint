@@ -54,8 +54,6 @@ import { useUnits } from '../lib/units';
 import { isLiveNode } from '../lib/liveStatus';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
-import { deckPicks, type RecNode } from '../lib/recommend';
-import { RecommendationDeck } from '../components/activity/RecommendationDeck';
 import { StrongestSignalCard } from '../components/profile/Signal';
 import { strongestSignals } from '../lib/signalScore';
 import {
@@ -297,30 +295,6 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
 
 // ---- Feed ------------------------------------------------------------------------------------
 
-/**
- * Top of the Feed: RECOMMENDATIONS, the deck of Boosted (or most popular) Points nearby, your
- * #tags first. Moved here from Alerts.
- */
-const FeedRecommendations: React.FC<Pick<ChannelsScreenProps, 'interestTags' | 'onOpenPoint' | 'onToggleRsvp'>> = ({
-  interestTags,
-  onOpenPoint,
-  onToggleRsvp,
-}) => {
-  const styles = useThemedStyles(createStyles);
-  const now = useBoosts();
-  const moderation = useModeration();
-  const units = useUnits(); // "316m away" or "0.2 mi away" on the cards
-  const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, RecNode>;
-  const deck = useMemo(() => deckPicks(nodes, interestTags, now), [nodes, interestTags, now, moderation, units]);
-  if (!deck.picks.length) return null;
-  return (
-    <View style={styles.recommendations} testID="feed-recommendations">
-      <Text style={styles.sectionLabel}>RECOMMENDATIONS</Text>
-      <RecommendationDeck picks={deck.picks} mode={deck.mode} onOpenPoint={onOpenPoint} onToggleRsvp={onToggleRsvp} />
-    </View>
-  );
-};
-
 const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   channels,
   onOpenChannel,
@@ -337,9 +311,6 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
-  const recommendations = (
-    <FeedRecommendations interestTags={interestTags} onOpenPoint={onOpenPoint} onToggleRsvp={onToggleRsvp} />
-  );
   const posts = useVisiblePosts();
   const comments = useVisibleComments();
   const now = useBoosts();
@@ -357,7 +328,6 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   if (!joined.length) {
     return (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
-      {recommendations}
       <View style={styles.empty} testID="channels-feed-empty">
         <View style={styles.emptyIcon}>
           <Users size={26} color={c.accent} strokeWidth={2} />
@@ -401,8 +371,6 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
           </TouchableOpacity>
         ))}
       </ScrollView>
-
-      {recommendations}
 
       <SortRow sort={sort} onChange={setSort} />
 
@@ -2107,8 +2075,6 @@ const createStyles = (c: ThemeColors) =>
     segmentCountText: { color: c.text, fontSize: 11, fontWeight: '800' },
     segmentCountTextActive: { color: c.onAccent },
     sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8, marginTop: 4 },
-    // Tucks the sort row (which has its own 14 top margin) up under the deck's dots.
-    recommendations: { marginBottom: -6 },
     sectionSpaced: { marginTop: 20 },
     findHeading: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, marginTop: 4 },
     findHeadingText: { marginBottom: 0, marginTop: 0 },

@@ -1,11 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Image, Linking, Platform, ScrollView, useWindowDimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, MapPin, Search, Settings, Store, Users, X, Zap } from 'lucide-react-native';
+import { Alert, Linking, Platform, ScrollView, useWindowDimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, MapPin, Search, Settings, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { PointCard } from '../components/discovery/PointCard';
 import { searchRanges, useUnits } from '../lib/units';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
-import { localSpots, matchesInterests, placeBoosts, spotsLabel, upNextPlans, type PlanRole } from '../lib/discoverSlots';
+import { matchesInterests, placeBoosts, upNextPlans, type PlanRole } from '../lib/discoverSlots';
+import { deckPicks, type RecNode } from '../lib/recommend';
+import { RecommendationDeck } from '../components/activity/RecommendationDeck';
 import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
 import {
   matchesDiscoverFilters,
@@ -15,7 +17,6 @@ import {
   useMyChannelsOnly,
 } from '../lib/discoverFilters';
 import { formatRange } from '../lib/calendarRange';
-import { isBusinessHost } from '../lib/hostProfiles';
 import { canSeePoint, toggleMembership, useChannels, useVisiblePosts, type Channel } from '../lib/channels';
 import { MEMBERSHIP_LABEL, accessOf, membershipAction } from '../lib/channelAccess';
 import { PLACE_ICON, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
@@ -40,7 +41,6 @@ import {
   type ChannelPick,
   type FeedNode,
 } from '../lib/discoverFeed';
-import { isLiveNode } from '../lib/liveStatus';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
@@ -174,17 +174,12 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     () => placeBoosts(nearby as DiscoveryNode[], (node) => isBoosted(node.id, now), { interestTags, hidden: hiddenBoosts }),
     [nearby, now, interestTags, hiddenBoosts],
   );
-  const spots = useMemo(
-    () =>
-      localSpots((Object.values(nodes || {}) as DiscoveryNode[]).filter(allowed), {
-        now,
-        isBusiness: isBusinessHost,
-        isBoosted: (node) => isBoosted(node.id, now),
-        hidden: hiddenBoosts,
-        window: timeWindow.custom ? timeWindow : null,
-      }),
+  // FEATURED RECOMMENDATIONS (where Tonight at Local Spots used to be): Boosted Points nearby,
+  // your #tags first; the most popular instead when nothing is boosted.
+  const deck = useMemo(
+    () => deckPicks(nodes as unknown as Record<string, RecNode>, interestTags, now),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, hiddenBoosts, timeWindow.start, timeWindow.end, filterKey],
+    [nodes, interestTags, now, moderation],
   );
   // Up next: your own plans that are live or start within 3 hours (any distance, any When).
   const plans = useMemo(
@@ -414,29 +409,12 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             </>
           ) : null}
 
-          {/* ---- Local spots: businesses with something on today ---- */}
-          {spots.length ? (
-            <>
-              <SectionHeader label={timeWindow.custom ? `LOCAL SPOTS · ${whenLabel.toUpperCase()}` : spotsLabel(now)} />
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.channelRow}
-                style={styles.channelScroll}
-                testID="discover-local-spots"
-              >
-                {spots.map(({ node, boosted, live }) => (
-                  <SpotCard
-                    key={node.id}
-                    node={node}
-                    boosted={boosted}
-                    live={live}
-                    onOpen={() => onOpenPoint(node.id)}
-                    onWhyBoosted={() => whyBoosted(node)}
-                  />
-                ))}
-              </ScrollView>
-            </>
+          {/* ---- Featured recommendations: the deck (moved here from Channels → Feed) ---- */}
+          {deck.picks.length ? (
+            <View testID="discover-recommendations">
+              <SectionHeader label="FEATURED RECOMMENDATIONS" />
+              <RecommendationDeck picks={deck.picks} mode={deck.mode} onOpenPoint={onOpenPoint} onToggleRsvp={onToggleRsvp} />
+            </View>
           ) : null}
 
           {/* ---- Nearby now (only when the chosen time reaches now) ---- */}
@@ -837,50 +815,6 @@ const BoostedLabel: React.FC<{ onWhy?: () => void }> = ({ onWhy }) => {
   );
 };
 
-/** A business with something on today: venue, what's on, when. */
-const SpotCard: React.FC<{
-  node: DiscoveryNode;
-  boosted: boolean;
-  live: boolean;
-  onOpen: () => void;
-  onWhyBoosted: () => void;
-}> = ({ node, boosted, live, onOpen, onWhyBoosted }) => {
-  const styles = useThemedStyles(createStyles);
-  const { colors: c } = useTheme();
-  const when = live ? 'LIVE NOW' : node.startsAt ? timeLabel(node.startsAt) : node.status;
-  return (
-    <TouchableOpacity
-      style={[styles.spotCard, boosted && styles.spotCardBoosted]}
-      onPress={onOpen}
-      accessibilityRole="button"
-      accessibilityLabel={`${node.venue}: ${node.title}, ${when}${boosted ? '. Boosted' : ''}`}
-      testID={`discover-spot-${node.id}`}
-    >
-      {node.coverPhotoUri ? (
-        <Image source={{ uri: node.coverPhotoUri }} style={styles.spotPhoto} resizeMode="cover" />
-      ) : (
-        <View style={[styles.spotPhoto, styles.spotPhotoEmpty]}>
-          <Store size={26} color={c.textFaint} strokeWidth={2} />
-        </View>
-      )}
-      <View style={styles.spotBody}>
-        {boosted ? <BoostedLabel onWhy={onWhyBoosted} /> : null}
-        <Text style={styles.spotVenue} numberOfLines={1}>
-          {node.venue}
-        </Text>
-        <Text style={styles.spotTitle} numberOfLines={2}>
-          {node.title}
-        </Text>
-        <View style={[styles.whenChip, live && styles.whenChipLive]}>
-          {live ? <View style={styles.liveDot} /> : null}
-          <Text style={[styles.whenText, live && styles.whenTextLive]}>{when}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-};
-
-/** A Point on Discover: the shared card (same as the Explore Map list). */
 const EventRow: React.FC<{
   node: DiscoveryNode;
   /** Kept for callers; the card shows "Starts in …" or the start time on its own. */
@@ -1155,20 +1089,6 @@ const createStyles = (c: ThemeColors) =>
       borderColor: c.amberBorder,
     },
     boostedText: { color: c.amber, fontSize: 9.5, fontWeight: '900', letterSpacing: 0.6 },
-    spotCard: {
-      width: 176,
-      borderRadius: 16,
-      overflow: 'hidden',
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.border,
-    },
-    spotCardBoosted: { borderColor: c.amber },
-    spotPhoto: { width: '100%', height: 92 },
-    spotPhotoEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: c.surfaceDim },
-    spotBody: { padding: 10, gap: 4 },
-    spotVenue: { color: c.textMuted, fontSize: 12, fontWeight: '800' },
-    spotTitle: { color: c.text, fontSize: 14, fontWeight: '800', lineHeight: 18 },
     eventCopy: { flex: 1, gap: 2 },
     eventTag: { color: c.accent, fontSize: 12, fontWeight: '800' },
     eventTitle: { color: c.text, fontSize: 15, fontWeight: '800' },

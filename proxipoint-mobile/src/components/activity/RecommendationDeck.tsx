@@ -1,10 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Check, ChevronLeft, ChevronRight, Sparkles, Zap } from 'lucide-react-native';
+import { Car, Check, ChevronLeft, ChevronRight, Flame, PersonStanding, Sparkles, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../discovery/CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
-import { activeBoost, formatTimeLeft } from '../../lib/boost';
+import { distanceLabel, pointTiming } from '../../lib/pointCard';
+import { formatClock } from '../../lib/calendarRange';
+import { formatCount } from '../../lib/discoverFeed';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const GOLD = '#f59e0b';
@@ -22,17 +24,11 @@ function shuffleKey(seed: number, id: string): number {
   }
   return (h >>> 0) / 4294967296;
 }
-/** Card height without the reason chips, and with them (only when some card has any). */
-const CARD_HEIGHT = 170;
-const CARD_HEIGHT_WITH_REASONS = 206;
+const CARD_HEIGHT = 162;
 const ARROW_SIZE = 30;
 
-/** Live / start time already show as the badge under the title, so they aren't repeated as chips. */
-const extraReasons = (pick: PriorityPick) =>
-  pick.reasons.filter((reason) => reason !== 'Live now' && reason !== pick.node.status).slice(0, 3);
-
 /**
- * Channels → Feed → RECOMMENDATIONS: a stack of picks that turns to the next card every 5 seconds,
+ * Discover → FEATURED RECOMMENDATIONS: a stack of picks that turns to the next card every 5 seconds,
  * in a new random order each time you open Activity. ‹ › flip by hand (the timer restarts after a flip), holding a card pauses it, and
  * it stays still when the phone's Reduce motion setting is on.
  */
@@ -54,8 +50,7 @@ export const RecommendationDeck: React.FC<{
     .sort((a, b) => a.key - b.key)
     .map((entry) => entry.pick);
   const count = cards.length;
-  const withReasons = cards.some((pick) => extraReasons(pick).length > 0);
-  const cardHeight = withReasons ? CARD_HEIGHT_WITH_REASONS : CARD_HEIGHT;
+  const cardHeight = CARD_HEIGHT;
 
   const [index, setIndex] = useState(0);
   const [held, setHeld] = useState(false);
@@ -149,11 +144,12 @@ export const RecommendationDeck: React.FC<{
   const { node } = pick;
   const where = node.locationPrivacy?.regionName ? `Somewhere in ${node.locationPrivacy.regionName}` : node.venue ?? '';
   const mainTag = (Array.isArray(node.tags) && node.tags[0]) || node.tag || '';
-  const boost = pick.boosted ? activeBoost(node.id) : null;
-  const kicker =
-    mode === 'boosted'
-      ? `BOOSTED · ${index + 1} OF ${count}`
-      : `POPULAR · ${index + 1} OF ${count}`;
+  const featured = mode === 'boosted' && pick.boosted;
+  const timing = pick.live ? null : pointTiming(node);
+  const endsAt = pick.live && node.endsAt ? new Date(node.endsAt) : null;
+  const distance = distanceLabel(node.distanceMeters, node.eta)?.replace(' • ', ' · ') ?? null;
+  const TravelIcon = node.etaMode === 'drive' ? Car : PersonStanding;
+  const going = node.attendeeCount && node.attendeeCount > 0 ? ` (${formatCount(node.attendeeCount)})` : '';
 
   const frontStyle = {
     opacity: slide.interpolate({ inputRange: [-1, 0, 1], outputRange: [0, 1, 0] }),
@@ -182,45 +178,57 @@ export const RecommendationDeck: React.FC<{
             accessibilityHint="Opens the Point on Discover"
             testID={`activity-rec-${node.id}`}
           >
+            {/* Icon tile · #tag · venue / title, with the Featured (or Popular) badge on the right. */}
             <View style={styles.main}>
-              <CategoryBadge tag={mainTag} title={node.title} photoUri={node.coverPhotoUri ?? null} size={56} />
+              <CategoryBadge tag={mainTag} title={node.title} photoUri={node.coverPhotoUri ?? null} size={44} />
               <View style={styles.copy}>
-                <View style={styles.kickerRow}>
-                  <Text style={[styles.kicker, mode === 'boosted' && styles.kickerBoosted]}>{kicker}</Text>
-                  {boost ? (
-                    <View style={styles.boostChip}>
-                      <Zap size={10} color={GOLD} fill={GOLD} strokeWidth={2} />
-                      <Text style={styles.boostText}>{formatTimeLeft(boost.endsAt)} LEFT</Text>
-                    </View>
-                  ) : null}
-                </View>
+                <Text style={styles.tagLine} numberOfLines={1}>
+                  {mainTag ? <Text style={styles.tag}>{mainTag}</Text> : null}
+                  {mainTag && where ? <Text style={styles.where}>{'  ·  '}</Text> : null}
+                  {where ? <Text style={styles.where}>{where}</Text> : null}
+                </Text>
                 <Text style={styles.title} numberOfLines={1}>
                   {node.title}
                 </Text>
-                {where ? (
-                  <Text style={styles.where} numberOfLines={1}>
-                    {where}
-                  </Text>
-                ) : null}
-                {pick.live ? (
-                  <LiveBadge label="LIVE NOW" />
-                ) : node.status ? (
-                  <Text style={styles.when}>{node.status}</Text>
-                ) : null}
               </View>
+              {featured ? (
+                <View style={styles.badge}>
+                  <Zap size={11} color={GOLD} fill={GOLD} strokeWidth={2} />
+                  <Text style={styles.badgeText}>FEATURED</Text>
+                </View>
+              ) : mode === 'popular' ? (
+                <View style={[styles.badge, styles.badgePopular]}>
+                  <Flame size={11} color={c.accent} strokeWidth={2.5} />
+                  <Text style={[styles.badgeText, styles.badgeTextPopular]}>POPULAR</Text>
+                </View>
+              ) : null}
             </View>
 
-            {extraReasons(pick).length ? (
-            <View style={styles.reasons}>
-              {extraReasons(pick).map((reason) => (
-                <View key={reason} style={styles.reason}>
-                  <Text style={styles.reasonText} numberOfLines={1}>
-                    {reason}
-                  </Text>
+            {/* LIVE NOW · Ends 9:30 PM · 1.4 mi · 6 min drive */}
+            <View style={styles.meta}>
+              {pick.live ? (
+                <LiveBadge label="LIVE NOW" />
+              ) : timing ? (
+                <View style={styles.timePill}>
+                  <Text style={styles.timeText}>{timing.label}</Text>
                 </View>
-              ))}
+              ) : null}
+              {endsAt ? (
+                <>
+                  <Text style={styles.metaDot}>·</Text>
+                  <Text style={styles.metaText}>Ends {formatClock(endsAt)}</Text>
+                </>
+              ) : null}
+              {distance ? (
+                <>
+                  <Text style={styles.metaDot}>·</Text>
+                  <TravelIcon size={13} color={c.textMuted} strokeWidth={2.25} />
+                  <Text style={[styles.metaText, styles.metaShrink]} numberOfLines={1}>
+                    {distance}
+                  </Text>
+                </>
+              ) : null}
             </View>
-            ) : null}
 
             <View style={styles.actions}>
               <TouchableOpacity
@@ -229,7 +237,7 @@ export const RecommendationDeck: React.FC<{
                 accessibilityRole="button"
                 testID="activity-rec-view"
               >
-                <Text style={styles.viewText}>VIEW POINT</Text>
+                <Text style={styles.viewText}>VIEW DROP</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.rsvpBtn, node.isRsvpd && styles.rsvpBtnOn]}
@@ -241,8 +249,11 @@ export const RecommendationDeck: React.FC<{
                 accessibilityState={{ selected: Boolean(node.isRsvpd) }}
                 testID="activity-rec-rsvp"
               >
-                {node.isRsvpd ? <Check size={15} color={c.accent} strokeWidth={3} /> : null}
-                <Text style={styles.rsvpText}>{node.isRsvpd ? 'GOING' : 'RSVP'}</Text>
+                <Check size={15} color={node.isRsvpd ? c.accent : c.onAccent} strokeWidth={3} />
+                <Text style={[styles.rsvpText, node.isRsvpd && styles.rsvpTextOn]}>
+                  {node.isRsvpd ? 'GOING' : 'RSVP'}
+                  {going}
+                </Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -333,62 +344,71 @@ const createStyles = (c: ThemeColors) =>
     ghostBack: { top: 14, transform: [{ scaleX: 0.9 }], opacity: 0.45, borderColor: c.border },
     front: { position: 'absolute', top: 0, left: 0, right: 0 },
     frontCard: { padding: 14, gap: 12, justifyContent: 'space-between' },
-    cardBoosted: { borderColor: GOLD },
+    cardBoosted: { borderColor: 'rgba(245, 158, 11, 0.7)' },
     emptyCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderWidth: 1, borderColor: c.border },
     emptyText: { flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 18 },
     main: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-    copy: { flex: 1, gap: 3, alignItems: 'flex-start' },
-    kickerRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-    kicker: { color: c.accent, fontSize: 11, fontWeight: '900', letterSpacing: 1 },
-    kickerBoosted: { color: GOLD },
-    boostChip: {
+    copy: { flex: 1, gap: 2 },
+    tagLine: { fontSize: 12.5 },
+    tag: { color: c.accent, fontWeight: '800' },
+    where: { color: c.textMuted, fontWeight: '600' },
+    title: { color: c.text, fontSize: 17, fontWeight: '800' },
+    badge: {
       flexDirection: 'row',
       alignItems: 'center',
-      gap: 3,
-      paddingHorizontal: 6,
-      paddingVertical: 1,
-      borderRadius: 6,
-      backgroundColor: 'rgba(245, 158, 11, 0.14)',
+      gap: 4,
+      alignSelf: 'flex-start',
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      backgroundColor: 'rgba(245, 158, 11, 0.12)',
       borderWidth: 1,
-      borderColor: 'rgba(245, 158, 11, 0.55)',
+      borderColor: 'rgba(245, 158, 11, 0.6)',
     },
-    boostText: { color: GOLD, fontSize: 9, fontWeight: '900', letterSpacing: 0.8 },
-    title: { color: c.text, fontSize: 18, fontWeight: '800', alignSelf: 'stretch' },
-    where: { color: c.textMuted, fontSize: 12, alignSelf: 'stretch' },
-    when: { color: c.accentSoft, fontSize: 12, fontWeight: '700' },
-    reasons: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, maxHeight: 56, overflow: 'hidden' },
-    reason: {
-      paddingHorizontal: 9,
-      paddingVertical: 4,
-      borderRadius: 10,
-      backgroundColor: c.base,
+    badgeText: { color: GOLD, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
+    badgePopular: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
+    badgeTextPopular: { color: c.accent },
+    meta: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 24 },
+    metaDot: { color: c.textFaint, fontSize: 12, fontWeight: '800' },
+    metaText: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
+    metaShrink: { flexShrink: 1 },
+    timePill: {
+      paddingHorizontal: 8,
+      paddingVertical: 3,
+      borderRadius: 8,
+      backgroundColor: c.accentTint,
       borderWidth: 1,
-      borderColor: c.border,
+      borderColor: c.accentBorder,
     },
-    reasonText: { color: c.textSecondary, fontSize: 11, fontWeight: '700' },
+    timeText: { color: c.accent, fontSize: 11, fontWeight: '800' },
     actions: { flexDirection: 'row', gap: 10 },
+    // View Drop: outlined; RSVP: filled (the main action).
     viewBtn: {
       flex: 1,
       minHeight: 42,
-      borderRadius: 21,
-      backgroundColor: c.accent,
+      borderRadius: 12,
+      backgroundColor: c.base,
+      borderWidth: 1,
+      borderColor: c.borderStrong,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    viewText: { color: c.base, fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
+    viewText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1 },
     rsvpBtn: {
+      flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 6,
       minHeight: 42,
-      paddingHorizontal: 20,
-      borderRadius: 21,
-      borderWidth: 1.5,
+      borderRadius: 12,
+      backgroundColor: c.accent,
+      borderWidth: 1,
       borderColor: c.accent,
     },
-    rsvpBtnOn: { backgroundColor: c.accentTint },
-    rsvpText: { color: c.accent, fontSize: 13, fontWeight: '900', letterSpacing: 1.2 },
+    rsvpBtnOn: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
+    rsvpText: { color: c.onAccent, fontSize: 13, fontWeight: '800', letterSpacing: 0.6 },
+    rsvpTextOn: { color: c.accent },
     controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 6, minHeight: 12 },
     dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.borderStrong },
