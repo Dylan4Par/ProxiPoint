@@ -1,8 +1,11 @@
 /**
  * Categories for the chip row on Channels → My Channels → Find channels. Channels don't store a
- * category, so one is read from their #tags: a channel is in every category any of its tags is in
- * (a channel with no matching tags only shows under All).
+ * category: each of their #tags has one on the allowed list (lib/hashtags), and each chip covers
+ * one or more of those categories. A channel is under every chip any of its tags falls in (a
+ * channel whose tags only fall in uncovered categories shows under All).
  */
+import { findHashtag, type HashtagCategoryId } from './hashtags';
+
 export type ChannelCategory = 'all' | 'sports' | 'arts' | 'tech' | 'food';
 
 export const CHANNEL_CATEGORIES: { id: ChannelCategory; label: string }[] = [
@@ -13,29 +16,20 @@ export const CHANNEL_CATEGORIES: { id: ChannelCategory; label: string }[] = [
   { id: 'food', label: 'Food & Drink' },
 ];
 
-const CATEGORY_TAGS: Record<Exclude<ChannelCategory, 'all'>, string[]> = {
-  sports: [
-    'pickleball', 'openplay', 'hiking', 'nighthike', 'outdoors', 'yoga', 'sunrise', 'running', 'runclub',
-    'cycling', 'biking', 'climbing', 'bouldering', 'soccer', 'basketball', 'volleyball', 'tennis', 'golf',
-    'disc golf', 'discgolf', 'skiing', 'snowboarding', 'fitness', 'pickup', 'sports', 'kayaking', 'paddleboard',
-  ],
-  arts: [
-    'livemusic', 'jazz', 'soul', 'openmic', 'vinylnight', 'concert', 'karaoke', 'dj', 'music', 'comedy',
-    'artwalk', 'gallery', 'localartists', 'art', 'arts', 'theater', 'theatre', 'film', 'poetry', 'dance',
-    'photography', 'crafts', 'murals',
-  ],
-  tech: ['techmeetup', 'tech', 'kotlin', 'gis', 'coding', 'hackathon', 'makers', 'maker', 'startup', 'ai', 'robotics', 'gamedev'],
-  food: [
-    'foodtrucks', 'tacotuesday', 'farmersmarket', 'localfood', 'tasting', 'food', 'brewery', 'beer', 'craftbeer',
-    'coffee', 'wine', 'winetasting', 'happyhour', 'brunch', 'cocktails', 'popupdinner', 'bakery',
-  ],
+/** Which of the list's categories each chip covers. */
+const CHIP_CATEGORIES: Record<Exclude<ChannelCategory, 'all'>, HashtagCategoryId[]> = {
+  sports: ['sports-fitness', 'outdoors-recreation'],
+  arts: ['music-nightlife', 'arts-culture'],
+  tech: ['tech-professional'],
+  food: ['food-dining'],
 };
-
-const norm = (tag: string) => tag.replace(/^#/, '').toLowerCase();
 
 /** Whether a channel with these #tags belongs under the chip. 'all' always matches. */
 export function channelInCategory(tags: readonly string[] | undefined, category: ChannelCategory): boolean {
   if (category === 'all') return true;
-  const wanted = CATEGORY_TAGS[category];
-  return (tags ?? []).some((tag) => wanted.includes(norm(tag)));
+  const wanted = CHIP_CATEGORIES[category];
+  return (tags ?? []).some((tag) => {
+    const entry = findHashtag(tag);
+    return entry ? wanted.includes(entry.category) : false;
+  });
 }

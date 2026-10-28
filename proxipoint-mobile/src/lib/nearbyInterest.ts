@@ -113,7 +113,7 @@ const SAMPLE_TAGS: Array<[string, number]> = [
   ['#Jazz', 0.14],
   ['#Yoga', 0.12],
   ['#BoardGames', 0.11],
-  ['#TriviaNight', 0.09],
+  ['#HappyHour', 0.09],
   ['#Volunteer', 0.08],
   ['#ArtWalk', 0.07],
   ['#TechMeetup', 0.03],

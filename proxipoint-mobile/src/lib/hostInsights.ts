@@ -62,7 +62,7 @@ export function seeded(text: string, salt = 0): number {
 const MILE = 1609.344;
 
 /** Other #tags a crowd tends to follow (sample affinities). */
-const AFFINITY_POOL = ['#LiveMusic', '#CraftBeer', '#DogFriendly', '#FoodTrucks', '#ArtWalk', '#Outdoors', '#TriviaNight', '#Yoga'];
+const AFFINITY_POOL = ['#LiveMusic', '#CraftBeer', '#DogFriendly', '#FoodTrucks', '#ArtWalk', '#Camping', '#BoardGames', '#Yoga'];
 
 export function eventsInRange<T extends { startsAt: string }>(events: T[], range: InsightRange, now = Date.now()): T[] {
   const days = INSIGHT_RANGES.find((r) => r.id === range)?.days ?? null;

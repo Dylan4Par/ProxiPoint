@@ -23,6 +23,7 @@ import {
   useMyChannelsOnly,
 } from '../../lib/discoverFilters';
 import { searchRanges, useUnits } from '../../lib/units';
+import { bestHashtagFor, searchHashtags } from '../../lib/hashtags';
 
 /** Short labels for the three Sort by buttons. */
 const SORT_SHORT: Record<PointSort, string> = { closest: 'Nearest First', soonest: 'Soonest', popular: 'Most Going' };
@@ -119,15 +120,22 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
     (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (rangeMeters != null ? 1 : 0);
   const [newTagInput, setNewTagInput] = useState('');
 
-  const handleAddNewTag = () => {
-    if (!newTagInput.trim()) return;
-    if (full && !activeKeys.has(keyOf(newTagInput))) {
+  // Only tags on the allowed list (lib/hashtags): typing shows the matches; + Add takes the exact
+  // one typed, or the best match.
+  const tagMatches = newTagInput.trim() ? searchHashtags(newTagInput, { exclude: activeTags, limit: 6 }) : [];
+  const addListedTag = (tag: string) => {
+    if (full && !activeKeys.has(keyOf(tag))) {
       setLimitNote(true);
       return;
     }
-    addTag(newTagInput);
+    addTag(tag);
     setNewTagInput('');
     setLimitNote(false);
+  };
+  const handleAddNewTag = () => {
+    if (!newTagInput.trim()) return;
+    const best = bestHashtagFor(newTagInput, activeTags);
+    if (best) addListedTag(best);
   };
   const toggleFollowed = (tag: string) => {
     if (activeKeys.has(keyOf(tag))) {
@@ -340,7 +348,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 <View style={styles.addTagRow}>
                   <TextInput
                     style={styles.addTagInput}
-                    placeholder="Add a hashtag, e.g. Pickleball"
+                    placeholder="Find a hashtag, e.g. Pickleball"
                     placeholderTextColor={c.iconFaint}
                     value={newTagInput}
                     onChangeText={(text) => {
@@ -355,6 +363,27 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   </TouchableOpacity>
                 </View>
               )}
+              {!full && newTagInput.trim() ? (
+                tagMatches.length ? (
+                  <View style={styles.chipWrap} testID="filter-tag-matches">
+                    {tagMatches.map((entry) => (
+                      <TouchableOpacity
+                        key={entry.tag}
+                        style={[styles.editorChip, styles.matchChip]}
+                        onPress={() => addListedTag(entry.tag)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add ${entry.tag}`}
+                      >
+                        <Text style={[styles.editorChipText, styles.matchChipText]}>+ {entry.tag}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.limitNote} testID="filter-no-match">
+                    No hashtag matches “{newTagInput.trim()}”. Try another word.
+                  </Text>
+                )
+              ) : null}
               {limitNote ? (
                 <Text style={styles.limitNote} testID="filter-limit-note">
                   {MAX_ACTIVE_TAGS} active filters at most. Remove one to add another.
@@ -912,6 +941,8 @@ const createStyles = (c: ThemeColors) =>
     fontWeight: '700',
     padding: 4,
   },
+  matchChip: { borderStyle: 'dashed' },
+  matchChipText: { fontWeight: '700' },
   addTagRow: {
     flexDirection: 'row',
     gap: 8,

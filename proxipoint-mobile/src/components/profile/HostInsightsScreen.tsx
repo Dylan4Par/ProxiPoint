@@ -34,9 +34,9 @@ const GOLD = '#f59e0b';
 function demoEvents(now: number): InsightEvent[] {
   const day = 86400000;
   const rows: Array<[string, string[], number, boolean?]> = [
-    ['Taco Tuesday Truck Rally', ['#FoodTrucks', '#TacoTuesday'], 2, true],
+    ['Taco Tuesday Truck Rally', ['#FoodTrucks', '#Tacos'], 2, true],
     ['Saturday Morning Market', ['#FarmersMarket'], 5],
-    ['Trivia Night', ['#TriviaNight'], 8],
+    ['Trivia Night', ['#BoardGames'], 8],
     ['Porch Blues Session', ['#LiveMusic'], 11],
     ['Food Truck Friday', ['#FoodTrucks'], 15, true],
     ['Sunset Open Play', ['#Pickleball'], 18],

@@ -3,6 +3,7 @@ import { LOCALRADAR_HANDLE, type PointSource } from '../lib/aggregated';
 import { venuePageHandle } from '../lib/hostProfiles';
 import { describeBeaconTiming, normalizeVisibility, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
 import { calculateDistanceMeters } from '../lib/locationFilter';
+import { canonicalTag, canonicalizeTags } from '../lib/hashtags';
 // 30 more sample Points around the default area and 10 in Fort Collins.
 import { MORE_SEED_POINTS } from './seedPointsMore';
 import type {
@@ -193,18 +194,7 @@ export const toCanvasCoordinates = (
   };
 };
 
-const TAG_POOL = [
-  '#LiveMusic',
-  '#TechMeetup',
-  '#FoodTrucks',
-  '#Pickleball',
-  '#ArtWalk',
-  '#FarmersMarket',
-  '#Yoga',
-  '#TriviaNight',
-  '#BoardGames',
-  '#Hiking',
-];
+const TAG_POOL = ['#LiveMusic', '#TechMeetup', '#FoodTrucks', '#Pickleball', '#ArtWalk', '#FarmersMarket', '#Yoga', '#BoardGames', '#Hiking'];
 const VENUE_POOL = [
   'Central Park Plaza',
   'The Rusty Anchor',
@@ -291,7 +281,7 @@ const SEED_POINTS: SeedPoint[] = [
     id: 'pt-taco-rally',
     url: 'https://example.com/taco-truck-rally',
     title: 'Taco Tuesday Truck Rally',
-    tags: ['#FoodTrucks', '#TacoTuesday'],
+    tags: ['#FoodTrucks', '#Tacos'],
     venue: 'Central Park Plaza',
     host: '@mesa4tacos',
     description: 'Six trucks, one plaza. Birria, al pastor, vegan options and a churro stand.',
@@ -306,7 +296,7 @@ const SEED_POINTS: SeedPoint[] = [
     id: 'pt-sunset-pickleball',
     url: 'https://example.com/dink-crew/open-play',
     title: 'Sunset Open Play (All Levels)',
-    tags: ['#Pickleball', '#OpenPlay'],
+    tags: ['#Pickleball'],
     venue: 'Meadow Park Courts',
     host: '@dinkcrew',
     description: 'Rotating doubles on four courts. Paddles to borrow. Full for tonight; check back next week.',
@@ -337,7 +327,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-vinyl-night',
     title: 'Vinyl Swap & Listening Party',
-    tags: ['#VinylNight', '#Records'],
+    tags: ['#DJSet'],
     venue: 'The Rusty Anchor',
     host: '@rustyanchor',
     description: 'Bring a crate, trade a few, and hear a side or two on the big speakers.',
@@ -353,7 +343,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-soul-saturday',
     title: 'Soul Revue Night',
-    tags: ['#LiveMusic', '#Soul'],
+    tags: ['#LiveMusic'],
     venue: 'The Rusty Anchor',
     host: '@rustyanchor',
     description: 'Seven-piece soul revue, two sets. Doors at 8.',
@@ -384,7 +374,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-kombucha-popup',
     title: 'Kombucha Tasting Pop-Up',
-    tags: ['#Tasting', '#LocalFood'],
+    tags: ['#FarmersMarket'],
     venue: 'Boulder Creek Pavilion (east lawn)',
     host: '@creeksidemarket',
     description: 'Six small-batch brews to try, plus a make-your-own starter demo at 6:30.',
@@ -398,7 +388,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-farmers-market',
     title: 'Evening Farmers Market',
-    tags: ['#FarmersMarket', '#LocalFood'],
+    tags: ['#FarmersMarket'],
     venue: 'Boulder Creek Pavilion',
     host: '@creeksidemarket',
     description: 'Local produce, bread, honey and flowers. Live fiddle by the fountain at 6.',
@@ -412,7 +402,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-board-games',
     title: 'Board Game Night',
-    tags: ['#BoardGames', '#Social'],
+    tags: ['#BoardGames'],
     venue: 'Meeple Café',
     host: '@meeplecafe',
     description: 'Hundreds of games to borrow, teachers on hand. Drop in solo and get matched to a table.',
@@ -442,7 +432,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-creek-cleanup',
     title: 'Boulder Creek Cleanup',
-    tags: ['#Volunteer', '#CreekCleanup', '#Outdoors'],
+    tags: ['#Volunteer', '#CleanUp'],
     venue: 'Boulder Creek Path',
     host: '@greenboulder',
     description: 'Gloves, grabbers and bags provided. One hour on the creek path, then coffee on us.',
@@ -458,7 +448,7 @@ const SEED_POINTS: SeedPoint[] = [
     id: 'pt-art-walk',
     url: 'https://example.com/first-wednesday-art-walk',
     title: 'First Wednesday Art Walk',
-    tags: ['#ArtWalk', '#Gallery', '#LocalArtists'],
+    tags: ['#ArtWalk', '#GalleryOpening'],
     venue: 'Old Town Square',
     host: '@oldtownarts',
     description: 'Twelve galleries open late with artist talks. Start anywhere; maps at the square.',
@@ -472,7 +462,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-golden-hour-yoga',
     title: 'Golden Hour Yoga in the Park',
-    tags: ['#Yoga', '#Outdoors'],
+    tags: ['#Yoga'],
     venue: 'Wonderland Lake Park',
     host: '@flowwithmaya',
     description: 'Gentle flow for all levels on the lawn. Bring a mat and water. Exact spot shared with approved guests.',
@@ -490,7 +480,7 @@ const SEED_POINTS: SeedPoint[] = [
     id: 'pt-pub-trivia',
     url: 'https://example.com/brickhouse-trivia',
     title: 'Wednesday Pub Trivia',
-    tags: ['#TriviaNight', '#Pub'],
+    tags: ['#BoardGames', '#CraftBeer'],
     venue: 'The Brickhouse Tap',
     host: '@quizmasterjen',
     description: 'Six rounds, teams up to six. Prizes for first place and best team name.',
@@ -507,7 +497,7 @@ const SEED_POINTS: SeedPoint[] = [
     id: 'pt-go-kotlin',
     url: 'https://example.com/go-kotlin-social',
     title: 'Go & Kotlin Devs Monthly Social',
-    tags: ['#TechMeetup', '#Kotlin', '#GIS'],
+    tags: ['#TechMeetup'],
     venue: 'Downtown Tech Lab',
     host: '@codeandcoffee',
     description: 'Lightning talks, then pizza. This month: offline maps with PMTiles. RSVPs are approved by the host.',
@@ -524,7 +514,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-sunrise-hike',
     title: 'Sunrise Ridge Hike',
-    tags: ['#Hiking', '#Sunrise', '#Outdoors'],
+    tags: ['#Hiking'],
     venue: 'Mesa Trailhead',
     host: '@trailtribe',
     description: 'Moderate 4-mile loop timed for sunrise. Headlamps required for the first stretch.',
@@ -687,8 +677,9 @@ function placeLocalBeacon(
     const etaMinutes = Math.max(2, Math.round(distanceMeters / 80));
     const node: DiscoveryNode = {
       id,
-      tag: primaryBeaconTag(draft.tags),
-      tags: parseBeaconTags(draft.tags).slice(0, 3).map(hashtag),
+      // Listed tags only (lib/hashtags); the form already limits picks to the list.
+      tag: canonicalizeTags(parseBeaconTags(draft.tags))[0] ?? primaryBeaconTag(draft.tags),
+      tags: canonicalizeTags(parseBeaconTags(draft.tags).map(hashtag)).slice(0, 3),
       title: draft.title,
       description: draft.description,
       url: draft.url ?? null,
@@ -772,8 +763,9 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   setPreviewGeofence: (preview) => set({ previewGeofence: preview }),
 
   addTag: (tag) => {
-    const cleanTag = tag.trim().startsWith('#') ? tag.trim() : `#${tag.trim()}`;
-    if (!cleanTag || cleanTag === '#') return;
+    // Filters only take tags from the allowed list (lib/hashtags), spelled the list's way.
+    const cleanTag = canonicalTag(tag);
+    if (!cleanTag) return;
     set((state) => {
       if (state.tags.some((known) => normalizeTag(known) === normalizeTag(cleanTag))) return state;
       // At most MAX_ACTIVE_TAGS active filters (not counting 'All'); full = nothing is added.
@@ -810,7 +802,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     }),
 
   syncMyPoint: (point) => {
-    const tags = point.tags.filter((tag) => tag.replace(/^#+/, '').trim()).slice(0, 3).map(hashtag);
+    const tags = canonicalizeTags(point.tags.map(hashtag)).slice(0, 3);
     set((state) => {
       const existing = state.nodes[point.id];
       if (!existing) return {};
@@ -913,7 +905,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
           statusColor: meta.statusColor,
           batteryPct: node.battery_pct,
           title: node.title || existing?.title || meta.title,
-          tag: node.category ? `#${node.category.replace('#', '')}` : existing?.tag || meta.tag,
+          // The server's category, if it's a listed tag; otherwise what we had.
+          tag: canonicalTag(node.category) ?? existing?.tag ?? meta.tag,
           venue: node.host || existing?.venue || meta.venue,
           attendeeCount: node.attendees_count ?? existing?.attendeeCount ?? meta.attendeeCount,
           eta: meta.eta,

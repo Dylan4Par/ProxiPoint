@@ -1,31 +1,76 @@
 import React from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import {
+  Banknote,
   Beer,
   Bike,
+  Binoculars,
   BookOpen,
+  Briefcase,
+  CakeSlice,
   Camera,
+  Car,
+  Code,
   Coffee,
+  Cpu,
+  Dices,
+  Drama,
+  Droplet,
   Dumbbell,
+  Eye,
+  Film,
+  Fish,
   Flame,
+  FlaskConical,
+  Footprints,
   Gamepad2,
+  HandHeart,
+  Headphones,
+  Heart,
+  Images,
+  Landmark,
+  Laptop,
+  Leaf,
+  Link,
+  Megaphone,
+  MessagesSquare,
   Mic,
+  Mountain,
   Music,
+  PaintBucket,
   Palette,
   PartyPopper,
+  PawPrint,
+  PersonStanding,
+  Rocket,
+  Sailboat,
+  Scissors,
+  ShoppingBasket,
+  Signpost,
+  Snowflake,
+  Star,
+  Stethoscope,
+  Tent,
   Terminal,
+  Trash2,
   Trees,
   Trophy,
-  HandHeart,
+  Truck,
   Users,
   Utensils,
+  Wind,
+  Wine,
+  Zap,
   type LucideIcon,
 } from 'lucide-react-native';
+import { findHashtag, hashtagCategory } from '../../lib/hashtags';
+import type { HashtagIcon } from '../../lib/hashtagList';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 /**
- * Round badge on Discover cards. Shows the event's cover photo when it has one; otherwise an
- * icon picked from its tag, tinted by category. Unknown tags fall back to the title's first
+ * Round badge on Discover cards. Shows the event's cover photo when it has one; otherwise its
+ * tag's icon from the allowed list (lib/hashtags), tinted by the tag's category. Tags not on the
+ * list (older data) go through the keyword rules below; anything else shows the title's first
  * letter (the same fallback My Drops uses).
  */
 
@@ -51,7 +96,7 @@ interface CategoryRule {
   tint: Tint;
 }
 
-/** Add rules here as new tags show up. Put specific words before general ones. */
+/** Fallback for tags that aren't on the list. Put specific words before general ones. */
 export const CATEGORY_RULES: CategoryRule[] = [
   { keywords: ['foodtruck', 'bbq', 'grill', 'taco'], Icon: Flame, tint: TINTS.amber },
   { keywords: ['coffee', 'cafe', 'brunch'], Icon: Coffee, tint: TINTS.amber },
@@ -73,7 +118,77 @@ export const CATEGORY_RULES: CategoryRule[] = [
   { keywords: ['meetup', 'social', 'network', 'community'], Icon: Users, tint: TINTS.cyan },
 ];
 
+/** Every icon the hashtag list uses (scripts/build_hashtags.py keeps these to lucide names). */
+const LIST_ICONS: Record<HashtagIcon, LucideIcon> = {
+  Banknote,
+  Beer,
+  Bike,
+  Binoculars,
+  BookOpen,
+  Briefcase,
+  CakeSlice,
+  Camera,
+  Car,
+  Code,
+  Coffee,
+  Cpu,
+  Dices,
+  Drama,
+  Droplet,
+  Dumbbell,
+  Eye,
+  Film,
+  Fish,
+  Flame,
+  FlaskConical,
+  Footprints,
+  Gamepad2,
+  HandHeart,
+  Headphones,
+  Heart,
+  Images,
+  Landmark,
+  Laptop,
+  Leaf,
+  Link,
+  Megaphone,
+  MessagesSquare,
+  Mic,
+  Mountain,
+  Music,
+  PaintBucket,
+  Palette,
+  PartyPopper,
+  PawPrint,
+  PersonStanding,
+  Rocket,
+  Sailboat,
+  Scissors,
+  ShoppingBasket,
+  Signpost,
+  Snowflake,
+  Star,
+  Stethoscope,
+  Tent,
+  Terminal,
+  Trash2,
+  Trees,
+  Trophy,
+  Truck,
+  Users,
+  Utensils,
+  Wind,
+  Wine,
+  Zap,
+};
+
 export function categoryFor(tag: string | undefined): CategoryRule | null {
+  // On the list: its own icon and its category's color.
+  const listed = findHashtag(tag);
+  if (listed) {
+    const category = hashtagCategory(listed.category);
+    return { keywords: [], Icon: LIST_ICONS[listed.icon], tint: TINTS[category?.tint ?? 'cyan'] };
+  }
   const key = (tag ?? '').replace(/^#+/, '').toLowerCase();
   if (!key) return null;
   return CATEGORY_RULES.find((rule) => rule.keywords.some((word) => key.includes(word))) ?? null;

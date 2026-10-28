@@ -23,6 +23,9 @@ import {
 import { useCampaigns } from '../../hooks/useCampaigns';
 import { applyDateInput, applyTimeInput, formatBeaconDate, formatBeaconTime } from '../../lib/beaconWindow';
 import { parseBeaconTags } from '../../lib/beaconDraft';
+import { tagsToInput } from '../../lib/tagInput';
+import { canonicalizeTags } from '../../lib/hashtags';
+import { TagPicker } from '../discovery/TagPicker';
 import { cleanVenueLabel, formatPointWhen, pointStatus, type DroppedPoint } from '../../lib/droppedPoint';
 import { dropRangeError } from '../../lib/dropRange';
 import { useUnits } from '../../lib/units';
@@ -59,7 +62,7 @@ function tomorrowAt(hour: number): Date {
   return d;
 }
 
-const tagsToText = (tags: string[]) => tags.join(', ');
+const tagsToText = (tags: string[]) => tagsToInput(canonicalizeTags(tags));
 
 interface EventForm {
   title: string;
@@ -290,19 +293,19 @@ export const CampaignBuilder: React.FC<CampaignBuilderProps> = ({
             <View style={styles.hairline} />
             <View style={styles.inlineRow}>
               <Hash size={16} color={c.textMuted} strokeWidth={2.25} />
-              <TextInput
-                style={styles.inlineInput}
-                placeholder="#RunClub, #5k"
-                placeholderTextColor={c.textFaint}
-                value={tagsText}
-                onChangeText={(v) => {
-                  setTagsText(v);
-                  setError(null);
-                }}
-                autoCapitalize="none"
-                autoCorrect={false}
-                testID="campaign-tags"
-              />
+              {/* Picked from the allowed list only (lib/hashtags). */}
+              <View style={styles.inlineInputBox}>
+                <TagPicker
+                  value={tagsText}
+                  onChange={(v) => {
+                    setTagsText(v);
+                    setError(null);
+                  }}
+                  mine={drops.flatMap((drop) => drop.tags)}
+                  label={null}
+                  testID="campaign-tags"
+                />
+              </View>
             </View>
           </View>
           <Text style={styles.note}>Each new Drop gets these #tags and the description.</Text>
@@ -726,6 +729,7 @@ const createStyles = (c: ThemeColors) =>
     descInput: { color: c.textBody, fontSize: 14, minHeight: 44, paddingVertical: 10, textAlignVertical: 'top' },
     inlineRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
     inlineInput: { flex: 1, color: c.text, fontSize: 14, paddingVertical: 8 },
+    inlineInputBox: { flex: 1, paddingVertical: 4 },
     note: { color: c.textMuted, fontSize: 12, lineHeight: 17, paddingHorizontal: 2 },
     noteInCard: { color: c.textMuted, fontSize: 12, lineHeight: 17 },
     section: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginTop: 12 },

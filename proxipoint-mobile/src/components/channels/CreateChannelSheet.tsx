@@ -14,7 +14,7 @@ import {
   type ChannelAccess,
 } from '../../lib/channelAccess';
 import { parseBeaconTags } from '../../lib/beaconDraft';
-import { formatTagInput } from '../../lib/tagInput';
+import { TagPicker } from '../discovery/TagPicker';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 export const ACCESS_ICON: Record<ChannelAccess, LucideIcon> = { public: Globe, restricted: Eye, private: Lock };
@@ -122,15 +122,13 @@ export const CreateChannelSheet: React.FC<{
           </Text>
 
           <Text style={[styles.label, styles.spaced]}>#TAGS</Text>
-          <TextInput
-            style={[styles.input, tried && errors.tags ? styles.inputError : null]}
+          {/* Picked from the allowed list only (lib/hashtags). */}
+          <TagPicker
             value={tagText}
-            onChangeText={(raw) => setTagText(formatTagInput(raw, tagText))}
-            placeholder="#Vinyl, #RecordStore"
-            placeholderTextColor={c.textFaint}
-            autoCapitalize="none"
-            autoCorrect={false}
-            accessibilityLabel="Channel #tags"
+            onChange={setTagText}
+            mine={[]}
+            limit={CHANNEL_TAG_LIMIT}
+            label={null}
             testID="create-channel-tags"
           />
           <Text style={tried && errors.tags ? styles.error : styles.hint}>

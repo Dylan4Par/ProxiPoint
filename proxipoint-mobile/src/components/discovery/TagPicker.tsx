@@ -1,15 +1,21 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Plus, X } from 'lucide-react-native';
-import { DROP_TAG_LIMIT, addTag, cleanTagWord, collectKnownTags, removeTag, selectedTags } from '../../lib/tagInput';
+import { DROP_TAG_LIMIT, addTag, collectKnownTags, removeTag, selectedTags } from '../../lib/tagInput';
+import { HASHTAG_LIST, bestHashtagFor, canonicalTag, searchHashtags } from '../../lib/hashtags';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const MAX_SUGGESTIONS = 8;
 
+/** Shown before you type when you have no usual tags yet. */
+const STARTER_TAGS = ['#LiveMusic', '#FoodTrucks', '#HappyHour', '#Hiking', '#BoardGames', '#ArtWalk', '#Yoga', '#Volunteer'];
+
 /**
- * Tags as chips. "# Add tag" comes first and picked tags trail to its right as filled pills
- * (tap × to remove); under them, your usual tags are one tap away (wrapped, never scrolled off). "Add tag" types a new one (space, comma or return adds it; backspace
- * on an empty field removes the last chip). The value stays in "#A, #B" form for the form.
+ * Tags as chips, picked from the allowed list (lib/hashtags): nobody can make up their own.
+ * "# Find a tag" comes first and picked tags trail to its right as filled pills (tap × to remove).
+ * Under them: your usual tags (one tap away), or, while typing, the listed tags that match
+ * ("beer" → #CraftBeer, #HappyHour…). Return adds the best match; backspace on an empty field
+ * removes the last chip. The value stays in "#A, #B" form for the form.
  */
 export const TagPicker: React.FC<{
   value: string;
@@ -19,8 +25,10 @@ export const TagPicker: React.FC<{
   /** Everything else nearby, for matches while typing. */
   known?: unknown[];
   limit?: number;
+  /** Left-hand label ("Tags"); null when the screen has its own label above. */
+  label?: string | null;
   testID?: string;
-}> = ({ value, onChange, mine, known, limit = DROP_TAG_LIMIT, testID = 'drop-tags' }) => {
+}> = ({ value, onChange, mine, known, limit = DROP_TAG_LIMIT, label = 'Tags', testID = 'drop-tags' }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [draft, setDraft] = useState('');
@@ -30,52 +38,48 @@ export const TagPicker: React.FC<{
   const pickedKeys = new Set(picked.map((t) => t.toLowerCase()));
   const full = picked.length >= limit;
 
-  const pool = useMemo(() => {
+  // Before typing: your usual tags, then tags on Points nearby (all on the list), then starters.
+  const usual = useMemo(() => {
     const seen = new Set<string>();
-    return [...mine, ...collectKnownTags(known)].filter((tag) => {
-      const key = tag.toLowerCase();
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+    return [...mine, ...collectKnownTags(known), ...STARTER_TAGS]
+      .map((tag) => canonicalTag(tag))
+      .filter((tag): tag is string => {
+        if (!tag || seen.has(tag)) return false;
+        seen.add(tag);
+        return true;
+      })
+      .map((tag) => tag.slice(1));
   }, [mine, known]);
 
-  const fragment = cleanTagWord(draft).toLowerCase();
+  const query = draft.trim();
+  const matches = full || !query ? [] : searchHashtags(query, { exclude: picked, limit: MAX_SUGGESTIONS });
   const suggestions = full
     ? []
-    : (fragment ? pool.filter((t) => t.toLowerCase().startsWith(fragment)) : mine)
-        .filter((t) => !pickedKeys.has(t.toLowerCase()))
-        .slice(0, MAX_SUGGESTIONS);
+    : query
+      ? matches.map((entry) => entry.tag.slice(1))
+      : usual.filter((t) => !pickedKeys.has(t.toLowerCase())).slice(0, MAX_SUGGESTIONS);
+  const noMatch = !full && Boolean(query) && matches.length === 0;
 
-  const commit = (words: string[], current = value) => {
-    let next = current;
-    words.forEach((word) => {
-      next = addTag(next, word, limit);
-    });
+  const pick = (tag: string) => {
+    const next = addTag(value, tag, limit);
     if (next !== value) onChange(next);
-    return next;
-  };
-
-  const onChangeText = (text: string) => {
-    if (/[\s,]/.test(text)) {
-      const parts = text.split(/[\s,]+/);
-      const rest = parts.pop() ?? '';
-      commit(parts);
-      setDraft(cleanTagWord(rest));
-    } else {
-      setDraft(text.replace(/^#+/, '').replace(/[^A-Za-z0-9_]/g, ''));
-    }
-  };
-
-  const submitDraft = () => {
-    if (draft) commit([draft]);
     setDraft('');
+  };
+
+  // Typing only searches the list (spaces are fine: "craft beer" finds #CraftBeer).
+  const onChangeText = (text: string) => setDraft(text.replace(/^#+/, '').replace(/[^A-Za-z0-9_ ]/g, ''));
+
+  // Return: the exact tag if it's on the list, otherwise the top match. Nothing new is ever made.
+  const submitDraft = () => {
+    if (!query) return;
+    const best = bestHashtagFor(query, picked);
+    if (best) pick(best);
   };
 
   return (
     <View testID={testID}>
       <View style={styles.row}>
-        <Text style={styles.label}>Tags</Text>
+        {label ? <Text style={styles.label}>{label}</Text> : null}
         <View style={styles.chips}>
           {full ? (
             <Text style={styles.fullNote}>{limit} tags max</Text>
@@ -87,7 +91,6 @@ export const TagPicker: React.FC<{
                 value={draft}
                 onChangeText={onChangeText}
                 onSubmitEditing={submitDraft}
-                onBlur={submitDraft}
                 onKeyPress={(e) => {
                   if (e.nativeEvent.key === 'Backspace' && draft === '' && picked.length > 0) {
                     onChange(removeTag(value, picked[picked.length - 1]));
@@ -95,7 +98,7 @@ export const TagPicker: React.FC<{
                 }}
                 blurOnSubmit={false}
                 returnKeyType="done"
-                placeholder="Add tag"
+                placeholder="Find a tag"
                 placeholderTextColor={c.textFaint}
                 autoCapitalize="none"
                 autoCorrect={false}
@@ -119,16 +122,18 @@ export const TagPicker: React.FC<{
           ))}
         </View>
       </View>
+      {noMatch ? (
+        <Text style={[styles.noMatch, !label && styles.noIndent]} testID={`${testID}-no-match`}>
+          No tag matches “{query}”. Try another word ({HASHTAG_LIST.length} tags to pick from).
+        </Text>
+      ) : null}
       {suggestions.length > 0 ? (
-        <View style={styles.suggestions} testID={`${testID}-suggestions`}>
+        <View style={[styles.suggestions, !label && styles.noIndent]} testID={`${testID}-suggestions`}>
           {suggestions.map((tag) => (
             <TouchableOpacity
               key={tag}
               style={styles.suggestion}
-              onPress={() => {
-                commit([tag]);
-                setDraft('');
-              }}
+              onPress={() => pick(tag)}
               accessibilityRole="button"
               accessibilityLabel={`Add #${tag}`}
               testID={`${testID}-suggestion-${tag}`}
@@ -161,7 +166,7 @@ const createStyles = (c: ThemeColors) =>
       borderColor: c.accentBorder,
     },
     chipText: { color: c.accent, fontSize: 13, fontWeight: '800' },
-    inputWrap: { flexDirection: 'row', alignItems: 'center', width: 96, height: 30 },
+    inputWrap: { flexDirection: 'row', alignItems: 'center', width: 110, height: 30 },
     hash: { color: c.textMuted, fontSize: 14, fontWeight: '700', marginRight: 2 },
     input: { flex: 1, color: c.text, fontSize: 14, fontWeight: '600', padding: 0 },
     fullNote: { color: c.textFaint, fontSize: 12 },
@@ -179,4 +184,6 @@ const createStyles = (c: ThemeColors) =>
       backgroundColor: c.base,
     },
     suggestionText: { color: c.accentSoft, fontSize: 12, fontWeight: '700' },
+    noMatch: { color: c.textFaint, fontSize: 12, paddingTop: 8, paddingLeft: 60 },
+    noIndent: { paddingLeft: 0 },
   });

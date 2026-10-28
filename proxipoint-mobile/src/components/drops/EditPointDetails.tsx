@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, Modal, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Crosshair, EyeOff, ImagePlus, Lock, MapPin, RotateCcw, X } from 'lucide-react-native';
 import { DiscoveryLeafletMap } from '../discovery/DiscoveryLeafletMap';
@@ -26,7 +26,9 @@ import { lookupPrivacyRegions } from '../../services/regionLookup';
 import type { PlaceSuggestion } from '../../types/beacon';
 import { WhenChip } from '../discovery/WhenChip';
 import { PhotoRulesNote } from '../safety/PhotoRulesNote';
-import { tagsToInput, useTagField } from '../../lib/tagInput';
+import { tagsToInput } from '../../lib/tagInput';
+import { TagPicker } from '../discovery/TagPicker';
+import { canonicalizeTags } from '../../lib/hashtags';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -59,13 +61,13 @@ export const EditPointDetails: React.FC<EditPointDetailsProps> = ({ point, onSav
   const { colors: c } = useTheme();
   const status = pointStatus(point);
   const [title, setTitle] = useState(point.title);
-  const [tagsText, setTagsText] = useState(tagsToInput(point.tags));
+  // Only listed tags carry over (old spellings map onto the list).
+  const [tagsText, setTagsText] = useState(tagsToInput(canonicalizeTags(point.tags)));
   // Same source of hashtag suggestions as the Drop Point sheet.
   const knownBeacons = useDiscoveryStore((state) => {
     const store = state as unknown as { beacons?: unknown[]; events?: unknown[] };
     return store.beacons ?? store.events;
   });
-  const tagField = useTagField(tagsText, setTagsText, knownBeacons);
   const [description, setDescription] = useState(point.description);
   const [photoUri, setPhotoUri] = useState<string | null>(point.coverPhotoUri);
   const [photoBusy, setPhotoBusy] = useState(false);
@@ -300,37 +302,15 @@ export const EditPointDetails: React.FC<EditPointDetailsProps> = ({ point, onSav
       />
 
       <Text style={styles.label}>Tags</Text>
-      <TextInput
+      {/* Picked from the allowed list only (lib/hashtags). */}
+      <TagPicker
         value={tagsText}
-        onChangeText={tagField.onChangeText}
-        onFocus={tagField.onFocus}
-        onBlur={tagField.onBlur}
-        placeholder="#TechMeetup, #PostGIS"
-        placeholderTextColor={c.textFaint}
-        autoCapitalize="none"
-        autoCorrect={false}
-        style={styles.input}
+        onChange={setTagsText}
+        mine={point.tags}
+        known={knownBeacons}
+        label={null}
         testID="manage-edit-tags"
       />
-      <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          keyboardShouldPersistTaps="always"
-          style={tagField.suggestions.length > 0 ? null : styles.collapsed}
-          contentContainerStyle={tagField.suggestions.length > 0 ? styles.suggestionRow : null}
-        >
-          {tagField.suggestions.map((tag) => (
-            <TouchableOpacity
-              key={tag}
-              style={styles.suggestion}
-              onPress={() => tagField.applySuggestion(tag)}
-              accessibilityRole="button"
-              accessibilityLabel={`Add tag ${tag}`}
-            >
-              <Text style={styles.suggestionText}>#{tag}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
 
       <View style={styles.labelRow}>
         <Text style={styles.label}>Description</Text>
@@ -584,17 +564,6 @@ const createStyles = (c: ThemeColors) =>
     fontSize: 14,
   },
   multiline: { minHeight: 72, maxHeight: 120 },
-  suggestionRow: { gap: 8, paddingTop: 2 },
-  collapsed: { height: 0 },
-  suggestion: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: c.borderStrong,
-    backgroundColor: c.base,
-  },
-  suggestionText: { color: c.accentSoft, fontSize: 12, fontWeight: '700' },
   whenRow: { flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 38 },
   whenLabel: { color: c.textSecondary, fontSize: 14, fontWeight: '500', width: 44 },
   chips: { flex: 1, flexDirection: 'row', justifyContent: 'flex-end', gap: 8 },

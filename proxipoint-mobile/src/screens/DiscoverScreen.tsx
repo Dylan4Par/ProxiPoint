@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { canonicalizeTags } from '../lib/hashtags';
 import { BackHandler, StyleSheet, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProximitySocket } from '../hooks/useProximitySocket';
@@ -173,12 +174,14 @@ export const DiscoverScreen: React.FC = () => {
   const [profile, setProfile] = useState<MyProfile>(() => {
     const { session, seed } = useAuthStore.getState();
     const account = session?.account;
-    return {
+    const merged = {
       ...DEFAULT_PROFILE,
       ...(seed?.profile ?? {}),
       ...(account?.displayName ? { displayName: account.displayName } : {}),
       ...(account?.handle ? { handle: `@${account.handle}` } : {}),
     };
+    // Followed tags saved before the allowed list: old spellings map onto it, the rest are dropped.
+    return { ...merged, interestTags: canonicalizeTags(merged.interestTags) };
   });
 
   // ---- Where Discover is looking -------------------------------------------------------------

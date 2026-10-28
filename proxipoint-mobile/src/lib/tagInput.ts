@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { parseBeaconTags } from './beaconDraft';
+import { canonicalTag } from './hashtags';
 
 /**
  * Shared behavior for every Tags field (Drop Point sheet, Manage sheet editor):
@@ -70,9 +71,10 @@ export function enteredTags(value: string): Set<string> {
 /** Pulls hashtags off whatever beacons/events the store holds, most-used first. */
 export function collectKnownTags(items: unknown[] | undefined): string[] {
   const counts = new Map<string, { label: string; count: number }>();
+  // Only tags on the allowed list, spelled the list's way (old spellings map onto it).
   const add = (raw: unknown) => {
     if (typeof raw !== 'string') return;
-    const label = cleanTagWord(raw);
+    const label = cleanTagWord(canonicalTag(raw) ?? '');
     if (!label) return;
     const key = label.toLowerCase();
     const entry = counts.get(key);
@@ -89,7 +91,9 @@ export function collectKnownTags(items: unknown[] | undefined): string[] {
       else if (typeof value === 'string') parseBeaconTags(value).forEach(add);
     }
   });
-  sessionTags.forEach((count, label) => {
+  sessionTags.forEach((count, raw) => {
+    const label = cleanTagWord(canonicalTag(raw) ?? '');
+    if (!label) return;
     const key = label.toLowerCase();
     const entry = counts.get(key);
     if (entry) entry.count += count;
@@ -175,9 +179,12 @@ export function selectedTags(value: string): string[] {
   return out;
 }
 
-/** Adds a tag (ignored if it's empty, already there, or the limit is reached). */
+/**
+ * Adds a tag from the allowed list (lib/hashtags), spelled the list's way. Ignored if it isn't on
+ * the list, is already there, or the limit is reached.
+ */
 export function addTag(value: string, tag: string, limit = DROP_TAG_LIMIT): string {
-  const clean = cleanTagWord(tag);
+  const clean = cleanTagWord(canonicalTag(tag) ?? '');
   const current = selectedTags(value);
   if (!clean || current.length >= limit || current.some((t) => t.toLowerCase() === clean.toLowerCase())) {
     return tagsToInput(current);
@@ -201,7 +208,7 @@ export function myTagSuggestions(
   const entries = new Map<string, { label: string; count: number; last: number; order: number }>();
   let order = 0;
   const add = (raw: string, weight: number, at: number) => {
-    const label = cleanTagWord(raw);
+    const label = cleanTagWord(canonicalTag(raw) ?? '');
     if (!label) return;
     const key = label.toLowerCase();
     const entry = entries.get(key);

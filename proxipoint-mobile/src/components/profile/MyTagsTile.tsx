@@ -5,6 +5,7 @@ import { INTEREST_TAG_LIMIT } from '../../lib/myProfile';
 import { INTEREST_RADIUS_METERS } from '../../lib/nearbyInterest';
 import { formatRadiusIn, useUnits } from '../../lib/units';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { bestHashtagFor, canonicalTag, searchHashtags } from '../../lib/hashtags';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 /** "#LiveMusic" from "livemusic", "#live music", "##LiveMusic" (letters, numbers, _ only). */
@@ -37,9 +38,14 @@ export const MyTagsTile: React.FC<{
   const knownTags = useDiscoveryStore((state) => state.tags) as string[];
   const full = tags.length >= INTEREST_TAG_LIMIT;
 
+  // Only tags on the allowed list (lib/hashtags): the exact one typed, or the best match.
   const add = (raw: string) => {
-    const tag = cleanTag(raw);
-    if (!tag) return;
+    if (!cleanTag(raw)) return;
+    const tag = bestHashtagFor(raw, tags);
+    if (!tag) {
+      setError(`No tag matches ${cleanTag(raw)}. Pick one from the list below.`);
+      return;
+    }
     if (tags.some((existing) => same(existing, tag))) {
       setError(`You already follow ${tag}.`);
       return;
@@ -58,11 +64,17 @@ export const MyTagsTile: React.FC<{
     setError('');
   };
 
-  // Tags already used on Discover that you don't follow yet.
-  const suggestions = (knownTags || [])
-    .filter((tag) => typeof tag === 'string' && tag.replace(/^#+/, '').trim() && !/^#?all$/i.test(tag))
-    .filter((tag) => !tags.some((existing) => same(existing, tag)))
-    .slice(0, 12);
+  // Typing: listed tags that match. Otherwise: tags already used on Discover you don't follow yet.
+  const query = cleanTag(input);
+  const suggestions = query
+    ? searchHashtags(query, { exclude: tags, limit: 12 }).map((entry) => entry.tag)
+    : (knownTags || [])
+        .map((tag) => (typeof tag === 'string' ? canonicalTag(tag) : null))
+        .filter((tag): tag is string => Boolean(tag))
+        .filter((tag, i, all) => all.indexOf(tag) === i)
+        .filter((tag) => !tags.some((existing) => same(existing, tag)))
+        .slice(0, 12);
+  const canAdd = Boolean(query && bestHashtagFor(query, tags));
 
   return (
     <View style={styles.tile} testID="profile-tags">
@@ -122,7 +134,7 @@ export const MyTagsTile: React.FC<{
               setError('');
             }}
             onSubmitEditing={() => add(input)}
-            placeholder="#LiveMusic"
+            placeholder="Find a tag, e.g. music"
             placeholderTextColor={c.textFaint}
             autoCapitalize="none"
             autoCorrect={false}
@@ -132,9 +144,9 @@ export const MyTagsTile: React.FC<{
             testID="profile-tags-input"
           />
           <TouchableOpacity
-            style={[styles.addBtn, !cleanTag(input) && styles.addBtnOff]}
+            style={[styles.addBtn, !canAdd && styles.addBtnOff]}
             onPress={() => add(input)}
-            disabled={!cleanTag(input)}
+            disabled={!canAdd}
             accessibilityRole="button"
             accessibilityLabel="Add #tag"
             testID="profile-tags-add"
