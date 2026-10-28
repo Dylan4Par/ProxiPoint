@@ -9,6 +9,7 @@ import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
 import { ReportSheet, type ReportTarget } from '../components/safety/ReportSheet';
 import { pickRecapPhotos } from '../lib/profilePhotos';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
+import { CHANNEL_CATEGORIES, channelInCategory, type ChannelCategory } from '../lib/channelCategories';
 import { ActivityScreen } from './ActivityScreen';
 import { timeAgo } from '../lib/activity';
 import { useBoosts } from '../lib/boost';
@@ -427,7 +428,11 @@ const ManageView: React.FC<{ channels: Channel[]; onOpenChannel: (id: string) =>
   const { colors: c } = useTheme();
   const [creating, setCreating] = useState(false);
   const joined = channels.filter((channel) => channel.joined);
-  const others = channels.filter((channel) => !channel.joined).sort((a, b) => b.memberCount - a.memberCount);
+  const [category, setCategory] = useState<ChannelCategory>('all');
+  const others = channels
+    .filter((channel) => !channel.joined && channelInCategory(channel.tags, category))
+    .sort((a, b) => b.memberCount - a.memberCount);
+  const categoryLabel = CHANNEL_CATEGORIES.find((entry) => entry.id === category)?.label ?? '';
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} testID="channels-manage">
       <TouchableOpacity
@@ -458,7 +463,32 @@ const ManageView: React.FC<{ channels: Channel[]; onOpenChannel: (id: string) =>
       ) : (
         <Text style={styles.emptyText}>You haven’t joined any channels yet.</Text>
       )}
-      <Text style={[styles.sectionLabel, styles.sectionSpaced]}>FIND CHANNELS</Text>
+      {/* Narrow Find channels by kind (scrolls sideways when the chips don't all fit). */}
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.categoryScroll}
+        contentContainerStyle={styles.categoryRow}
+        accessibilityRole="tablist"
+        testID="channels-category-row"
+      >
+        {CHANNEL_CATEGORIES.map(({ id, label }) => {
+          const active = category === id;
+          return (
+            <TouchableOpacity
+              key={id}
+              style={[styles.categoryChip, active && styles.categoryChipActive]}
+              onPress={() => setCategory(id)}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: active }}
+              testID={`channels-category-${id}`}
+            >
+              <Text style={[styles.categoryText, active && styles.categoryTextActive]}>{label}</Text>
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
+      <Text style={styles.sectionLabel}>FIND CHANNELS</Text>
       {others.length ? (
         <View style={styles.list}>
           {others.map((channel) => (
@@ -466,7 +496,9 @@ const ManageView: React.FC<{ channels: Channel[]; onOpenChannel: (id: string) =>
           ))}
         </View>
       ) : (
-        <Text style={styles.emptyText}>You’re in every channel around here.</Text>
+        <Text style={styles.emptyText}>
+          {category === 'all' ? 'You’re in every channel around here.' : `No ${categoryLabel} channels to join yet.`}
+        </Text>
       )}
     </ScrollView>
   );
@@ -1989,6 +2021,20 @@ const createStyles = (c: ThemeColors) =>
     // Tucks the sort row (which has its own 14 top margin) up under the deck's dots.
     recommendations: { marginBottom: -6 },
     sectionSpaced: { marginTop: 20 },
+    // Find channels category chips: a smaller take on the Feed / My Channels pills.
+    categoryScroll: { flexGrow: 0, marginHorizontal: -16, marginTop: 16, marginBottom: 8 },
+    categoryRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 16 },
+    categoryChip: {
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: 16,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    categoryChipActive: { backgroundColor: c.accentTint, borderColor: c.accentDeep },
+    categoryText: { color: c.textMuted, fontSize: 12, fontWeight: '700' },
+    categoryTextActive: { color: c.accent, fontWeight: '800' },
     list: { gap: 10 },
     emptyText: { color: c.textFaint, fontSize: 13, lineHeight: 19 },
 
