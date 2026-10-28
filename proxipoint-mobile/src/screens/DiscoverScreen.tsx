@@ -758,6 +758,10 @@ export const DiscoverScreen: React.FC = () => {
           }}
           myHandle={profile.handle}
           unreadAlerts={unread}
+          onOpenAlerts={() => {
+            goTo('profile');
+            setProfileView('alerts');
+          }}
           interestTags={profile.interestTags ?? []}
           onOpenPoint={openHostPoint}
           onToggleRsvp={(id) => toggleRsvp(id)}

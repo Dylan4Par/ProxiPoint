@@ -4,7 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CampaignsView } from '../components/campaigns/CampaignsView';
 import type { CampaignBuilderProps } from '../components/campaigns/CampaignBuilder';
 import type { DroppedPoint } from '../lib/droppedPoint';
-import { BadgeCheck, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, Heart, ImagePlus, Lock, SmilePlus, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
+import { BadgeCheck, Bell, Newspaper, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, Heart, ImagePlus, Lock, SmilePlus, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
 import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
 import { ReportSheet, type ReportTarget } from '../components/safety/ReportSheet';
 import { pickRecapPhotos } from '../lib/profilePhotos';
@@ -92,8 +92,10 @@ interface ChannelsScreenProps {
   onOpenChannel: (id: string | null) => void;
   /** Your handle, used as the author of new posts. */
   myHandle: string;
-  /** Unread #tag alerts (shown on the Alerts pill). */
+  /** Unread #tag alerts (the dot on the bell). */
   unreadAlerts: number;
+  /** Bell in the header: Profile → Notifications & Proximity Alerts. */
+  onOpenAlerts?: () => void;
   interestTags: string[];
   /** Show the Point on Explore Map with its details open. */
   onOpenPoint: (id: string) => void;
@@ -173,6 +175,7 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
   const channels = useChannels();
   const posts = useVisiblePosts();
   const open = channelId ? channels.find((channel) => channel.id === channelId) ?? null : null;
+  const joinedCount = channels.filter((channel) => channel.joined).length;
   const openPost = postId ? posts.find((post) => post.id === postId) ?? null : null;
 
   // Android back: post page → whatever it was opened from; place page → the same; channel page → the list.
@@ -208,49 +211,60 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
     <View style={styles.container} testID="channels-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Channels</Text>
-        {/* Same search as Discover (#tags, c/channels, events). */}
-        <TouchableOpacity
-          style={styles.searchBtn}
-          onPress={props.onOpenSearch}
-          accessibilityRole="button"
-          accessibilityLabel="Search channels, #tags and events"
-          testID="channels-search"
-        >
-          <Search size={18} color={c.accent} strokeWidth={2.5} />
-          <Text style={styles.searchBtnText}>Search</Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          {/* Same search as Discover (#tags, c/channels, events). */}
+          <TouchableOpacity
+            style={styles.searchBtn}
+            onPress={props.onOpenSearch}
+            accessibilityRole="button"
+            accessibilityLabel="Search channels, #tags and events"
+            testID="channels-search"
+          >
+            <Search size={18} color={c.accent} strokeWidth={2.5} />
+            <Text style={styles.searchBtnText}>Search</Text>
+          </TouchableOpacity>
+          {/* Bell: Notifications & Proximity Alerts (on Profile); the dot means unread alerts. */}
+          {props.onOpenAlerts ? (
+            <TouchableOpacity
+              style={styles.bellBtn}
+              onPress={props.onOpenAlerts}
+              accessibilityRole="button"
+              accessibilityLabel={unreadAlerts > 0 ? `Notifications, ${unreadAlerts} unread` : 'Notifications'}
+              testID="channels-alerts"
+            >
+              <Bell size={18} color={c.text} strokeWidth={2.25} />
+              {unreadAlerts > 0 ? <View style={styles.bellDot} /> : null}
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
-      {/* Scrolls sideways when the tabs don't all fit. */}
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        style={styles.segmentScroll}
-        contentContainerStyle={styles.segmentRow}
-        accessibilityRole="tablist"
-      >
+      {/* Feed | My Channels: one bar split in two, the open one filled in. */}
+      <View style={styles.segmentBar} accessibilityRole="tablist">
         {SEGMENTS.map(({ id, label }) => {
           const active = segment === id;
-          const badge = id === 'alerts' && unreadAlerts > 0 && !active;
+          const Icon = id === 'feed' ? Newspaper : Users;
+          const count = id === 'manage' ? joinedCount : 0;
           return (
             <TouchableOpacity
               key={id}
-              style={[styles.segmentPill, active && styles.segmentPillActive]}
+              style={[styles.segmentHalf, active && styles.segmentHalfActive]}
               onPress={() => onChangeSegment(id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
-              accessibilityLabel={badge ? `${label}, ${unreadAlerts} unread` : label}
+              accessibilityLabel={count ? `${label}, ${count} joined` : label}
               testID={`channels-segment-${id}`}
             >
+              <Icon size={15} color={active ? c.onAccent : c.textMuted} strokeWidth={2.25} />
               <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
-              {badge ? (
-                <View style={styles.segmentBadge}>
-                  <Text style={styles.segmentBadgeText}>{unreadAlerts > 9 ? '9+' : unreadAlerts}</Text>
+              {count ? (
+                <View style={[styles.segmentCount, active && styles.segmentCountActive]}>
+                  <Text style={[styles.segmentCountText, active && styles.segmentCountTextActive]}>{count}</Text>
                 </View>
               ) : null}
             </TouchableOpacity>
           );
         })}
-      </ScrollView>
+      </View>
 
       {segment === 'feed' ? <FeedView {...props} channels={channels} /> : null}
       {segment === 'alerts' ? (
@@ -1991,32 +2005,65 @@ const createStyles = (c: ThemeColors) =>
     },
     searchBtnText: { color: c.accent, fontSize: 13, fontWeight: '800' },
     title: { color: c.text, fontSize: 24, fontWeight: '800' },
-    segmentScroll: { flexGrow: 0 },
-    segmentRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 10 },
-    segmentPill: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      gap: 6,
-      paddingHorizontal: 14,
-      paddingVertical: 8,
+    headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    bellBtn: {
+      width: 36,
+      height: 36,
       borderRadius: 18,
-      backgroundColor: c.border,
-      borderWidth: 1,
-      borderColor: 'transparent',
-    },
-    segmentPillActive: { backgroundColor: c.accentTint, borderColor: c.accentDeep },
-    segmentText: { color: c.textMuted, fontSize: 13, fontWeight: '700' },
-    segmentTextActive: { color: c.accent, fontWeight: '800' },
-    segmentBadge: {
-      minWidth: 18,
-      height: 18,
-      borderRadius: 9,
-      paddingHorizontal: 4,
       alignItems: 'center',
       justifyContent: 'center',
-      backgroundColor: c.yellow,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
     },
-    segmentBadgeText: { color: '#0a1120', fontSize: 10, fontWeight: '900' },
+    bellDot: {
+      position: 'absolute',
+      top: 7,
+      right: 8,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: c.accent,
+      borderWidth: 1.5,
+      borderColor: c.surface,
+    },
+    // Feed | My Channels: one rounded bar, split in half; the open half is filled.
+    segmentBar: {
+      flexDirection: 'row',
+      marginHorizontal: 16,
+      marginTop: 12,
+      marginBottom: 10,
+      padding: 4,
+      gap: 4,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    segmentHalf: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 7,
+      paddingVertical: 9,
+      borderRadius: 10,
+    },
+    segmentHalfActive: { backgroundColor: c.accent },
+    segmentText: { color: c.textMuted, fontSize: 13, fontWeight: '700' },
+    segmentTextActive: { color: c.onAccent, fontWeight: '800' },
+    segmentCount: {
+      minWidth: 20,
+      height: 20,
+      borderRadius: 10,
+      paddingHorizontal: 5,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.border,
+    },
+    segmentCountActive: { backgroundColor: 'rgba(255,255,255,0.35)' },
+    segmentCountText: { color: c.text, fontSize: 11, fontWeight: '800' },
+    segmentCountTextActive: { color: c.onAccent },
     sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2, marginBottom: 8, marginTop: 4 },
     // Tucks the sort row (which has its own 14 top margin) up under the deck's dots.
     recommendations: { marginBottom: -6 },
