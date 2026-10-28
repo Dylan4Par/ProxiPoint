@@ -4,12 +4,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CampaignsView } from '../components/campaigns/CampaignsView';
 import type { CampaignBuilderProps } from '../components/campaigns/CampaignBuilder';
 import type { DroppedPoint } from '../lib/droppedPoint';
-import { BadgeCheck, Bell, Newspaper, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, Heart, ImagePlus, Lock, SmilePlus, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
+import { BadgeCheck, Bell, Flame, Newspaper, Check, ChevronLeft, ChevronRight, CornerDownRight, Flag, Heart, ImagePlus, Lock, SmilePlus, Sparkles, MapPin, MessageCircle, Plus, Search, Send, ShieldCheck, Users, X } from 'lucide-react-native';
 import { PhotoRulesNote } from '../components/safety/PhotoRulesNote';
 import { ReportSheet, type ReportTarget } from '../components/safety/ReportSheet';
 import { pickRecapPhotos } from '../lib/profilePhotos';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { CHANNEL_CATEGORIES, channelInCategory, type ChannelCategory } from '../lib/channelCategories';
+import { suggestChannels } from '../lib/channelSuggest';
 import { ActivityScreen } from './ActivityScreen';
 import { timeAgo } from '../lib/activity';
 import { useBoosts } from '../lib/boost';
@@ -278,7 +279,7 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
         />
       ) : null}
       {segment === 'manage' ? (
-        <ManageView channels={channels} onOpenChannel={onOpenChannel} myHandle={props.myHandle} />
+        <ManageView channels={channels} onOpenChannel={onOpenChannel} myHandle={props.myHandle} myTags={props.interestTags} />
       ) : null}
       {segment === 'campaigns' ? (
         <CampaignsView
@@ -433,19 +434,30 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
 
 // ---- Manage ----------------------------------------------------------------------------------
 
-const ManageView: React.FC<{ channels: Channel[]; onOpenChannel: (id: string) => void; myHandle: string }> = ({
-  channels,
-  onOpenChannel,
-  myHandle,
-}) => {
+const ManageView: React.FC<{
+  channels: Channel[];
+  onOpenChannel: (id: string) => void;
+  myHandle: string;
+  /** Your followed #tags: For you matches channels to them. */
+  myTags: string[];
+}> = ({ channels, onOpenChannel, myHandle, myTags }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [creating, setCreating] = useState(false);
   const joined = channels.filter((channel) => channel.joined);
   const [category, setCategory] = useState<ChannelCategory>('all');
-  const others = channels
-    .filter((channel) => !channel.joined && channelInCategory(channel.tags, category))
-    .sort((a, b) => b.memberCount - a.memberCount);
+  const posts = useVisiblePosts();
+  // For you (fits your #tags and channels) + Trending (busiest this week), inside the picked chip.
+  const { forYou, trending } = useMemo(
+    () =>
+      suggestChannels(
+        channels.filter((channel) => channel.joined || channelInCategory(channel.tags, category)),
+        posts,
+        myTags,
+        Date.now(),
+      ),
+    [channels, posts, myTags, category],
+  );
   const categoryLabel = CHANNEL_CATEGORIES.find((entry) => entry.id === category)?.label ?? '';
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} testID="channels-manage">
@@ -502,14 +514,33 @@ const ManageView: React.FC<{ channels: Channel[]; onOpenChannel: (id: string) =>
           );
         })}
       </ScrollView>
-      <Text style={styles.sectionLabel}>FIND CHANNELS</Text>
-      {others.length ? (
-        <View style={styles.list}>
-          {others.map((channel) => (
-            <ChannelRow key={channel.id} channel={channel} onOpen={() => onOpenChannel(channel.id)} />
-          ))}
-        </View>
-      ) : (
+      {forYou.length ? (
+        <>
+          <View style={styles.findHeading}>
+            <Sparkles size={13} color={c.violet} strokeWidth={2.5} />
+            <Text style={[styles.sectionLabel, styles.findHeadingText]}>FOR YOU</Text>
+          </View>
+          <View style={styles.list}>
+            {forYou.map(({ channel, reason }) => (
+              <ChannelRow key={channel.id} channel={channel} reason={reason} reasonTone="forYou" onOpen={() => onOpenChannel(channel.id)} />
+            ))}
+          </View>
+        </>
+      ) : null}
+      {trending.length ? (
+        <>
+          <View style={[styles.findHeading, forYou.length ? styles.sectionSpaced : null]}>
+            <Flame size={13} color={c.orange} strokeWidth={2.5} />
+            <Text style={[styles.sectionLabel, styles.findHeadingText]}>TRENDING</Text>
+          </View>
+          <View style={styles.list}>
+            {trending.map(({ channel, reason }) => (
+              <ChannelRow key={channel.id} channel={channel} reason={reason} reasonTone="trending" onOpen={() => onOpenChannel(channel.id)} />
+            ))}
+          </View>
+        </>
+      ) : null}
+      {forYou.length || trending.length ? null : (
         <Text style={styles.emptyText}>
           {category === 'all' ? 'You’re in every channel around here.' : `No ${categoryLabel} channels to join yet.`}
         </Text>
@@ -518,7 +549,13 @@ const ManageView: React.FC<{ channels: Channel[]; onOpenChannel: (id: string) =>
   );
 };
 
-const ChannelRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ channel, onOpen }) => {
+const ChannelRow: React.FC<{
+  channel: Channel;
+  onOpen: () => void;
+  /** Find channels: why it's suggested ("Because you follow #Hiking", "4 posts this week"). */
+  reason?: string;
+  reasonTone?: 'forYou' | 'trending';
+}> = ({ channel, onOpen, reason, reasonTone = 'trending' }) => {
   const styles = useThemedStyles(createStyles);
   return (
     <TouchableOpacity
@@ -536,6 +573,11 @@ const ChannelRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ channe
         <Text style={styles.rowMeta} numberOfLines={1}>
           {channel.handle} · {formatCount(channel.memberCount)} members{channelStatus(channel)}
         </Text>
+        {reason ? (
+          <Text style={[styles.rowReason, reasonTone === 'forYou' ? styles.rowReasonForYou : styles.rowReasonTrending]} numberOfLines={1}>
+            {reason}
+          </Text>
+        ) : null}
       </View>
       <JoinButton channel={channel} />
     </TouchableOpacity>
@@ -2068,6 +2110,11 @@ const createStyles = (c: ThemeColors) =>
     // Tucks the sort row (which has its own 14 top margin) up under the deck's dots.
     recommendations: { marginBottom: -6 },
     sectionSpaced: { marginTop: 20 },
+    findHeading: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8, marginTop: 4 },
+    findHeadingText: { marginBottom: 0, marginTop: 0 },
+    rowReason: { fontSize: 11.5, fontWeight: '700', marginTop: 3 },
+    rowReasonForYou: { color: c.violet },
+    rowReasonTrending: { color: c.orange },
     // Find channels category chips: a smaller take on the Feed / My Channels pills.
     categoryScroll: { flexGrow: 0, marginHorizontal: -16, marginTop: 16, marginBottom: 8 },
     categoryRow: { flexDirection: 'row', gap: 6, paddingHorizontal: 16 },
