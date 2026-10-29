@@ -6,10 +6,11 @@ Run from proxipoint-mobile/ after editing the spreadsheet:
     python scripts/build_hashtags.py
 (needs: pip install openpyxl)
 
-Spreadsheet: sheet "Taxonomy", header row with these columns (any order, extra columns ignored):
+Spreadsheet: sheet "Taxonomy" (or the first sheet), header row with these columns (any order, extra columns ignored):
     Tag ID | Hashtag | Category | Description / Scope | Suggested Icon | Default Radius Sensitivity
 - Hashtag: "#LiveMusic" (letters, numbers, _). Unique ignoring case.
-- Category: one of the categories below (add a new one to CATEGORIES first).
+- Category: one of CATEGORIES below, or a finer name listed in CATEGORY_ALIASES.
+Only Hashtag and Category are required; the other columns can be left out or blank.
 - Suggested Icon: an Ionicons-style name ("musical-notes") or a lucide name ("Music"); see ICONS.
   Unknown names fall back to the category's icon (with a warning).
 - Default Radius Sensitivity: "Neighborhood (1-3 mi)", "Local (3-5 mi)" or "Metro (5-15 mi)".
@@ -37,6 +38,51 @@ CATEGORIES = {
     "Community & Civic": ("community-civic", "cyan", "HandHeart"),
     "Family & Kids": ("family-kids", "amber", "Users"),
     "Wellness & Mind": ("wellness-mind", "cyan", "Leaf"),
+    "Holidays & Seasonal": ("holidays-seasonal", "pink", "Gift"),
+    "Celebrations & Milestones": ("celebrations-milestones", "violet", "PartyPopper"),
+    "Faith & Spiritual": ("faith-spiritual", "blue", "Church"),
+    "Shopping & Markets": ("shopping-markets", "amber", "ShoppingBag"),
+}
+
+# Finer category names (as in the "Additional" sheet) -> one of CATEGORIES above. A sheet can use
+# either; new names have to be added here (or to CATEGORIES) before they're accepted.
+CATEGORY_ALIASES = {
+    # Holidays & Seasonal
+    "Winter Holidays & Christmas": "Holidays & Seasonal", "Halloween & Fall": "Holidays & Seasonal",
+    "New Year's Celebrations": "Holidays & Seasonal", "Thanksgiving & Harvest": "Holidays & Seasonal",
+    "Spring & Easter": "Holidays & Seasonal", "Valentine's & Romance": "Holidays & Seasonal",
+    "Mardi Gras & Carnival": "Holidays & Seasonal", "St. Patrick's Day": "Holidays & Seasonal",
+    "Summer & Patriotic": "Holidays & Seasonal", "Holiday Charity & Giving": "Holidays & Seasonal",
+    "Shopping & Holidays": "Holidays & Seasonal", "Seasonal Celebrations": "Holidays & Seasonal",
+    "Seasonal & Tours": "Holidays & Seasonal", "Spring & Community": "Holidays & Seasonal",
+    # Celebrations & Milestones
+    "Weddings & Romance": "Celebrations & Milestones", "Birthdays & Milestones": "Celebrations & Milestones",
+    "Family & Milestones": "Celebrations & Milestones", "Education & Milestones": "Celebrations & Milestones",
+    "Milestones & Romance": "Celebrations & Milestones", "Career & Milestones": "Celebrations & Milestones",
+    "Social & Milestones": "Celebrations & Milestones", "Gatherings & Farewells": "Celebrations & Milestones",
+    "Memorial & Remembrance": "Celebrations & Milestones",
+    # Faith & Spiritual
+    "Family & Faith": "Faith & Spiritual", "Wellness & Spiritual": "Faith & Spiritual",
+    # Shopping & Markets
+    "Community & Shopping": "Shopping & Markets",
+    # Existing categories
+    "Sports & Rec": "Sports & Fitness", "Sports & Casual": "Sports & Fitness",
+    "Games & Social": "Social & Hobbies", "Makers & Crafts": "Social & Hobbies",
+    "Casual Gatherings": "Social & Hobbies", "Home & Hobbies": "Social & Hobbies",
+    "Pop Culture & Hobbies": "Social & Hobbies", "Social & Family": "Social & Hobbies",
+    "Home & Gatherings": "Social & Hobbies", "Education & Social": "Social & Hobbies",
+    "Education & Learning": "Social & Hobbies",
+    "Nightlife & Drinks": "Music & Nightlife", "Music & Social": "Music & Nightlife",
+    "Food & Casual": "Food & Dining",
+    "Cultural Celebrations": "Arts & Culture", "Community & Arts": "Arts & Culture",
+    "Arts & Social": "Arts & Culture", "Dance & Social": "Arts & Culture",
+    "Outdoors & Tours": "Outdoors & Recreation", "Science & Nature": "Outdoors & Recreation",
+    "Professional & Casual": "Tech & Professional", "Professional & Career": "Tech & Professional",
+    "Community & Pets": "Community & Civic", "Community & Service": "Community & Civic",
+    "Community & Neighborhood": "Community & Civic", "Home & Community": "Community & Civic",
+    "Real Estate & Community": "Community & Civic", "Civic & Patriotic": "Community & Civic",
+    "Kids & Family": "Family & Kids", "Pets & Family": "Family & Kids",
+    "Wellness & Community": "Wellness & Mind",
 }
 
 # Sheet icon names -> lucide-react-native components (only ones that exist in lucide 1.x).
@@ -60,6 +106,11 @@ ICONS = {
 }
 LUCIDE = sorted(set(ICONS.values()) | {c[2] for c in CATEGORIES.values()} | {"Terminal", "Trees"})
 
+
+def tag_id(tag: str) -> str:
+    """'#NYEParty' -> 'nye-party', '#LiveMusic' -> 'live-music' (acronyms stay together)."""
+    return re.sub(r"(?<=[a-z0-9])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])", "-", tag.lstrip("#")).lower()
+
 # A better icon than the sheet's for a few tags.
 ICON_OVERRIDES = {"Theater": "Drama", "PuppetShow": "Drama", "Improv": "Drama", "Camping": "Tent"}
 
@@ -68,7 +119,7 @@ RADIUS = {"neighborhood": "neighborhood", "local": "local", "metro": "metro"}
 
 def main() -> None:
     wb = openpyxl.load_workbook(SOURCE, data_only=True)
-    ws = wb["Taxonomy"]
+    ws = wb["Taxonomy"] if "Taxonomy" in wb.sheetnames else wb.worksheets[0]
     header = None
     rows = []
     for raw in ws.iter_rows(values_only=True):
@@ -101,7 +152,7 @@ def main() -> None:
             problems.append(f"#{tag}: listed twice")
             continue
         seen.add(tag.lower())
-        label = col(cells, "Category")
+        label = CATEGORY_ALIASES.get(col(cells, "Category"), col(cells, "Category"))
         if label not in CATEGORIES:
             problems.append(f"#{tag}: unknown category {label!r} (add it to CATEGORIES)")
             continue
@@ -109,11 +160,12 @@ def main() -> None:
         sheet_icon = col(cells, "Suggested Icon")
         icon = ICON_OVERRIDES.get(tag) or ICONS.get(sheet_icon) or (sheet_icon if sheet_icon in LUCIDE else None)
         if not icon:
-            print(f"warning: #{tag}: icon {sheet_icon!r} not mapped, using {cat_icon}", file=sys.stderr)
+            if sheet_icon:
+                print(f"warning: #{tag}: icon {sheet_icon!r} not mapped, using {cat_icon}", file=sys.stderr)
             icon = cat_icon
         radius_raw = col(cells, "Default Radius Sensitivity").split(" ")[0].lower()
         tags.append({
-            "id": col(cells, "Tag ID") or re.sub(r"(?<!^)(?=[A-Z])", "-", tag).lower(),
+            "id": col(cells, "Tag ID") or tag_id(tag),
             "tag": f"#{tag}",
             "category": cat_id,
             "description": col(cells, "Description / Scope"),

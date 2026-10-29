@@ -36,11 +36,11 @@ function demoEvents(now: number): InsightEvent[] {
   const rows: Array<[string, string[], number, boolean?]> = [
     ['Taco Tuesday Truck Rally', ['#FoodTrucks', '#Tacos'], 2, true],
     ['Saturday Morning Market', ['#FarmersMarket'], 5],
-    ['Trivia Night', ['#BoardGames'], 8],
+    ['Trivia Night', ['#TriviaTournament'], 8],
     ['Porch Blues Session', ['#LiveMusic'], 11],
     ['Food Truck Friday', ['#FoodTrucks'], 15, true],
     ['Sunset Open Play', ['#Pickleball'], 18],
-    ['Catan & Friends', ['#BoardGames'], 20],
+    ['Catan & Friends', ['#BoardGameNight'], 20],
     ['Comedy Open Mic', ['#OpenMic'], 22],
     ['Mural Tour', ['#ArtWalk'], 24],
     ['Power Yoga in the Park', ['#Yoga'], 26],

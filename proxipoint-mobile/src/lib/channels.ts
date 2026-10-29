@@ -202,7 +202,7 @@ let channels: Channel[] = [
     name: 'Tabletop & Trivia',
     handle: 'c/tabletop',
     description: 'Board game nights, pub trivia teams looking for players, and game swaps.',
-    tags: ['#BoardGames'],
+    tags: ['#BoardGames', '#TriviaTournament', '#BoardGameNight'],
     memberCount: 512,
     joined: false,
   },

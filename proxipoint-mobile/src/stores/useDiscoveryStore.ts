@@ -327,7 +327,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-vinyl-night',
     title: 'Vinyl Swap & Listening Party',
-    tags: ['#DJSet'],
+    tags: ['#VinylNight'],
     venue: 'The Rusty Anchor',
     host: '@rustyanchor',
     description: 'Bring a crate, trade a few, and hear a side or two on the big speakers.',
@@ -402,7 +402,7 @@ const SEED_POINTS: SeedPoint[] = [
   {
     id: 'pt-board-games',
     title: 'Board Game Night',
-    tags: ['#BoardGames'],
+    tags: ['#BoardGameNight'],
     venue: 'Meeple Café',
     host: '@meeplecafe',
     description: 'Hundreds of games to borrow, teachers on hand. Drop in solo and get matched to a table.',
@@ -480,7 +480,7 @@ const SEED_POINTS: SeedPoint[] = [
     id: 'pt-pub-trivia',
     url: 'https://example.com/brickhouse-trivia',
     title: 'Wednesday Pub Trivia',
-    tags: ['#BoardGames', '#CraftBeer'],
+    tags: ['#TriviaTournament', '#CraftBeer'],
     venue: 'The Brickhouse Tap',
     host: '@quizmasterjen',
     description: 'Six rounds, teams up to six. Prizes for first place and best team name.',

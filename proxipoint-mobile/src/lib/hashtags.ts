@@ -22,16 +22,16 @@ export const tagKey = (tag: string) => tag.replace(/^#+/, '').replace(/[^A-Za-z0
  * Tags used before the list existed (and common spellings), mapped onto a listed tag so saved
  * Drops, filters and followed tags carry over. Anything not here and not listed is dropped.
  */
-const LEGACY: Record<string, string> = {
+export const LEGACY_TAGS: Record<string, string> = {
   // Music & nightlife
   music: 'LiveMusic', livemusic: 'LiveMusic', soul: 'LiveMusic', blues: 'LiveMusic', bluegrass: 'LiveMusic',
   rock: 'LiveMusic', acoustic: 'LiveMusic', songwriters: 'LiveMusic', concert: 'LiveMusic', band: 'LiveMusic',
-  vinyl: 'DJSet', vinylnight: 'DJSet', records: 'DJSet', dj: 'DJSet', nightlife: 'DJSet',
+  vinyl: 'VinylNight', records: 'VinylNight', dj: 'DJSet', nightlife: 'DJSet',
   brewery: 'CraftBeer', pub: 'CraftBeer', beer: 'CraftBeer', wine: 'WineTasting',
-  poetry: 'PoetrySlam', standup: 'Comedy',
+  poetry: 'PoetrySlam', standup: 'StandUpComedy',
   // Games & social
-  trivia: 'BoardGames', trivianight: 'BoardGames', musicbingo: 'BoardGames', catan: 'BoardGames',
-  chess: 'BoardGames', strategy: 'BoardGames', tabletop: 'BoardGames',
+  trivia: 'TriviaTournament', trivianight: 'TriviaTournament', musicbingo: 'TriviaTournament',
+  catan: 'BoardGameNight', chess: 'ChessClub', strategy: 'BoardGames', tabletop: 'BoardGames', poker: 'PokerNight',
   dogs: 'DogFriendly', crafts: 'MakersAndCrafts', makers: 'MakersAndCrafts', network: 'Networking',
   // Food
   tacotuesday: 'Tacos', taco: 'Tacos', localfood: 'FarmersMarket', honey: 'FarmersMarket',
@@ -41,13 +41,16 @@ const LEGACY: Record<string, string> = {
   nighthike: 'Hiking', hike: 'Hiking',
   // Arts
   art: 'ArtWalk', murals: 'ArtWalk', localartists: 'ArtWalk', gallery: 'GalleryOpening', ceramics: 'Pottery',
-  movies: 'FilmScreening', film: 'FilmScreening', theatre: 'Theater',
+  movies: 'FilmScreening', film: 'FilmScreening', theatre: 'Theater', ceramicsclass: 'CeramicsWorkshop',
   // Tech
   gis: 'TechMeetup', postgis: 'TechMeetup', kotlin: 'TechMeetup', webdev: 'TechMeetup',
   reactnative: 'TechMeetup', opendata: 'TechMeetup', ai: 'AIandRobotics',
   // Community & family
   volunteering: 'Volunteer', creekcleanup: 'CleanUp', foodbank: 'MutualAid', community: 'Civic',
   kidfriendly: 'FamilyFriendly', family: 'FamilyFriendly', kids: 'FamilyFriendly',
+  // Holidays & celebrations
+  xmas: 'Christmas', nye: 'NewYearsEve', july4th: 'FourthOfJuly', stpatricks: 'StPatricksDay',
+  valentines: 'ValentinesDay', bday: 'Birthday', grad: 'GraduationParty',
 };
 
 const BY_KEY = new Map<string, HashtagEntry>(HASHTAG_LIST.map((entry) => [tagKey(entry.tag), entry]));
@@ -59,7 +62,7 @@ export function findHashtag(input: string | null | undefined): HashtagEntry | nu
   if (!key) return null;
   const direct = BY_KEY.get(key);
   if (direct) return direct;
-  const legacy = LEGACY[key];
+  const legacy = LEGACY_TAGS[key];
   return legacy ? BY_KEY.get(tagKey(legacy)) ?? null : null;
 }
 
@@ -118,7 +121,7 @@ export function searchHashtags(
     if (score) scored.push({ entry, score, index });
   });
   // Old spellings: "taco" → #Tacos, "trivia" → #BoardGames.
-  Object.entries(LEGACY).forEach(([old, tag]) => {
+  Object.entries(LEGACY_TAGS).forEach(([old, tag]) => {
     if (!old.startsWith(q)) return;
     const entry = BY_KEY.get(tagKey(tag));
     if (!entry || skip.has(tagKey(entry.tag)) || scored.some((s) => s.entry === entry)) return;

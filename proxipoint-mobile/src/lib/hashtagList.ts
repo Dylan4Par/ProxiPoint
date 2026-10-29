@@ -12,10 +12,14 @@ export type HashtagCategoryId =
   | 'community-civic'
   | 'family-kids'
   | 'wellness-mind'
+  | 'holidays-seasonal'
+  | 'celebrations-milestones'
+  | 'faith-spiritual'
+  | 'shopping-markets'
   ;
 export type HashtagTint = 'cyan' | 'amber' | 'blue' | 'green' | 'violet' | 'pink';
 export type HashtagRadius = 'neighborhood' | 'local' | 'metro';
-export type HashtagIcon = 'Banknote' | 'Beer' | 'Bike' | 'Binoculars' | 'BookOpen' | 'Briefcase' | 'CakeSlice' | 'Camera' | 'Car' | 'Code' | 'Coffee' | 'Cpu' | 'Dices' | 'Drama' | 'Droplet' | 'Dumbbell' | 'Eye' | 'Film' | 'Fish' | 'Flame' | 'FlaskConical' | 'Footprints' | 'Gamepad2' | 'HandHeart' | 'Headphones' | 'Heart' | 'Images' | 'Landmark' | 'Laptop' | 'Leaf' | 'Link' | 'Megaphone' | 'MessagesSquare' | 'Mic' | 'Mountain' | 'Music' | 'PaintBucket' | 'Palette' | 'PartyPopper' | 'PawPrint' | 'PersonStanding' | 'Rocket' | 'Sailboat' | 'Scissors' | 'ShoppingBasket' | 'Signpost' | 'Snowflake' | 'Star' | 'Stethoscope' | 'Tent' | 'Terminal' | 'Trash2' | 'Trees' | 'Trophy' | 'Truck' | 'Users' | 'Utensils' | 'Wind' | 'Wine' | 'Zap';
+export type HashtagIcon = 'Banknote' | 'Beer' | 'Bike' | 'Binoculars' | 'BookOpen' | 'Briefcase' | 'CakeSlice' | 'Camera' | 'Car' | 'Church' | 'Code' | 'Coffee' | 'Cpu' | 'Dices' | 'Drama' | 'Droplet' | 'Dumbbell' | 'Eye' | 'Film' | 'Fish' | 'Flame' | 'FlaskConical' | 'Footprints' | 'Gamepad2' | 'Gift' | 'HandHeart' | 'Headphones' | 'Heart' | 'Images' | 'Landmark' | 'Laptop' | 'Leaf' | 'Link' | 'Megaphone' | 'MessagesSquare' | 'Mic' | 'Mountain' | 'Music' | 'PaintBucket' | 'Palette' | 'PartyPopper' | 'PawPrint' | 'PersonStanding' | 'Rocket' | 'Sailboat' | 'Scissors' | 'ShoppingBag' | 'ShoppingBasket' | 'Signpost' | 'Snowflake' | 'Star' | 'Stethoscope' | 'Tent' | 'Terminal' | 'Trash2' | 'Trees' | 'Trophy' | 'Truck' | 'Users' | 'Utensils' | 'Wind' | 'Wine' | 'Zap';
 
 export interface HashtagCategory {
   id: HashtagCategoryId;
@@ -96,6 +100,30 @@ export const HASHTAG_CATEGORIES: HashtagCategory[] = [
     'label': 'Wellness & Mind',
     'tint': 'cyan',
     'icon': 'Leaf'
+  },
+  {
+    'id': 'holidays-seasonal',
+    'label': 'Holidays & Seasonal',
+    'tint': 'pink',
+    'icon': 'Gift'
+  },
+  {
+    'id': 'celebrations-milestones',
+    'label': 'Celebrations & Milestones',
+    'tint': 'violet',
+    'icon': 'PartyPopper'
+  },
+  {
+    'id': 'faith-spiritual',
+    'label': 'Faith & Spiritual',
+    'tint': 'blue',
+    'icon': 'Church'
+  },
+  {
+    'id': 'shopping-markets',
+    'label': 'Shopping & Markets',
+    'tint': 'amber',
+    'icon': 'ShoppingBag'
   }
 ];
 
@@ -898,6 +926,2366 @@ export const HASHTAG_LIST: HashtagEntry[] = [
     'category': 'wellness-mind',
     'description': 'Healthy eating and diet seminars',
     'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'open-house',
+    'tag': '#OpenHouse',
+    'category': 'community-civic',
+    'description': 'Real Estate & Community',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'food-specials',
+    'tag': '#FoodSpecials',
+    'category': 'food-dining',
+    'description': 'Food & Dining',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'food-promo',
+    'tag': '#FoodPromo',
+    'category': 'food-dining',
+    'description': 'Food & Dining',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'drink-promo',
+    'tag': '#DrinkPromo',
+    'category': 'music-nightlife',
+    'description': 'Nightlife & Drinks',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'haunted-tour',
+    'tag': '#HauntedTour',
+    'category': 'holidays-seasonal',
+    'description': 'Seasonal & Tours',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'tasting-menu',
+    'tag': '#TastingMenu',
+    'category': 'food-dining',
+    'description': 'Food & Dining',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'brewery-tour',
+    'tag': '#BreweryTour',
+    'category': 'music-nightlife',
+    'description': 'Nightlife & Drinks',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'patio-vibes',
+    'tag': '#PatioVibes',
+    'category': 'music-nightlife',
+    'description': 'Nightlife & Drinks',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'rooftop-bar',
+    'tag': '#RooftopBar',
+    'category': 'music-nightlife',
+    'description': 'Nightlife & Drinks',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'pub-crawl',
+    'tag': '#PubCrawl',
+    'category': 'music-nightlife',
+    'description': 'Nightlife & Drinks',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'ghost-tour',
+    'tag': '#GhostTour',
+    'category': 'holidays-seasonal',
+    'description': 'Seasonal & Tours',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'historical-tour',
+    'tag': '#HistoricalTour',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'walking-tour',
+    'tag': '#WalkingTour',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Tours',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'architecture-tour',
+    'tag': '#ArchitectureTour',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'art-exhibit',
+    'tag': '#ArtExhibit',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'sculpture-walk',
+    'tag': '#SculptureWalk',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'live-theater',
+    'tag': '#LiveTheater',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'stand-up-comedy',
+    'tag': '#StandUpComedy',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'improv-show',
+    'tag': '#ImprovShow',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'live-poetry',
+    'tag': '#LivePoetry',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'vinyl-night',
+    'tag': '#VinylNight',
+    'category': 'music-nightlife',
+    'description': 'Music & Nightlife',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'silent-disco',
+    'tag': '#SilentDisco',
+    'category': 'music-nightlife',
+    'description': 'Music & Nightlife',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'bluegrass-jam',
+    'tag': '#BluegrassJam',
+    'category': 'music-nightlife',
+    'description': 'Music & Nightlife',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'indie-rock',
+    'tag': '#IndieRock',
+    'category': 'music-nightlife',
+    'description': 'Music & Nightlife',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'electronic-music',
+    'tag': '#ElectronicMusic',
+    'category': 'music-nightlife',
+    'description': 'Music & Nightlife',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'salsa-night',
+    'tag': '#SalsaNight',
+    'category': 'arts-culture',
+    'description': 'Dance & Social',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'swing-dance',
+    'tag': '#SwingDance',
+    'category': 'arts-culture',
+    'description': 'Dance & Social',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'line-dancing',
+    'tag': '#LineDancing',
+    'category': 'arts-culture',
+    'description': 'Dance & Social',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'bachata-night',
+    'tag': '#BachataNight',
+    'category': 'arts-culture',
+    'description': 'Dance & Social',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'billiards',
+    'tag': '#Billiards',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'darts-tournament',
+    'tag': '#DartsTournament',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'ping-pong',
+    'tag': '#PingPong',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'axe-throwing',
+    'tag': '#AxeThrowing',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'disc-golf',
+    'tag': '#DiscGolf',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'ultimate-frisbee',
+    'tag': '#UltimateFrisbee',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'skate-park',
+    'tag': '#SkatePark',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'spikeball',
+    'tag': '#Spikeball',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'cornhole',
+    'tag': '#Cornhole',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'bocce-ball',
+    'tag': '#BocceBall',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'pickleball-clinic',
+    'tag': '#PickleballClinic',
+    'category': 'sports-fitness',
+    'description': 'Sports & Fitness',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'slow-pitch-softball',
+    'tag': '#SlowPitchSoftball',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'trail-ride',
+    'tag': '#TrailRide',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Recreation',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'gravel-biking',
+    'tag': '#GravelBiking',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Recreation',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'sunrise-hike',
+    'tag': '#SunriseHike',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Recreation',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'sunset-paddle',
+    'tag': '#SunsetPaddle',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Recreation',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'river-float',
+    'tag': '#RiverFloat',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Recreation',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'fly-fishing',
+    'tag': '#FlyFishing',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Recreation',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'campout',
+    'tag': '#Campout',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Recreation',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'foraging-walk',
+    'tag': '#ForagingWalk',
+    'category': 'outdoors-recreation',
+    'description': 'Outdoors & Recreation',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'plant-swap',
+    'tag': '#PlantSwap',
+    'category': 'social-hobbies',
+    'description': 'Home & Hobbies',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'seed-exchange',
+    'tag': '#SeedExchange',
+    'category': 'social-hobbies',
+    'description': 'Home & Hobbies',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'succulent-workshop',
+    'tag': '#SucculentWorkshop',
+    'category': 'social-hobbies',
+    'description': 'Home & Hobbies',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'woodworking',
+    'tag': '#Woodworking',
+    'category': 'social-hobbies',
+    'description': 'Makers & Crafts',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'leathercraft',
+    'tag': '#Leathercraft',
+    'category': 'social-hobbies',
+    'description': 'Makers & Crafts',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'ceramics-workshop',
+    'tag': '#CeramicsWorkshop',
+    'category': 'social-hobbies',
+    'description': 'Makers & Crafts',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'paint-and-sip',
+    'tag': '#PaintAndSip',
+    'category': 'arts-culture',
+    'description': 'Arts & Social',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'board-game-night',
+    'tag': '#BoardGameNight',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'chess-club',
+    'tag': '#ChessClub',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'poker-night',
+    'tag': '#PokerNight',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'mtg',
+    'tag': '#MTG',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'trivia-tournament',
+    'tag': '#TriviaTournament',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'retro-gaming',
+    'tag': '#RetroGaming',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'cosplay-meet',
+    'tag': '#CosplayMeet',
+    'category': 'social-hobbies',
+    'description': 'Pop Culture & Hobbies',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'anime-night',
+    'tag': '#AnimeNight',
+    'category': 'social-hobbies',
+    'description': 'Pop Culture & Hobbies',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'pokemon',
+    'tag': '#Pokemon',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'writers-workshop',
+    'tag': '#WritersWorkshop',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'screenwriting',
+    'tag': '#Screenwriting',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'book-signing',
+    'tag': '#BookSigning',
+    'category': 'arts-culture',
+    'description': 'Community & Arts',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'author-reading',
+    'tag': '#AuthorReading',
+    'category': 'arts-culture',
+    'description': 'Community & Arts',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'vintage-market',
+    'tag': '#VintageMarket',
+    'category': 'shopping-markets',
+    'description': 'Shopping & Markets',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'flea-market',
+    'tag': '#FleaMarket',
+    'category': 'shopping-markets',
+    'description': 'Shopping & Markets',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'estate-sale',
+    'tag': '#EstateSale',
+    'category': 'shopping-markets',
+    'description': 'Shopping & Markets',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'garage-sale',
+    'tag': '#GarageSale',
+    'category': 'shopping-markets',
+    'description': 'Community & Shopping',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'clothing-swap',
+    'tag': '#ClothingSwap',
+    'category': 'shopping-markets',
+    'description': 'Community & Shopping',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'makers-fair',
+    'tag': '#MakersFair',
+    'category': 'shopping-markets',
+    'description': 'Shopping & Markets',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'artisan-fair',
+    'tag': '#ArtisanFair',
+    'category': 'shopping-markets',
+    'description': 'Shopping & Markets',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'craft-fair',
+    'tag': '#CraftFair',
+    'category': 'shopping-markets',
+    'description': 'Shopping & Markets',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'pop-up-boutique',
+    'tag': '#PopUpBoutique',
+    'category': 'shopping-markets',
+    'description': 'Shopping & Markets',
+    'icon': 'ShoppingBag',
+    'radius': 'local'
+  },
+  {
+    'id': 'pet-adoption',
+    'tag': '#PetAdoption',
+    'category': 'community-civic',
+    'description': 'Community & Pets',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'dog-park-meetup',
+    'tag': '#DogParkMeetup',
+    'category': 'community-civic',
+    'description': 'Community & Pets',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'puppy-social',
+    'tag': '#PuppySocial',
+    'category': 'community-civic',
+    'description': 'Community & Pets',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'yappy-hour',
+    'tag': '#YappyHour',
+    'category': 'community-civic',
+    'description': 'Community & Pets',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'cat-cafe-meet',
+    'tag': '#CatCafeMeet',
+    'category': 'community-civic',
+    'description': 'Community & Pets',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'community-garden',
+    'tag': '#CommunityGarden',
+    'category': 'community-civic',
+    'description': 'Community & Civic',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'park-cleanup',
+    'tag': '#ParkCleanup',
+    'category': 'community-civic',
+    'description': 'Community & Civic',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'beach-cleanup',
+    'tag': '#BeachCleanup',
+    'category': 'community-civic',
+    'description': 'Community & Civic',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'repair-cafe',
+    'tag': '#RepairCafe',
+    'category': 'community-civic',
+    'description': 'Community & Civic',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'free-store',
+    'tag': '#FreeStore',
+    'category': 'community-civic',
+    'description': 'Community & Civic',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'tool-library',
+    'tag': '#ToolLibrary',
+    'category': 'community-civic',
+    'description': 'Community & Civic',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'solar-eclipse-watch',
+    'tag': '#SolarEclipseWatch',
+    'category': 'outdoors-recreation',
+    'description': 'Science & Nature',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'astronomy-night',
+    'tag': '#AstronomyNight',
+    'category': 'outdoors-recreation',
+    'description': 'Science & Nature',
+    'icon': 'Trees',
+    'radius': 'local'
+  },
+  {
+    'id': 'coding-bootcamp',
+    'tag': '#CodingBootcamp',
+    'category': 'tech-professional',
+    'description': 'Tech & Professional',
+    'icon': 'Terminal',
+    'radius': 'local'
+  },
+  {
+    'id': 'firing-range',
+    'tag': '#FiringRange',
+    'category': 'sports-fitness',
+    'description': 'Sports & Rec',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'product-management',
+    'tag': '#ProductManagement',
+    'category': 'tech-professional',
+    'description': 'Tech & Professional',
+    'icon': 'Terminal',
+    'radius': 'local'
+  },
+  {
+    'id': 'freelance-meetup',
+    'tag': '#FreelanceMeetup',
+    'category': 'tech-professional',
+    'description': 'Tech & Professional',
+    'icon': 'Terminal',
+    'radius': 'local'
+  },
+  {
+    'id': 'job-fair',
+    'tag': '#JobFair',
+    'category': 'tech-professional',
+    'description': 'Professional & Career',
+    'icon': 'Terminal',
+    'radius': 'local'
+  },
+  {
+    'id': 'halloween',
+    'tag': '#Halloween',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'trick-or-treat',
+    'tag': '#TrickOrTreat',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'trunk-or-treat',
+    'tag': '#TrunkOrTreat',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'haunted-house',
+    'tag': '#HauntedHouse',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'costume-party',
+    'tag': '#CostumeParty',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'costume-contest',
+    'tag': '#CostumeContest',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'pumpkin-patch',
+    'tag': '#PumpkinPatch',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'pumpkin-carving',
+    'tag': '#PumpkinCarving',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'corn-maze',
+    'tag': '#CornMaze',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'apple-picking',
+    'tag': '#ApplePicking',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'oktoberfest',
+    'tag': '#Oktoberfest',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'fall-festival',
+    'tag': '#FallFestival',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'dia-de-los-muertos',
+    'tag': '#DiaDeLosMuertos',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'cider-festival',
+    'tag': '#CiderFestival',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'witches-night-out',
+    'tag': '#WitchesNightOut',
+    'category': 'holidays-seasonal',
+    'description': 'Halloween & Fall',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'thanksgiving',
+    'tag': '#Thanksgiving',
+    'category': 'holidays-seasonal',
+    'description': 'Thanksgiving & Harvest',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'friendsgiving',
+    'tag': '#Friendsgiving',
+    'category': 'holidays-seasonal',
+    'description': 'Thanksgiving & Harvest',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'turkey-trot',
+    'tag': '#TurkeyTrot',
+    'category': 'holidays-seasonal',
+    'description': 'Thanksgiving & Harvest',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'harvest-festival',
+    'tag': '#HarvestFestival',
+    'category': 'holidays-seasonal',
+    'description': 'Thanksgiving & Harvest',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'pie-bake-off',
+    'tag': '#PieBakeOff',
+    'category': 'holidays-seasonal',
+    'description': 'Thanksgiving & Harvest',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'thanksgiving-buffet',
+    'tag': '#ThanksgivingBuffet',
+    'category': 'holidays-seasonal',
+    'description': 'Thanksgiving & Harvest',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'black-friday-event',
+    'tag': '#BlackFridayEvent',
+    'category': 'holidays-seasonal',
+    'description': 'Shopping & Holidays',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'small-business-saturday',
+    'tag': '#SmallBusinessSaturday',
+    'category': 'holidays-seasonal',
+    'description': 'Shopping & Holidays',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'cyber-monday',
+    'tag': '#CyberMonday',
+    'category': 'holidays-seasonal',
+    'description': 'Shopping & Holidays',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'giving-tuesday',
+    'tag': '#GivingTuesday',
+    'category': 'holidays-seasonal',
+    'description': 'Holiday Charity & Giving',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'toy-drive',
+    'tag': '#ToyDrive',
+    'category': 'holidays-seasonal',
+    'description': 'Holiday Charity & Giving',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-food-drive',
+    'tag': '#HolidayFoodDrive',
+    'category': 'holidays-seasonal',
+    'description': 'Holiday Charity & Giving',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'angel-tree',
+    'tag': '#AngelTree',
+    'category': 'holidays-seasonal',
+    'description': 'Holiday Charity & Giving',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-volunteer',
+    'tag': '#HolidayVolunteer',
+    'category': 'holidays-seasonal',
+    'description': 'Holiday Charity & Giving',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'christmas',
+    'tag': '#Christmas',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'christmas-eve',
+    'tag': '#ChristmasEve',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-market',
+    'tag': '#HolidayMarket',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'christmas-market',
+    'tag': '#ChristmasMarket',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'tree-lighting',
+    'tag': '#TreeLighting',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-lights',
+    'tag': '#HolidayLights',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'santa-con',
+    'tag': '#SantaCon',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'pictures-with-santa',
+    'tag': '#PicturesWithSanta',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'breakfast-with-santa',
+    'tag': '#BreakfastWithSanta',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'ugly-sweater-party',
+    'tag': '#UglySweaterParty',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-pop-up',
+    'tag': '#HolidayPopUp',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'winter-fest',
+    'tag': '#WinterFest',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'ice-skating',
+    'tag': '#IceSkating',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-bar-crawl',
+    'tag': '#HolidayBarCrawl',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'cookie-exchange',
+    'tag': '#CookieExchange',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'gingerbread-house',
+    'tag': '#GingerbreadHouse',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-concert',
+    'tag': '#HolidayConcert',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'caroling',
+    'tag': '#Caroling',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'nutcracker',
+    'tag': '#Nutcracker',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-parade',
+    'tag': '#HolidayParade',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'holiday-craft-fair',
+    'tag': '#HolidayCraftFair',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'menorah-lighting',
+    'tag': '#MenorahLighting',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'hanukkah',
+    'tag': '#Hanukkah',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'kwanzaa',
+    'tag': '#Kwanzaa',
+    'category': 'holidays-seasonal',
+    'description': 'Winter Holidays & Christmas',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'winter-solstice',
+    'tag': '#WinterSolstice',
+    'category': 'holidays-seasonal',
+    'description': 'Seasonal Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'new-years-eve',
+    'tag': '#NewYearsEve',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'nye-party',
+    'tag': '#NYEParty',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'nye-countdown',
+    'tag': '#NYECountdown',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'ball-drop',
+    'tag': '#BallDrop',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'new-years-day',
+    'tag': '#NewYearsDay',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'new-years-brunch',
+    'tag': '#NewYearsBrunch',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'polar-plunge',
+    'tag': '#PolarPlunge',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'resolution-run',
+    'tag': '#ResolutionRun',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'noon-years-eve',
+    'tag': '#NoonYearsEve',
+    'category': 'holidays-seasonal',
+    'description': 'New Year\'s Celebrations',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'valentines-day',
+    'tag': '#ValentinesDay',
+    'category': 'holidays-seasonal',
+    'description': 'Valentine\'s & Romance',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'galentines-day',
+    'tag': '#GalentinesDay',
+    'category': 'holidays-seasonal',
+    'description': 'Valentine\'s & Romance',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'anti-valentines',
+    'tag': '#AntiValentines',
+    'category': 'holidays-seasonal',
+    'description': 'Valentine\'s & Romance',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'valentines-dinner',
+    'tag': '#ValentinesDinner',
+    'category': 'holidays-seasonal',
+    'description': 'Valentine\'s & Romance',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'romance-comedy',
+    'tag': '#RomanceComedy',
+    'category': 'holidays-seasonal',
+    'description': 'Valentine\'s & Romance',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'mardi-gras',
+    'tag': '#MardiGras',
+    'category': 'holidays-seasonal',
+    'description': 'Mardi Gras & Carnival',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'fat-tuesday',
+    'tag': '#FatTuesday',
+    'category': 'holidays-seasonal',
+    'description': 'Mardi Gras & Carnival',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'king-cake-party',
+    'tag': '#KingCakeParty',
+    'category': 'holidays-seasonal',
+    'description': 'Mardi Gras & Carnival',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'masquerade-ball',
+    'tag': '#MasqueradeBall',
+    'category': 'holidays-seasonal',
+    'description': 'Mardi Gras & Carnival',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'crawfish-boil',
+    'tag': '#CrawfishBoil',
+    'category': 'holidays-seasonal',
+    'description': 'Mardi Gras & Carnival',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'st-patricks-day',
+    'tag': '#StPatricksDay',
+    'category': 'holidays-seasonal',
+    'description': 'St. Patrick\'s Day',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'st-paddys-pub-crawl',
+    'tag': '#StPaddysPubCrawl',
+    'category': 'holidays-seasonal',
+    'description': 'St. Patrick\'s Day',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'irish-festival',
+    'tag': '#IrishFestival',
+    'category': 'holidays-seasonal',
+    'description': 'St. Patrick\'s Day',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'st-paddys-parade',
+    'tag': '#StPaddysParade',
+    'category': 'holidays-seasonal',
+    'description': 'St. Patrick\'s Day',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'green-beer-day',
+    'tag': '#GreenBeerDay',
+    'category': 'holidays-seasonal',
+    'description': 'St. Patrick\'s Day',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'easter',
+    'tag': '#Easter',
+    'category': 'holidays-seasonal',
+    'description': 'Spring & Easter',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'easter-sunday',
+    'tag': '#EasterSunday',
+    'category': 'holidays-seasonal',
+    'description': 'Spring & Easter',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'easter-egg-hunt',
+    'tag': '#EasterEggHunt',
+    'category': 'holidays-seasonal',
+    'description': 'Spring & Easter',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'easter-brunch',
+    'tag': '#EasterBrunch',
+    'category': 'holidays-seasonal',
+    'description': 'Spring & Easter',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'spring-equinox',
+    'tag': '#SpringEquinox',
+    'category': 'holidays-seasonal',
+    'description': 'Spring & Easter',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'passover',
+    'tag': '#Passover',
+    'category': 'holidays-seasonal',
+    'description': 'Spring & Easter',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'earth-day',
+    'tag': '#EarthDay',
+    'category': 'holidays-seasonal',
+    'description': 'Spring & Community',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'arbor-day',
+    'tag': '#ArborDay',
+    'category': 'holidays-seasonal',
+    'description': 'Spring & Community',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'cinco-de-mayo',
+    'tag': '#CincoDeMayo',
+    'category': 'arts-culture',
+    'description': 'Cultural Celebrations',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'fiesta-day',
+    'tag': '#FiestaDay',
+    'category': 'arts-culture',
+    'description': 'Cultural Celebrations',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'memorial-day',
+    'tag': '#MemorialDay',
+    'category': 'holidays-seasonal',
+    'description': 'Summer & Patriotic',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'memorial-day-weekend',
+    'tag': '#MemorialDayWeekend',
+    'category': 'holidays-seasonal',
+    'description': 'Summer & Patriotic',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'fourth-of-july',
+    'tag': '#FourthOfJuly',
+    'category': 'holidays-seasonal',
+    'description': 'Summer & Patriotic',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'independence-day',
+    'tag': '#IndependenceDay',
+    'category': 'holidays-seasonal',
+    'description': 'Summer & Patriotic',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'july4th-fireworks',
+    'tag': '#July4thFireworks',
+    'category': 'holidays-seasonal',
+    'description': 'Summer & Patriotic',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'patriotic-parade',
+    'tag': '#PatrioticParade',
+    'category': 'holidays-seasonal',
+    'description': 'Summer & Patriotic',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'labor-day',
+    'tag': '#LaborDay',
+    'category': 'holidays-seasonal',
+    'description': 'Summer & Patriotic',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'labor-day-weekend',
+    'tag': '#LaborDayWeekend',
+    'category': 'holidays-seasonal',
+    'description': 'Summer & Patriotic',
+    'icon': 'Gift',
+    'radius': 'local'
+  },
+  {
+    'id': 'veterans-day',
+    'tag': '#VeteransDay',
+    'category': 'community-civic',
+    'description': 'Civic & Patriotic',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'juneteenth',
+    'tag': '#Juneteenth',
+    'category': 'arts-culture',
+    'description': 'Cultural Celebrations',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'pride-fest',
+    'tag': '#PrideFest',
+    'category': 'arts-culture',
+    'description': 'Cultural Celebrations',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'pride-parade',
+    'tag': '#PrideParade',
+    'category': 'arts-culture',
+    'description': 'Cultural Celebrations',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'wake',
+    'tag': '#Wake',
+    'category': 'celebrations-milestones',
+    'description': 'Memorial & Remembrance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'birthday',
+    'tag': '#Birthday',
+    'category': 'celebrations-milestones',
+    'description': 'Birthdays & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'funeral',
+    'tag': '#Funeral',
+    'category': 'celebrations-milestones',
+    'description': 'Memorial & Remembrance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'baby-shower',
+    'tag': '#BabyShower',
+    'category': 'celebrations-milestones',
+    'description': 'Family & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'celebration-of-life',
+    'tag': '#CelebrationOfLife',
+    'category': 'celebrations-milestones',
+    'description': 'Memorial & Remembrance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'memorial-service',
+    'tag': '#MemorialService',
+    'category': 'celebrations-milestones',
+    'description': 'Memorial & Remembrance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'repast',
+    'tag': '#Repast',
+    'category': 'celebrations-milestones',
+    'description': 'Memorial & Remembrance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'graveside-service',
+    'tag': '#GravesideService',
+    'category': 'celebrations-milestones',
+    'description': 'Memorial & Remembrance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'anniversary',
+    'tag': '#Anniversary',
+    'category': 'celebrations-milestones',
+    'description': 'Milestones & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'wedding',
+    'tag': '#Wedding',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'wedding-reception',
+    'tag': '#WeddingReception',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'rehearsal-dinner',
+    'tag': '#RehearsalDinner',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'bridal-shower',
+    'tag': '#BridalShower',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'bachelorette-party',
+    'tag': '#BacheloretteParty',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'bachelor-party',
+    'tag': '#BachelorParty',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'engagement-party',
+    'tag': '#EngagementParty',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'vow-renewal',
+    'tag': '#VowRenewal',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'elopement',
+    'tag': '#Elopement',
+    'category': 'celebrations-milestones',
+    'description': 'Weddings & Romance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'gender-reveal',
+    'tag': '#GenderReveal',
+    'category': 'celebrations-milestones',
+    'description': 'Family & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'sip-and-see',
+    'tag': '#SipAndSee',
+    'category': 'celebrations-milestones',
+    'description': 'Family & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'christening',
+    'tag': '#Christening',
+    'category': 'faith-spiritual',
+    'description': 'Family & Faith',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'baptism',
+    'tag': '#Baptism',
+    'category': 'faith-spiritual',
+    'description': 'Family & Faith',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'first-communion',
+    'tag': '#FirstCommunion',
+    'category': 'faith-spiritual',
+    'description': 'Family & Faith',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'confirmation',
+    'tag': '#Confirmation',
+    'category': 'faith-spiritual',
+    'description': 'Family & Faith',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'bar-mitzvah',
+    'tag': '#BarMitzvah',
+    'category': 'faith-spiritual',
+    'description': 'Family & Faith',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'bat-mitzvah',
+    'tag': '#BatMitzvah',
+    'category': 'faith-spiritual',
+    'description': 'Family & Faith',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'quinceanera',
+    'tag': '#Quinceanera',
+    'category': 'celebrations-milestones',
+    'description': 'Family & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'sweet-sixteen',
+    'tag': '#SweetSixteen',
+    'category': 'celebrations-milestones',
+    'description': 'Birthdays & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'milestone-birthday',
+    'tag': '#MilestoneBirthday',
+    'category': 'celebrations-milestones',
+    'description': 'Birthdays & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'kids-birthday',
+    'tag': '#KidsBirthday',
+    'category': 'celebrations-milestones',
+    'description': 'Birthdays & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'surprise-party',
+    'tag': '#SurpriseParty',
+    'category': 'celebrations-milestones',
+    'description': 'Birthdays & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'graduation-party',
+    'tag': '#GraduationParty',
+    'category': 'celebrations-milestones',
+    'description': 'Education & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'commencement',
+    'tag': '#Commencement',
+    'category': 'celebrations-milestones',
+    'description': 'Education & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'prom-sendoff',
+    'tag': '#PromSendoff',
+    'category': 'celebrations-milestones',
+    'description': 'Education & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'retirement-party',
+    'tag': '#RetirementParty',
+    'category': 'celebrations-milestones',
+    'description': 'Career & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'going-away-party',
+    'tag': '#GoingAwayParty',
+    'category': 'celebrations-milestones',
+    'description': 'Gatherings & Farewells',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'welcome-party',
+    'tag': '#WelcomeParty',
+    'category': 'celebrations-milestones',
+    'description': 'Gatherings & Farewells',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'housewarming',
+    'tag': '#Housewarming',
+    'category': 'social-hobbies',
+    'description': 'Home & Gatherings',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'open-house-social',
+    'tag': '#OpenHouseSocial',
+    'category': 'social-hobbies',
+    'description': 'Home & Gatherings',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'backyard-bbq',
+    'tag': '#BackyardBBQ',
+    'category': 'social-hobbies',
+    'description': 'Casual Gatherings',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'cookout',
+    'tag': '#Cookout',
+    'category': 'social-hobbies',
+    'description': 'Casual Gatherings',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'potluck',
+    'tag': '#Potluck',
+    'category': 'social-hobbies',
+    'description': 'Casual Gatherings',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'picnic',
+    'tag': '#Picnic',
+    'category': 'social-hobbies',
+    'description': 'Casual Gatherings',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'bonfire',
+    'tag': '#Bonfire',
+    'category': 'social-hobbies',
+    'description': 'Casual Gatherings',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'pool-party',
+    'tag': '#PoolParty',
+    'category': 'social-hobbies',
+    'description': 'Casual Gatherings',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'block-party',
+    'tag': '#BlockParty',
+    'category': 'community-civic',
+    'description': 'Community & Neighborhood',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'hoa-meeting',
+    'tag': '#HOAMeeting',
+    'category': 'community-civic',
+    'description': 'Community & Neighborhood',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'family-reunion',
+    'tag': '#FamilyReunion',
+    'category': 'celebrations-milestones',
+    'description': 'Family & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'class-reunion',
+    'tag': '#ClassReunion',
+    'category': 'celebrations-milestones',
+    'description': 'Social & Milestones',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'alumni-gathering',
+    'tag': '#AlumniGathering',
+    'category': 'social-hobbies',
+    'description': 'Education & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'tailgate',
+    'tag': '#Tailgate',
+    'category': 'sports-fitness',
+    'description': 'Sports & Casual',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'watch-party',
+    'tag': '#WatchParty',
+    'category': 'sports-fitness',
+    'description': 'Sports & Casual',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'game-day',
+    'tag': '#GameDay',
+    'category': 'sports-fitness',
+    'description': 'Sports & Casual',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'super-bowl-party',
+    'tag': '#SuperBowlParty',
+    'category': 'sports-fitness',
+    'description': 'Sports & Casual',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'fantasy-draft',
+    'tag': '#FantasyDraft',
+    'category': 'sports-fitness',
+    'description': 'Sports & Casual',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'dinner-party',
+    'tag': '#DinnerParty',
+    'category': 'food-dining',
+    'description': 'Food & Casual',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'sunday-dinner',
+    'tag': '#SundayDinner',
+    'category': 'food-dining',
+    'description': 'Food & Casual',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'supper-club',
+    'tag': '#SupperClub',
+    'category': 'food-dining',
+    'description': 'Food & Casual',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'crawfish-boil-private',
+    'tag': '#CrawfishBoilPrivate',
+    'category': 'food-dining',
+    'description': 'Food & Casual',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'fish-fry',
+    'tag': '#FishFry',
+    'category': 'food-dining',
+    'description': 'Food & Casual',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'crab-feast',
+    'tag': '#CrabFeast',
+    'category': 'food-dining',
+    'description': 'Food & Casual',
+    'icon': 'Utensils',
+    'radius': 'local'
+  },
+  {
+    'id': 'study-group',
+    'tag': '#StudyGroup',
+    'category': 'social-hobbies',
+    'description': 'Education & Learning',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'coworking-session',
+    'tag': '#CoworkingSession',
+    'category': 'tech-professional',
+    'description': 'Professional & Casual',
+    'icon': 'Terminal',
+    'radius': 'local'
+  },
+  {
+    'id': 'mastermind',
+    'tag': '#Mastermind',
+    'category': 'tech-professional',
+    'description': 'Professional & Casual',
+    'icon': 'Terminal',
+    'radius': 'local'
+  },
+  {
+    'id': 'book-swap',
+    'tag': '#BookSwap',
+    'category': 'social-hobbies',
+    'description': 'Social & Hobbies',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'game-night-private',
+    'tag': '#GameNightPrivate',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'card-game-night',
+    'tag': '#CardGameNight',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'poker-night-private',
+    'tag': '#PokerNightPrivate',
+    'category': 'social-hobbies',
+    'description': 'Games & Social',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'karaoke-night-private',
+    'tag': '#KaraokeNightPrivate',
+    'category': 'music-nightlife',
+    'description': 'Music & Social',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'jam-session',
+    'tag': '#JamSession',
+    'category': 'music-nightlife',
+    'description': 'Music & Social',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'garage-band-rehearsal',
+    'tag': '#GarageBandRehearsal',
+    'category': 'music-nightlife',
+    'description': 'Music & Social',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'dance-rehearsal',
+    'tag': '#DanceRehearsal',
+    'category': 'arts-culture',
+    'description': 'Arts & Social',
+    'icon': 'Palette',
+    'radius': 'local'
+  },
+  {
+    'id': 'diy-workshop-private',
+    'tag': '#DIYWorkshopPrivate',
+    'category': 'social-hobbies',
+    'description': 'Makers & Crafts',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'craft-night',
+    'tag': '#CraftNight',
+    'category': 'social-hobbies',
+    'description': 'Makers & Crafts',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'sewing-circle',
+    'tag': '#SewingCircle',
+    'category': 'social-hobbies',
+    'description': 'Makers & Crafts',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'quilting-bee',
+    'tag': '#QuiltingBee',
+    'category': 'social-hobbies',
+    'description': 'Makers & Crafts',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'prayer-meeting',
+    'tag': '#PrayerMeeting',
+    'category': 'faith-spiritual',
+    'description': 'Faith & Spiritual',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'bible-study',
+    'tag': '#BibleStudy',
+    'category': 'faith-spiritual',
+    'description': 'Faith & Spiritual',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'meditation-group',
+    'tag': '#MeditationGroup',
+    'category': 'faith-spiritual',
+    'description': 'Wellness & Spiritual',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'satsang',
+    'tag': '#Satsang',
+    'category': 'faith-spiritual',
+    'description': 'Faith & Spiritual',
+    'icon': 'Church',
+    'radius': 'local'
+  },
+  {
+    'id': 'support-group',
+    'tag': '#SupportGroup',
+    'category': 'wellness-mind',
+    'description': 'Wellness & Community',
+    'icon': 'Leaf',
+    'radius': 'local'
+  },
+  {
+    'id': 'a-ameeting',
+    'tag': '#AAmeeting',
+    'category': 'wellness-mind',
+    'description': 'Wellness & Community',
+    'icon': 'Leaf',
+    'radius': 'local'
+  },
+  {
+    'id': 'grief-support',
+    'tag': '#GriefSupport',
+    'category': 'celebrations-milestones',
+    'description': 'Memorial & Remembrance',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'caregiver-meetup',
+    'tag': '#CaregiverMeetup',
+    'category': 'wellness-mind',
+    'description': 'Wellness & Community',
+    'icon': 'Leaf',
+    'radius': 'local'
+  },
+  {
+    'id': 'playgroup',
+    'tag': '#Playgroup',
+    'category': 'family-kids',
+    'description': 'Kids & Family',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'playdate-private',
+    'tag': '#PlaydatePrivate',
+    'category': 'family-kids',
+    'description': 'Kids & Family',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'moms-night-out',
+    'tag': '#MomsNightOut',
+    'category': 'social-hobbies',
+    'description': 'Social & Family',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'dads-night-out',
+    'tag': '#DadsNightOut',
+    'category': 'social-hobbies',
+    'description': 'Social & Family',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'parents-night-out',
+    'tag': '#ParentsNightOut',
+    'category': 'social-hobbies',
+    'description': 'Social & Family',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'pet-birthday',
+    'tag': '#PetBirthday',
+    'category': 'family-kids',
+    'description': 'Pets & Family',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'dog-meetup-private',
+    'tag': '#DogMeetupPrivate',
+    'category': 'family-kids',
+    'description': 'Pets & Family',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'puppy-playdate',
+    'tag': '#PuppyPlaydate',
+    'category': 'family-kids',
+    'description': 'Pets & Family',
+    'icon': 'Users',
+    'radius': 'local'
+  },
+  {
+    'id': 'moving-sale',
+    'tag': '#MovingSale',
+    'category': 'community-civic',
+    'description': 'Home & Community',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'yard-sale-private',
+    'tag': '#YardSalePrivate',
+    'category': 'community-civic',
+    'description': 'Home & Community',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'downsizing-sale',
+    'tag': '#DownsizingSale',
+    'category': 'community-civic',
+    'description': 'Home & Community',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'volunteer-project',
+    'tag': '#VolunteerProject',
+    'category': 'community-civic',
+    'description': 'Community & Service',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'fundraiser-private',
+    'tag': '#FundraiserPrivate',
+    'category': 'community-civic',
+    'description': 'Community & Service',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'charity-dinner',
+    'tag': '#CharityDinner',
+    'category': 'community-civic',
+    'description': 'Community & Service',
+    'icon': 'HandHeart',
+    'radius': 'local'
+  },
+  {
+    'id': 'silent-auction',
+    'tag': '#SilentAuction',
+    'category': 'community-civic',
+    'description': 'Community & Service',
+    'icon': 'HandHeart',
     'radius': 'local'
   }
 ];
