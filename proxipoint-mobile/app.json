@@ -5,8 +5,8 @@
     "scheme": "proxipoint",
     "version": "1.0.0",
     "orientation": "portrait",
-    "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon.png",
     "plugins": [
       "expo-router",
       "expo-dev-client",
@@ -27,6 +27,14 @@
         {
           "color": "#2563eb"
         }
+      ],
+      "@react-native-community/datetimepicker",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#0a1120",
+          "resizeMode": "contain"
+        }
       ]
     ],
     "ios": {
@@ -44,6 +52,10 @@
     },
     "android": {
       "package": "com.callsignsolutions.proxipoint",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#67e8f9"
+      },
       "permissions": [
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",

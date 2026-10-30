@@ -1,0 +1,90 @@
+/**
+ * Who can see a Point. 'channel' = members of one channel (channelId). The old 'tag_network'
+ * option is gone; Points saved with it are treated as public (see normalizeVisibility).
+ */
+export type BeaconVisibility = 'private' | 'channel' | 'public';
+
+export const BEACON_DURATIONS = ['1 hr', '2 hrs', '4 hrs', 'All Day'] as const;
+
+export type BeaconDuration = (typeof BEACON_DURATIONS)[number];
+
+export type BoundaryTierLevel = 'micro' | 'neighborhood' | 'metro';
+
+export type PlaceSemanticType =
+  | 'poi'
+  | 'address'
+  | 'micro'
+  | 'neighborhood'
+  | 'district'
+  | 'locality'
+  | 'city'
+  | 'metro';
+
+export interface BoundaryTier {
+  id: BoundaryTierLevel;
+  label: string;
+  icon: string;
+  radiusMeters: number;
+  displayRadius: string;
+  description: string;
+}
+
+export interface PlaceSuggestion {
+  id: string;
+  label: string;
+  subtitle: string;
+  latitude: number;
+  longitude: number;
+  placeType?: PlaceSemanticType | string;
+}
+
+export interface PreviewGeofence {
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+}
+
+export interface DropBeaconInput {
+  title: string;
+  description?: string;
+  /** Optional link: tickets, the event page or the venue's site (https). */
+  url?: string | null;
+  tags: string;
+  visibility: BeaconVisibility;
+  /** Channel the Point is posted to. Required for 'channel' visibility, optional otherwise. */
+  channelId?: string | null;
+  venue: string;
+  latitude: number;
+  longitude: number;
+  isLiveNow: boolean;
+  duration: BeaconDuration;
+  scheduledStart: string;
+  /** Exact span posted as duration_hours. Preset duration stays for older callers. */
+  durationHours?: number;
+  radiusMeters?: number;
+  tierLevel?: BoundaryTierLevel;
+}
+
+export interface BeaconDraft extends DropBeaconInput {
+  radiusMeters: number;
+  tierLevel: BoundaryTierLevel;
+}
+
+export interface BeaconCreatePayload {
+  title: string;
+  description?: string;
+  venue: string;
+  channels: string[];
+  latitude: number;
+  longitude: number;
+  radius_meters: number;
+  visibility: BeaconVisibility;
+  /** Present when the Point is posted to a channel. */
+  channel_id?: string;
+  duration_hours: number;
+  url?: string;
+}
+
+export interface PersistedBeacon extends BeaconCreatePayload {
+  id: string;
+}

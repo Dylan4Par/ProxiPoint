@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -8,10 +8,59 @@ import {
   Modal,
   TextInput,
   TouchableWithoutFeedback,
+  Image,
+  Switch,
 } from 'react-native';
-import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { tourTarget } from '../tour/tourTargets';
+import { CalendarDays, ChevronLeft, ChevronRight, Minus, Plus, SlidersHorizontal, X } from 'lucide-react-native';
+import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort, type PointSort } from '../../lib/pointSort';
+import {
+  setFollowedOnly,
+  setMapRange,
+  setMyChannelsOnly,
+  useFollowedTagsFilter,
+  useMapRange,
+  useMyChannelsOnly,
+} from '../../lib/discoverFilters';
+import { searchRanges, useUnits } from '../../lib/units';
+import { bestHashtagFor, searchHashtags } from '../../lib/hashtags';
 
-export const TopFilterHeader: React.FC = () => {
+/** Short labels for the three Sort by buttons. */
+const SORT_SHORT: Record<PointSort, string> = { closest: 'Nearest First', soonest: 'Soonest', popular: 'Most Going' };
+import { MAX_ACTIVE_TAGS, useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
+
+interface TopFilterHeaderProps {
+  /** Tap on the avatar opens the Profile page. */
+  onOpenProfile?: () => void;
+  profileInitial?: string;
+  profilePhotoUri?: string | null;
+  /** "Live Now" filter: only Points happening right now. Works together with a hashtag. */
+  liveOnly?: boolean;
+  onToggleLiveOnly?: () => void;
+  /** Calendar button next to Nearby / RSVP'd. */
+  onOpenCalendar?: () => void;
+  /** Avatar at the left of the top row. Off on Explore Map, where Profile is its own tab. */
+  showAvatar?: boolean;
+  /** Replaces the default top row (avatar, Nearby / RSVP'd, calendar). Explore Map uses its own. */
+  topRow?: React.ReactNode;
+  /** Inside a page (Discover): no glass background, less padding on top. */
+  embedded?: boolean;
+}
+
+export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
+  onOpenProfile,
+  profileInitial,
+  profilePhotoUri,
+  liveOnly = false,
+  onToggleLiveOnly,
+  onOpenCalendar,
+  showAvatar = true,
+  topRow,
+  embedded = false,
+}) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
   const activeTab = useDiscoveryStore((s) => s.activeTab);
   const setActiveTab = useDiscoveryStore((s) => s.setActiveTab);
   const selectedTag = useDiscoveryStore((s) => s.selectedTag);
@@ -26,31 +75,109 @@ export const TopFilterHeader: React.FC = () => {
   const [tenantId, setTenantId] = useState('00000000-0000-0000-0000-000000000001');
   const [serverUrl, setServerUrl] = useState('ws://10.0.2.2:8080/api/v1/ingest');
 
-  // Tag Editor Modal State
+  // Chip row: arrows on whichever side has more chips hidden (tap to scroll that way).
+  const chipScroll = useRef<ScrollView | null>(null);
+  const [chipView, setChipView] = useState({ x: 0, width: 0, content: 0 });
+  const moreLeft = chipView.x > 8;
+  const moreRight = chipView.content - chipView.width - chipView.x > 8;
+  const nudgeChips = (direction: 1 | -1) => {
+    const max = Math.max(0, chipView.content - chipView.width);
+    const x = Math.min(max, Math.max(0, chipView.x + direction * chipView.width * 0.7));
+    chipScroll.current?.scrollTo({ x, animated: true });
+    // An animated scroll doesn't always report its last position, so set where it ends up
+    // (otherwise the arrow could stay showing at the very start or end).
+    setChipView((v) => ({ ...v, x }));
+  };
+  const trackChipX = (x: number) => setChipView((v) => (Math.abs(v.x - x) < 1 ? v : { ...v, x }));
+
+  // Explore Map's own top row has no Nearby / RSVP'd switch, so it always shows Nearby.
+  React.useEffect(() => {
+    if (topRow && activeTab !== 'Nearby') setActiveTab('Nearby');
+  }, [topRow, activeTab, setActiveTab]);
+
+  // Filter & sort sheet (sort order, Live now, and the hashtag chips).
   const [tagModalOpen, setTagModalOpen] = useState(false);
+  const sort = usePointSort();
+  // Badge on the filter button: how many choices differ from the defaults.
+  const myChannelsOnly = useMyChannelsOnly();
+  const rangeMeters = useMapRange();
+  const followed = useFollowedTagsFilter();
+  // Active filter #tags (the chip row, besides All): at most MAX_ACTIVE_TAGS. Added ones are green
+  // with ×; your followed #tags (Profile → Followed Tags) are always listed: gray with + while
+  // off, green with − while active.
+  const keyOf = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
+  const followedKeys = new Set(followed.tags.map(keyOf));
+  const activeTags = tags.filter((tag) => tag !== 'All');
+  const activeKeys = new Set(activeTags.map(keyOf));
+  const addedTags = activeTags.filter((tag) => !followedKeys.has(keyOf(tag)));
+  const followedList = followed.tags.map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
+  const full = activeTags.length >= MAX_ACTIVE_TAGS;
+  const [limitNote, setLimitNote] = useState(false);
+  const activeTagFor = (tag: string) => tags.find((t) => keyOf(t) === keyOf(tag)) ?? tag;
+  const units = useUnits();
+  const ranges = searchRanges(units);
+  const activeCount =
+    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (rangeMeters != null ? 1 : 0);
   const [newTagInput, setNewTagInput] = useState('');
 
+  // Only tags on the allowed list (lib/hashtags): typing shows the matches; + Add takes the exact
+  // one typed, or the best match.
+  const tagMatches = newTagInput.trim() ? searchHashtags(newTagInput, { exclude: activeTags, limit: 6 }) : [];
+  const addListedTag = (tag: string) => {
+    if (full && !activeKeys.has(keyOf(tag))) {
+      setLimitNote(true);
+      return;
+    }
+    addTag(tag);
+    setNewTagInput('');
+    setLimitNote(false);
+  };
   const handleAddNewTag = () => {
-    if (newTagInput.trim()) {
-      addTag(newTagInput);
-      setNewTagInput('');
+    if (!newTagInput.trim()) return;
+    const best = bestHashtagFor(newTagInput, activeTags);
+    if (best) addListedTag(best);
+  };
+  const toggleFollowed = (tag: string) => {
+    if (activeKeys.has(keyOf(tag))) {
+      removeTag(activeTagFor(tag));
+      setLimitNote(false);
+    } else if (full) {
+      setLimitNote(true);
+    } else {
+      addTag(tag);
     }
   };
 
   return (
-    <View style={styles.headerContainer}>
-      {/* Top Row: Avatar Pill + Segmented Switcher */}
+    <View style={[styles.headerContainer, embedded && styles.headerEmbedded]}>
+      {/* Top row: a custom one (Explore Map), or avatar + Nearby / RSVP'd + calendar. */}
+      {topRow ? (
+        <View style={styles.topRow}>{topRow}</View>
+      ) : (
       <View style={styles.topRow}>
+        {showAvatar ? (
         <TouchableOpacity
           style={styles.avatarButton}
-          onPress={() => setSettingsOpen(true)}
+          // Tap: your Profile page. Long-press: the developer connection settings below.
+          onPress={() => (onOpenProfile ? onOpenProfile() : setSettingsOpen(true))}
+          onLongPress={() => setSettingsOpen(true)}
+          delayLongPress={600}
           activeOpacity={0.8}
+          accessibilityRole="button"
+          accessibilityLabel="Open your profile"
+          accessibilityHint="Long-press for connection settings"
+          testID="header-profile"
         >
           <View style={styles.avatarInner}>
-            <Text style={styles.avatarInitial}>R</Text>
+            {profilePhotoUri ? (
+              <Image source={{ uri: profilePhotoUri }} style={styles.avatarImage} />
+            ) : (
+              <Text style={styles.avatarInitial}>{profileInitial || callsign.charAt(0).toUpperCase() || 'R'}</Text>
+            )}
           </View>
           <View style={styles.onlineBadge} />
         </TouchableOpacity>
+        ) : null}
 
         <View style={styles.segmentedWrapper}>
           <TouchableOpacity
@@ -71,65 +198,163 @@ export const TopFilterHeader: React.FC = () => {
             </Text>
           </TouchableOpacity>
         </View>
+
+        {onOpenCalendar ? (
+          <TouchableOpacity
+            style={styles.calendarBtn}
+            onPress={onOpenCalendar}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Open calendar"
+            testID="header-calendar"
+          >
+            <CalendarDays size={20} color={c.sky} strokeWidth={2.25} />
+          </TouchableOpacity>
+        ) : null}
       </View>
+      )}
 
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
+      <View style={styles.chipArea} ref={tourTarget('map-filter-rail')} collapsable={false}>
       <ScrollView
+        ref={chipScroll}
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.tagScrollContainer}
+        scrollEventThrottle={32}
+        onScroll={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
+        // The final position (onScroll is throttled and can miss the last few pixels).
+        onScrollEndDrag={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
+        onMomentumScrollEnd={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
+        onLayout={(e) => {
+          const width = e.nativeEvent.layout.width;
+          setChipView((v) => (v.width === width ? v : { ...v, width }));
+        }}
+        onContentSizeChange={(content) => setChipView((v) => (v.content === content ? v : { ...v, content }))}
       >
+        {/* Filter & sort, first in the row. The badge counts choices that aren't the defaults. */}
+        <TouchableOpacity
+          style={[styles.addTagPill, activeCount > 0 && styles.filterBtnActive]}
+          activeOpacity={0.8}
+          onPress={() => setTagModalOpen(true)}
+          accessibilityRole="button"
+          accessibilityLabel={activeCount ? `Filter and sort, ${activeCount} on` : 'Filter and sort'}
+          testID="filter-manage-tags"
+        >
+          <SlidersHorizontal size={16} color={activeCount ? c.onAccent : c.accent} strokeWidth={2.5} />
+          {activeCount > 0 ? (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{activeCount}</Text>
+            </View>
+          ) : null}
+        </TouchableOpacity>
         {tags.map((tag) => {
-          const isActive = selectedTag === tag;
-          return (
+          const isAll = tag === 'All';
+          // "All" means no filters at all, so it isn't highlighted while Live Now is on.
+          const isActive = selectedTag === tag && !(isAll && liveOnly);
+          const pill = (
             <TouchableOpacity
               key={tag}
               style={[styles.tagPill, isActive && styles.tagPillActive]}
-              onPress={() => setSelectedTag(tag)}
+              onPress={() => {
+                setSelectedTag(tag);
+                if (isAll && liveOnly) onToggleLiveOnly?.();
+              }}
             >
               <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
                 {tag}
               </Text>
             </TouchableOpacity>
           );
+          if (!isAll || !onToggleLiveOnly) return pill;
+          return (
+            <React.Fragment key={tag}>
+              {pill}
+              <TouchableOpacity
+                style={[styles.tagPill, styles.livePill, liveOnly && styles.livePillActive]}
+                onPress={onToggleLiveOnly}
+                accessibilityRole="button"
+                accessibilityState={{ selected: liveOnly }}
+                accessibilityLabel="Live now"
+                testID="filter-live-now"
+              >
+                <View style={[styles.liveDot, liveOnly && styles.liveDotActive]} />
+                <Text style={[styles.tagText, styles.liveText, liveOnly && styles.liveTextActive]}>Live Now</Text>
+              </TouchableOpacity>
+            </React.Fragment>
+          );
         })}
-
-        {/* Trailing ✎ Pill inside the scroll list */}
-        <TouchableOpacity
-          style={styles.trailingEditPill}
-          activeOpacity={0.8}
-          onPress={() => setTagModalOpen(true)}
-        >
-          <Text style={styles.trailingEditIcon}>✎</Text>
-        </TouchableOpacity>
       </ScrollView>
+      {moreLeft ? (
+        <TouchableOpacity
+          style={[styles.moreArrow, styles.moreArrowLeft]}
+          onPress={() => nudgeChips(-1)}
+          accessibilityRole="button"
+          accessibilityLabel="Scroll filters back"
+          testID="chips-more-left"
+        >
+          <ChevronLeft size={16} color={c.accent} strokeWidth={2.75} />
+        </TouchableOpacity>
+      ) : null}
+      {moreRight ? (
+        <TouchableOpacity
+          style={[styles.moreArrow, styles.moreArrowRight]}
+          onPress={() => nudgeChips(1)}
+          accessibilityRole="button"
+          accessibilityLabel="More filters"
+          testID="chips-more-right"
+        >
+          <ChevronRight size={16} color={c.accent} strokeWidth={2.75} />
+        </TouchableOpacity>
+      ) : null}
+      </View>
 
-      {/* Tag Management Modal */}
+      {/* Filter & sort sheet */}
       <Modal
         visible={tagModalOpen}
-        animationType="fade"
+        animationType="slide"
         transparent={true}
         onRequestClose={() => setTagModalOpen(false)}
       >
-        <TouchableWithoutFeedback onPress={() => setTagModalOpen(false)}>
-          <View style={styles.modalBackdrop}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalCard}>
-                <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Manage Keyword Hashtags</Text>
-                  <TouchableOpacity onPress={() => setTagModalOpen(false)}>
-                    <Text style={styles.modalCloseText}>✕</Text>
-                  </TouchableOpacity>
-                </View>
+        <View style={styles.sheetBackdrop}>
+          <TouchableWithoutFeedback onPress={() => setTagModalOpen(false)}>
+            <View style={styles.sheetDismiss} />
+          </TouchableWithoutFeedback>
+          <View style={styles.sheet} testID="filter-sheet">
+            <View style={styles.sheetHandle} />
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Filter & sort</Text>
+              <TouchableOpacity onPress={() => setTagModalOpen(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+                <X size={20} color={c.textMuted} strokeWidth={2.5} />
+              </TouchableOpacity>
+            </View>
 
-                {/* Add New Tag Input */}
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
+              {/* Hashtag chips: up to MAX_ACTIVE_TAGS active at once. */}
+              <View style={styles.sectionHeadRow}>
+                <Text style={[styles.sectionSubtitle, styles.sectionSubtitleInline]}>Your hashtags</Text>
+                <Text style={[styles.activeCount, full && styles.activeCountFull]} testID="filter-active-count">
+                  {activeTags.length} / {MAX_ACTIVE_TAGS} active
+                </Text>
+              </View>
+              {full ? (
+                // At the limit: a badge where the input was, until a chip is taken off.
+                <View style={styles.maxBadge} testID="filter-max-badge" accessibilityRole="text">
+                  <Text style={styles.maxBadgeText}>
+                    {MAX_ACTIVE_TAGS} of {MAX_ACTIVE_TAGS} Selected (Max)
+                  </Text>
+                </View>
+              ) : (
                 <View style={styles.addTagRow}>
                   <TextInput
                     style={styles.addTagInput}
-                    placeholder="e.g. Pickleball, FarmersMarket"
-                    placeholderTextColor="#475569"
+                    placeholder="Find a hashtag, e.g. Pickleball"
+                    placeholderTextColor={c.iconFaint}
                     value={newTagInput}
-                    onChangeText={setNewTagInput}
+                    onChangeText={(text) => {
+                      setNewTagInput(text);
+                      setLimitNote(false);
+                    }}
                     onSubmitEditing={handleAddNewTag}
                     returnKeyType="done"
                   />
@@ -137,35 +362,155 @@ export const TopFilterHeader: React.FC = () => {
                     <Text style={styles.addTagBtnText}>+ Add</Text>
                   </TouchableOpacity>
                 </View>
-
-                {/* Active Tags */}
-                <Text style={styles.sectionSubtitle}>Active Keywords (tap ✕ to remove)</Text>
-                <View style={styles.chipWrap}>
-                  {tags.map((tag) => (
-                    <View key={tag} style={styles.editorChip}>
-                      <Text style={styles.editorChipText}>{tag}</Text>
-                      {tag !== 'All' && (
-                        <TouchableOpacity
-                          onPress={() => removeTag(tag)}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Text style={styles.removeChipText}>✕</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  ))}
-                </View>
-
-                <TouchableOpacity
-                  style={styles.saveBtn}
-                  onPress={() => setTagModalOpen(false)}
-                >
-                  <Text style={styles.saveBtnText}>Done</Text>
-                </TouchableOpacity>
+              )}
+              {!full && newTagInput.trim() ? (
+                tagMatches.length ? (
+                  <View style={styles.chipWrap} testID="filter-tag-matches">
+                    {tagMatches.map((entry) => (
+                      <TouchableOpacity
+                        key={entry.tag}
+                        style={[styles.editorChip, styles.matchChip]}
+                        onPress={() => addListedTag(entry.tag)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add ${entry.tag}`}
+                      >
+                        <Text style={[styles.editorChipText, styles.matchChipText]}>+ {entry.tag}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.limitNote} testID="filter-no-match">
+                    No hashtag matches “{newTagInput.trim()}”. Try another word.
+                  </Text>
+                )
+              ) : null}
+              {limitNote ? (
+                <Text style={styles.limitNote} testID="filter-limit-note">
+                  {MAX_ACTIVE_TAGS} active filters at most. Remove one to add another.
+                </Text>
+              ) : null}
+              <View style={styles.chipWrap}>
+                {/* Added (typed or searched): green, × removes it. */}
+                {addedTags.map((tag) => (
+                  <View key={tag} style={[styles.editorChip, styles.activeChip]}>
+                    <Text style={[styles.editorChipText, styles.activeChipText]}>{tag}</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        removeTag(tag);
+                        setLimitNote(false);
+                      }}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${tag}`}
+                    >
+                      <X size={14} color={c.green} strokeWidth={3} />
+                    </TouchableOpacity>
+                  </View>
+                ))}
+                {addedTags.length === 0 ? (
+                  <Text style={styles.followedNote}>No added hashtags yet.</Text>
+                ) : null}
               </View>
-            </TouchableWithoutFeedback>
+
+              {/* Followed on your Profile: always listed. Gray + adds it, green − takes it off. */}
+              {followedList.length ? (
+              <>
+              <View style={styles.tagDivider} />
+              <Text style={styles.sectionSubtitle}>Followed tags</Text>
+              <View style={styles.chipWrap}>
+                {followedList.map((tag) => {
+                  const on = activeKeys.has(keyOf(tag));
+                  return (
+                    <TouchableOpacity
+                      key={`followed-${tag}`}
+                      style={[styles.editorChip, on ? styles.activeChip : styles.followedOffChip, !on && full && styles.chipDisabled]}
+                      onPress={() => toggleFollowed(tag)}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={on ? `Take ${tag} off the filters` : `Add ${tag} to the filters`}
+                      testID={`filter-followed-${keyOf(tag)}`}
+                    >
+                      <Text style={[styles.editorChipText, on && styles.activeChipText]}>{tag}</Text>
+                      {on ? (
+                        <Minus size={14} color={c.green} strokeWidth={3} />
+                      ) : (
+                        <Plus size={14} color={c.textMuted} strokeWidth={3} />
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.followedNote}>From your Profile. Tap + to use one as a filter, − to take it off.</Text>
+              </>
+              ) : null}
+
+              {/* Distance from the middle of the area being explored. */}
+              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Distance</Text>
+              <View style={styles.rangeRow} accessibilityRole="radiogroup">
+                {ranges.map((option) => {
+                  const on = rangeMeters === option.meters;
+                  return (
+                    <TouchableOpacity
+                      key={option.label}
+                      style={[styles.rangeChip, on && styles.rangeChipOn]}
+                      onPress={() => setMapRange(option.meters)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={option.meters == null ? 'Any distance' : `Within ${option.label}`}
+                      testID={`filter-range-${option.meters ?? 'any'}`}
+                    >
+                      <Text style={[styles.rangeText, on && styles.rangeTextOn]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.sortNote}>From the middle of the area you're exploring.</Text>
+
+              {/* Sort: three side-by-side buttons. */}
+              <Text style={styles.sectionSubtitle}>Sort by</Text>
+              <View style={styles.sortSegment} accessibilityRole="radiogroup">
+                {POINT_SORTS.map((option) => {
+                  const on = sort === option.id;
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.sortSegmentBtn, on && styles.sortSegmentBtnOn]}
+                      onPress={() => setPointSort(option.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={`${option.label}: ${option.hint}`}
+                      testID={`sort-${option.id}`}
+                    >
+                      <Text style={[styles.sortSegmentText, on && styles.sortSegmentTextOn]} numberOfLines={1}>
+                        {SORT_SHORT[option.id]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.sortNote}>Boosted Points stay at the top, labeled.</Text>
+            </ScrollView>
+
+            <View style={styles.sheetButtons}>
+              <TouchableOpacity
+                style={[styles.resetBtn, activeCount === 0 && styles.resetBtnOff]}
+                disabled={activeCount === 0}
+                onPress={() => {
+                  setPointSort(DEFAULT_POINT_SORT);
+                  setMyChannelsOnly(false);
+                  setMapRange(null);
+                  setFollowedOnly(false);
+                }}
+                accessibilityRole="button"
+              >
+                <Text style={styles.resetText}>Reset</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.saveBtn, styles.doneBtn]} onPress={() => setTagModalOpen(false)} accessibilityRole="button">
+                <Text style={styles.saveBtnText}>Done</Text>
+              </TouchableOpacity>
+            </View>
           </View>
-        </TouchableWithoutFeedback>
+        </View>
       </Modal>
 
       {/* Settings Modal Sheet */}
@@ -180,7 +525,7 @@ export const TopFilterHeader: React.FC = () => {
             <TouchableWithoutFeedback>
               <View style={styles.modalCard}>
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>Node & Profile Settings</Text>
+                  <Text style={styles.modalTitle}>Connection Settings (dev)</Text>
                   <TouchableOpacity onPress={() => setSettingsOpen(false)}>
                     <Text style={styles.modalCloseText}>✕</Text>
                   </TouchableOpacity>
@@ -193,7 +538,7 @@ export const TopFilterHeader: React.FC = () => {
                     value={callsign}
                     onChangeText={setCallsign}
                     placeholder="e.g. Ranger-F0A5ACCF"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={c.iconFaint}
                   />
                 </View>
 
@@ -204,7 +549,7 @@ export const TopFilterHeader: React.FC = () => {
                     value={tenantId}
                     onChangeText={setTenantId}
                     autoCapitalize="none"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={c.iconFaint}
                   />
                 </View>
 
@@ -215,7 +560,7 @@ export const TopFilterHeader: React.FC = () => {
                     value={serverUrl}
                     onChangeText={setServerUrl}
                     autoCapitalize="none"
-                    placeholderTextColor="#475569"
+                    placeholderTextColor={c.iconFaint}
                   />
                 </View>
 
@@ -239,26 +584,28 @@ export const TopFilterHeader: React.FC = () => {
   );
 };
 
-const styles = StyleSheet.create({
+const createStyles = (c: ThemeColors) =>
+  StyleSheet.create({
   headerContainer: {
     paddingTop: 12,
     paddingBottom: 8,
-    backgroundColor: 'rgba(15, 23, 42, 0.75)',
+    backgroundColor: c.headerGlass,
     zIndex: 10,
   },
+  headerEmbedded: { paddingTop: 10, paddingBottom: 4, backgroundColor: 'transparent', marginHorizontal: -16 },
   topRow: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 16,
-    gap: 10,
+    gap: 8,
   },
   avatarButton: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderWidth: 1.5,
-    borderColor: '#06b6d4',
+    borderColor: c.accentDeep,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
@@ -267,12 +614,17 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  avatarImage: {
+    width: '100%',
+    height: '100%',
   },
   avatarInitial: {
-    color: '#38bdf8',
+    color: c.sky,
     fontSize: 16,
     fontWeight: '800',
   },
@@ -283,14 +635,24 @@ const styles = StyleSheet.create({
     width: 11,
     height: 11,
     borderRadius: 5.5,
-    backgroundColor: '#10b981',
+    backgroundColor: c.greenDeep,
     borderWidth: 2,
-    borderColor: '#0a1120',
+    borderColor: c.mapBase,
+  },
+  calendarBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.border,
+    borderWidth: 1,
+    borderColor: 'rgba(56, 189, 248, 0.2)',
   },
   segmentedWrapper: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderRadius: 24,
     padding: 3,
     borderWidth: 1,
@@ -305,17 +667,30 @@ const styles = StyleSheet.create({
   segmentBtnActive: {
     backgroundColor: 'rgba(6, 182, 212, 0.15)',
     borderWidth: 1,
-    borderColor: '#06b6d4',
+    borderColor: c.accentDeep,
   },
   segmentText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 14,
     fontWeight: '600',
   },
   segmentTextActive: {
-    color: '#38bdf8',
+    color: c.sky,
     fontWeight: '700',
   },
+  chipArea: { position: 'relative' },
+  /* Small round arrow over the chip row's edge, centered on the chips (below the 12pt top padding). */
+  moreArrow: {
+    position: 'absolute',
+    top: 12,
+    bottom: 0,
+    width: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: c.headerGlass,
+  },
+  moreArrowLeft: { left: 0, borderTopRightRadius: 16, borderBottomRightRadius: 16 },
+  moreArrowRight: { right: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
   tagScrollContainer: {
     paddingHorizontal: 16,
     paddingTop: 12,
@@ -326,38 +701,210 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: 18,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.borderStrong,
   },
+  // Filter & sort chips: active = green (× or −), followed but off = gray with +.
+  activeChip: { backgroundColor: c.greenTint, borderColor: c.green },
+  activeChipText: { color: c.green, fontWeight: '800' },
+  followedOffChip: { backgroundColor: c.border, borderColor: c.borderStrong },
+  chipDisabled: { opacity: 0.45 },
+  followedNote: { color: c.textFaint, fontSize: 11, marginTop: 8 },
+  tagDivider: { height: 1, backgroundColor: c.border, marginTop: 16, marginBottom: 14 },
+  sectionHeadRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', marginBottom: 10 },
+  sectionSubtitleInline: { marginBottom: 0 },
+  activeCount: { color: c.textMuted, fontSize: 11, fontWeight: '700' },
+  activeCountFull: { color: c.amber },
+  limitNote: { color: c.amber, fontSize: 12, fontWeight: '600', marginTop: -2, marginBottom: 8 },
+  maxBadge: {
+    height: 44,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.green,
+    backgroundColor: c.greenTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  maxBadgeText: { color: c.green, fontSize: 13, fontWeight: '800', letterSpacing: 0.3 },
   tagPillActive: {
-    backgroundColor: '#06b6d4',
-    borderColor: '#22d3ee',
+    backgroundColor: c.accentDeep,
+    borderColor: c.accent,
+  },
+  livePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    borderColor: 'rgba(52, 211, 153, 0.45)',
+  },
+  livePillActive: {
+    backgroundColor: c.green,
+    borderColor: c.greenBright,
+  },
+  liveDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
+    backgroundColor: c.green,
+  },
+  liveDotActive: {
+    backgroundColor: c.greenInk,
+  },
+  liveText: {
+    color: c.greenBright,
+  },
+  liveTextActive: {
+    color: c.greenInk,
+    fontWeight: '800',
   },
   tagText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 12,
     fontWeight: '600',
   },
   tagTextActive: {
-    color: '#0f172a',
+    color: c.surface,
     fontWeight: '700',
   },
-  trailingEditPill: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 18,
-    backgroundColor: '#1e293b',
+  /* Round filter button at the start of the chip row (same height as the chips). */
+  addTagPill: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: c.border,
     borderWidth: 1,
-    borderColor: '#06b6d4',
+    borderColor: c.accentDeep,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  trailingEditIcon: {
-    color: '#38bdf8',
-    fontSize: 13,
-    fontWeight: '700',
+  filterBtnActive: {
+    backgroundColor: c.accent,
+    borderColor: c.accent,
   },
+  filterBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 3,
+    backgroundColor: c.amber,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  filterBadgeText: { color: '#1c1917', fontSize: 10, fontWeight: '900' },
+  /* Filter & sort sheet */
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(2, 6, 23, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  sheetDismiss: { flex: 1 },
+  sheet: {
+    maxHeight: '85%',
+    backgroundColor: c.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+  },
+  sheetHandle: {
+    width: 42,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: c.borderStrong,
+    alignSelf: 'center',
+    marginBottom: 10,
+  },
+  sheetContent: { paddingBottom: 8 },
+  sortList: { gap: 6 },
+  sortRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.border,
+    marginBottom: 6,
+  },
+  sortRowOn: { borderColor: c.accent, backgroundColor: c.accentTint },
+  sortCopy: { flex: 1, gap: 1 },
+  sortLabel: { color: c.text, fontSize: 14, fontWeight: '700' },
+  sortLabelOn: { color: c.accent },
+  sortHint: { color: c.textMuted, fontSize: 12 },
+  sortNote: { color: c.textFaint, fontSize: 11, marginTop: 8, marginBottom: 16 },
+  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  rangeChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  rangeChipOn: { backgroundColor: c.accent, borderColor: c.accent },
+  rangeText: { color: c.textSecondary, fontSize: 14, fontWeight: '700' },
+  rangeTextOn: { color: c.onAccent },
+  sortSegment: {
+    flexDirection: 'row',
+    padding: 4,
+    gap: 4,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  sortSegmentBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 10,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  sortSegmentBtnOn: {
+    borderColor: c.accent,
+    backgroundColor: c.accentTint,
+    shadowColor: c.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  sortSegmentText: { color: c.textSecondary, fontSize: 13, fontWeight: '700' },
+  sortSegmentTextOn: { color: c.accent, fontWeight: '800' },
+  showCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+    paddingHorizontal: 14,
+    marginBottom: 6,
+  },
+  showRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12 },
+  showRowDivider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: c.border },
+  sectionGap: { marginTop: 10 },
+  sheetButtons: { flexDirection: 'row', gap: 10, marginTop: 8 },
+  resetBtn: {
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+    alignItems: 'center',
+    marginTop: 6,
+  },
+  resetBtnOff: { opacity: 0.4 },
+  resetText: { color: c.text, fontSize: 14, fontWeight: '700' },
+  doneBtn: { flex: 1 },
   /* Modals */
   modalBackdrop: {
     flex: 1,
@@ -368,11 +915,11 @@ const styles = StyleSheet.create({
   },
   modalCard: {
     width: '100%',
-    backgroundColor: '#0f172a',
+    backgroundColor: c.surface,
     borderRadius: 20,
     padding: 20,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.borderStrong,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -380,20 +927,22 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#1e293b',
+    borderBottomColor: c.border,
     paddingBottom: 10,
   },
   modalTitle: {
-    color: '#f8fafc',
+    color: c.text,
     fontSize: 16,
     fontWeight: '700',
   },
   modalCloseText: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 18,
     fontWeight: '700',
     padding: 4,
   },
+  matchChip: { borderStyle: 'dashed' },
+  matchChipText: { fontWeight: '700' },
   addTagRow: {
     flexDirection: 'row',
     gap: 8,
@@ -401,28 +950,28 @@ const styles = StyleSheet.create({
   },
   addTagInput: {
     flex: 1,
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderRadius: 10,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: c.borderStrong,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 9,
     fontSize: 13,
   },
   addTagBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: c.accentDeep,
     paddingHorizontal: 16,
     justifyContent: 'center',
     borderRadius: 10,
   },
   addTagBtnText: {
-    color: '#0f172a',
+    color: c.surface,
     fontSize: 13,
     fontWeight: '700',
   },
   sectionSubtitle: {
-    color: '#64748b',
+    color: c.textFaint,
     fontSize: 11,
     fontWeight: '600',
     textTransform: 'uppercase',
@@ -437,21 +986,21 @@ const styles = StyleSheet.create({
   editorChip: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderRadius: 16,
     paddingHorizontal: 10,
     paddingVertical: 6,
     gap: 6,
     borderWidth: 1,
-    borderColor: '#334155',
+    borderColor: c.borderStrong,
   },
   editorChipText: {
-    color: '#e2e8f0',
+    color: c.textBody,
     fontSize: 12,
     fontWeight: '600',
   },
   removeChipText: {
-    color: '#ef4444',
+    color: c.danger,
     fontSize: 12,
     fontWeight: '700',
     paddingHorizontal: 2,
@@ -460,18 +1009,18 @@ const styles = StyleSheet.create({
     marginBottom: 14,
   },
   fieldLabel: {
-    color: '#94a3b8',
+    color: c.textMuted,
     fontSize: 11,
     fontWeight: '600',
     marginBottom: 6,
     textTransform: 'uppercase',
   },
   textInput: {
-    backgroundColor: '#1e293b',
+    backgroundColor: c.border,
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#334155',
-    color: '#f8fafc',
+    borderColor: c.borderStrong,
+    color: c.text,
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 13,
@@ -480,7 +1029,7 @@ const styles = StyleSheet.create({
   statusBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#172554',
+    backgroundColor: c.chipBlue,
     padding: 10,
     borderRadius: 8,
     gap: 8,
@@ -490,22 +1039,22 @@ const styles = StyleSheet.create({
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10b981',
+    backgroundColor: c.greenDeep,
   },
   statusBoxText: {
-    color: '#38bdf8',
+    color: c.sky,
     fontSize: 11,
     fontWeight: '600',
   },
   saveBtn: {
-    backgroundColor: '#06b6d4',
+    backgroundColor: c.accentDeep,
     paddingVertical: 12,
     borderRadius: 10,
     alignItems: 'center',
     marginTop: 6,
   },
   saveBtnText: {
-    color: '#0f172a',
+    color: c.surface,
     fontSize: 14,
     fontWeight: '700',
   },

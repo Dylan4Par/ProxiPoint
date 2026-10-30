@@ -1,0 +1,138 @@
+import { BOUNDARY_RADII } from './boundaryTiers';
+import type {
+  BeaconCreatePayload,
+  BeaconDraft,
+  BeaconDuration,
+  BeaconVisibility,
+  DropBeaconInput,
+} from '../types/beacon';
+
+const DEFAULT_BEACON_URL = 'http://127.0.0.1:8090/api/v1/beacons';
+
+export const GEOCODE_DEBOUNCE_MS = 300;
+
+export const BEACON_DESCRIPTION_WORD_LIMIT = 200;
+
+export function countBeaconWords(value: string): number {
+  const trimmed = value.trim();
+  if (!trimmed) return 0;
+  return trimmed.split(/\s+/).length;
+}
+
+/** Keep the first 200 words, including the spacing the operator already typed. */
+export function clampBeaconDescription(value: string, limit = BEACON_DESCRIPTION_WORD_LIMIT): string {
+  if (countBeaconWords(value) <= limit) return value;
+  const pattern = /\S+/g;
+  let count = 0;
+  let end = 0;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(value)) !== null) {
+    count += 1;
+    end = match.index + match[0].length;
+    if (count >= limit) break;
+  }
+  return value.slice(0, end);
+}
+
+export function parseBeaconTags(raw: string): string[] {
+  const seen = new Set<string>();
+  const tags: string[] = [];
+  for (const part of raw.split(/[,\s]+/)) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const tag = trimmed.startsWith('#') ? trimmed : `#${trimmed}`;
+    if (tag === '#' || seen.has(tag)) continue;
+    seen.add(tag);
+    tags.push(tag);
+  }
+  return tags;
+}
+
+export function primaryBeaconTag(raw: string): string {
+  return parseBeaconTags(raw)[0] ?? '#Beacon';
+}
+
+export function describeBeaconTiming(input: {
+  isLiveNow: boolean;
+  duration: BeaconDuration;
+  scheduledStart: string;
+}): { status: string; statusColor: string } {
+  if (input.isLiveNow) {
+    return { status: 'LIVE NOW', statusColor: '#10b981' };
+  }
+  const when = input.scheduledStart.trim() || 'scheduled';
+  return { status: `Starts ${when}`, statusColor: '#38bdf8' };
+}
+
+export function isBeaconVisibility(value: string): value is BeaconVisibility {
+  return value === 'private' || value === 'channel' || value === 'public';
+}
+
+/**
+ * Visibility from anywhere (server, old saved drafts): the retired 'tag_network' becomes 'public',
+ * and anything unknown falls back to 'public'.
+ */
+export function normalizeVisibility(value: unknown): BeaconVisibility {
+  return typeof value === 'string' && isBeaconVisibility(value) ? value : 'public';
+}
+
+export function createBeaconDraft(input: DropBeaconInput): BeaconDraft {
+  const tierLevel = input.tierLevel ?? 'micro';
+  return {
+    ...input,
+    title: input.title.trim(),
+    description: clampBeaconDescription(input.description ?? '').trim(),
+    tierLevel,
+    radiusMeters: input.radiusMeters ?? BOUNDARY_RADII[tierLevel],
+  };
+}
+
+export function formatBroadcastReach(tags: string, displayRadius: string): string {
+  const audience = parseBeaconTags(tags)[0] ?? '#Network';
+  return `↳ Broadcasting to ${audience} trackers within a ${displayRadius} radius.`;
+}
+
+export function durationToHours(duration: BeaconDuration): number {
+  switch (duration) {
+    case '1 hr':
+      return 1;
+    case '2 hrs':
+      return 2;
+    case '4 hrs':
+      return 4;
+    case 'All Day':
+      return 24;
+  }
+}
+
+export function resolveDurationHours(draft: { duration: BeaconDuration; durationHours?: number }): number {
+  if (draft.durationHours != null && Number.isFinite(draft.durationHours) && draft.durationHours > 0) {
+    return Math.round(draft.durationHours * 100) / 100;
+  }
+  return durationToHours(draft.duration);
+}
+
+export function toBeaconCreatePayload(draft: BeaconDraft): BeaconCreatePayload {
+  const description = clampBeaconDescription(draft.description ?? '').trim();
+  return {
+    title: draft.title,
+    venue: draft.venue,
+    channels: parseBeaconTags(draft.tags),
+    latitude: draft.latitude,
+    longitude: draft.longitude,
+    radius_meters: draft.radiusMeters,
+    visibility: draft.visibility,
+    ...(draft.channelId ? { channel_id: draft.channelId } : {}),
+    duration_hours: resolveDurationHours(draft),
+    ...(description ? { description } : {}),
+    ...(draft.url ? { url: draft.url } : {}),
+  };
+}
+
+export function resolveBeaconCreateUrl(env: { beaconUrl?: string; apiUrl?: string }): string {
+  const beaconUrl = env.beaconUrl?.trim();
+  if (beaconUrl) return beaconUrl;
+  const apiUrl = env.apiUrl?.trim();
+  if (apiUrl) return apiUrl.replace(/\/telemetry\/ping$/, '/beacons');
+  return DEFAULT_BEACON_URL;
+}
