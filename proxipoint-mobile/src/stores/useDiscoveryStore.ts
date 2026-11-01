@@ -4,6 +4,7 @@ import { venuePageHandle } from '../lib/hostProfiles';
 import { describeBeaconTiming, normalizeVisibility, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
 import { calculateDistanceMeters } from '../lib/locationFilter';
 import { canonicalTag, canonicalizeTags } from '../lib/hashtags';
+import { mergeRemoteNodes, timingStatus } from '../lib/remoteEvents';
 // 30 more sample Points around the default area and 10 in Fort Collins.
 import { MORE_SEED_POINTS } from './seedPointsMore';
 import type {
@@ -15,6 +16,13 @@ import type {
   PersistedBeacon,
   PreviewGeofence,
 } from '../types/beacon';
+
+export interface RemoteEventsState {
+  status: 'off' | 'loading' | 'ok' | 'error';
+  count: number;
+  loadedAt: string | null;
+  error: string | null;
+}
 
 export interface InboundProximityNode {
   id: string;
@@ -145,6 +153,8 @@ export interface DiscoveryState {
   selectedTag: string;
   tags: string[];
   previewGeofence: PreviewGeofence | null;
+  /** Events loaded from the backend (GET /api/v1/events): 'off' when EXPO_PUBLIC_EVENTS_URL isn't set. */
+  remoteEvents: RemoteEventsState;
 
   // Setters & Actions
   setSocketConnected: (connected: boolean) => void;
@@ -171,6 +181,9 @@ export interface DiscoveryState {
   adoptPersistedBeacon: (saved: PersistedBeacon, draft: BeaconDraft) => string;
   updateConfig: (config: Partial<Pick<DiscoveryState, 'tenantId' | 'deviceId' | 'wsEndpoint' | 'searchRadiusMeters'>>) => void;
   syncProximityNodes: (incomingNodes: InboundProximityNode[], timestamp: string) => void;
+  /** Replace the backend events with a fresh set (ids "ev:…"); local Points and samples stay. */
+  setRemoteEvents: (nodes: DiscoveryNode[], loadedAt: string) => void;
+  setRemoteEventsStatus: (status: RemoteEventsState['status'], error?: string) => void;
   getVisibleNodes: () => DiscoveryNode[];
 }
 
@@ -529,26 +542,8 @@ const SEED_POINTS: SeedPoint[] = [
   },
 ];
 
-function formatClock(date: Date): string {
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
-
 /** "LIVE NOW", "Starts in 15m", "Starts in 2h", "Today 7:30 PM" or "Tomorrow 6:15 AM". */
-function seedStatus(start: Date, end: Date, now: Date): { status: string; statusColor: string } {
-  if (now >= start && now < end) return { status: 'LIVE NOW', statusColor: '#10b981' };
-  const minutes = Math.round((start.getTime() - now.getTime()) / 60000);
-  if (minutes <= 59) return { status: `Starts in ${Math.max(1, minutes)}m`, statusColor: '#38bdf8' };
-  if (minutes <= 180) return { status: `Starts in ${Math.round(minutes / 60)}h`, statusColor: '#38bdf8' };
-  const sameDay = start.toDateString() === now.toDateString();
-  const tomorrow = new Date(now);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const day = sameDay
-    ? 'Today'
-    : start.toDateString() === tomorrow.toDateString()
-      ? 'Tomorrow'
-      : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][start.getDay()];
-  return { status: `${day} ${formatClock(start)}`, statusColor: '#94a3b8' };
-}
+const seedStatus = timingStatus;
 
 /** Start time: fixed clock times as given; later starts rounded to the quarter hour. */
 function seedStart(point: SeedPoint, now: Date): Date {
@@ -740,6 +735,25 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   // The filter chips: 'All' plus up to MAX_ACTIVE_TAGS active #tags.
   tags: ['All', '#LiveMusic', '#FoodTrucks', '#FarmersMarket', '#TechMeetup', '#Pickleball'],
   previewGeofence: null,
+  remoteEvents: { status: 'off', count: 0, loadedAt: null, error: null },
+
+  setRemoteEvents: (incoming, loadedAt) =>
+    set((state) => {
+      const placed = placeNodes(
+        Object.fromEntries(incoming.map((n) => [n.id, n])),
+        state.selfCoordinates,
+        state.viewPlace,
+      );
+      const nodes = mergeRemoteNodes(state.nodes, Object.values(placed));
+      const keepSelection = state.selectedNodeId == null || nodes[state.selectedNodeId] != null;
+      return {
+        nodes,
+        remoteEvents: { status: 'ok', count: incoming.length, loadedAt, error: null },
+        ...(keepSelection ? {} : { selectedNodeId: FIRST_SEED_ID, selectedEventId: FIRST_SEED_ID }),
+      };
+    }),
+  setRemoteEventsStatus: (status, error) =>
+    set((state) => ({ remoteEvents: { ...state.remoteEvents, status, error: error ?? null } })),
 
   setSocketConnected: (connected) => set({ isSocketConnected: connected }),
   // Moving you: distances and walk/drive times change; the map stays where it is.
