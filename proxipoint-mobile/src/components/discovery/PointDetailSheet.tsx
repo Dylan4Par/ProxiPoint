@@ -97,6 +97,8 @@ interface NodeView {
   /** The venue's page handle, when known. */
   venueHandle: string | null;
   photoUri: string | null;
+  /** Stock photo credit (Pexels): shown under the photo, as Pexels requires. */
+  photoCredit: { provider: string; photographer: string; photographerUrl: string | null; pageUrl: string } | null;
   startsAt: Date | null;
   endsAt: Date | null;
   maxAttendance: number | null;
@@ -149,7 +151,8 @@ function readNode(node: unknown): NodeView {
     host: hostValue || null,
     aggregated: n.source === 'external',
     venueHandle: str(n.venueHandle) || null,
-    photoUri: str(n.coverPhotoUri) || str(n.photoUri) || str(n.imageUrl) || null,
+    photoUri: str(n.coverPhotoLargeUri) || str(n.coverPhotoUri) || str(n.photoUri) || str(n.imageUrl) || null,
+    photoCredit: readPhotoCredit(n.photoCredit),
     startsAt: date(n.startsAt),
     endsAt: date(n.endsAt),
     maxAttendance: num(n.maxAttendance),
@@ -161,6 +164,19 @@ function readNode(node: unknown): NodeView {
     hereCount: num(n.hereCount) ?? 0,
     imHere: n.imHere === true,
     url: safeUrl(n.url ?? n.link ?? n.website),
+  };
+}
+
+function readPhotoCredit(value: unknown): NodeView['photoCredit'] {
+  const v = value as Record<string, unknown> | null | undefined;
+  if (!v) return null;
+  const pageUrl = safeUrl(v.pageUrl);
+  if (!pageUrl || typeof v.photographer !== 'string' || !v.photographer.trim()) return null;
+  return {
+    provider: str(v.provider) || 'Pexels',
+    photographer: v.photographer.trim(),
+    photographerUrl: safeUrl(v.photographerUrl),
+    pageUrl,
   };
 }
 
@@ -284,6 +300,11 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
     }
   };
 
+  const openLink = (url: string | null) => {
+    if (!url) return;
+    Linking.openURL(url).catch(() => setNotice('Couldn’t open that link.'));
+  };
+
   const directions = async () => {
     if (!canNavigate) return;
     const label = encodeURIComponent(view.venue || view.title);
@@ -357,6 +378,27 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {view.photoUri ? (
           <Image source={{ uri: view.photoUri }} style={styles.cover} resizeMode="cover" />
+        ) : null}
+        {view.photoUri && view.photoCredit ? (
+          // Stock photo credit: the photographer and a link to the photo on Pexels (required).
+          <Text style={styles.photoCredit} testID="point-detail-photo-credit">
+            Photo:{' '}
+            <Text
+              style={styles.photoCreditLink}
+              onPress={() => openLink(view.photoCredit?.photographerUrl ?? view.photoCredit?.pageUrl ?? null)}
+              accessibilityRole="link"
+            >
+              {view.photoCredit.photographer}
+            </Text>
+            {' on '}
+            <Text
+              style={styles.photoCreditLink}
+              onPress={() => openLink(view.photoCredit?.pageUrl ?? null)}
+              accessibilityRole="link"
+            >
+              {view.photoCredit.provider}
+            </Text>
+          </Text>
         ) : null}
 
         <View style={styles.titleRow}>
@@ -589,6 +631,8 @@ const createStyles = (c: ThemeColors) =>
   reportBtn: { position: 'absolute', left: 16, top: 12, padding: 4 },
   content: { paddingHorizontal: 16, paddingBottom: 24, gap: 12 },
   cover: { width: '100%', aspectRatio: 16 / 9, borderRadius: 16, backgroundColor: c.base },
+  photoCredit: { color: c.textMuted, fontSize: 11, marginTop: -6, textAlign: 'right' },
+  photoCreditLink: { color: c.textMuted, fontWeight: '700', textDecorationLine: 'underline' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   titleCopy: { flex: 1, gap: 2 },
   tagRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginBottom: 2 },
