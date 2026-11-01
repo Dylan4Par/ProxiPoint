@@ -244,6 +244,24 @@ export const EventCardList: React.FC<{
   // collapsed). The map also slides to the pin, which can reorder the list, so keep following the
   // pick for a moment. A card tapped in the list stays where it is.
   const listRef = useRef<FlatList<DiscoveryNode>>(null);
+  // Scrolls are delayed (drawer opening, cards not drawn yet), and by then the list may have been
+  // rebuilt for a new map area, so they look the card up by id at that moment, never by an index
+  // saved earlier: a stale index past the end makes FlatList throw ("scrollToIndex out of range").
+  const shownRef = useRef<DiscoveryNode[]>(shownNodes);
+  shownRef.current = shownNodes;
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollToNode = useCallback((id: string) => {
+    const index = shownRef.current.findIndex((node) => node.id === id);
+    if (index < 0) return; // no longer in the list
+    try {
+      listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true });
+    } catch {
+      // The list changed between the lookup and the scroll; the next pick scrolls again.
+    }
+  }, []);
+  useEffect(() => () => {
+    if (retryTimer.current) clearTimeout(retryTimer.current);
+  }, []);
   const pickedInList = useRef<string | null>(null);
   const pickedAt = useRef(0);
   const lastPick = useRef<string | null>(null);
@@ -260,14 +278,11 @@ export const EventCardList: React.FC<{
     } else if (pickedInList.current === selectedNodeId || Date.now() - pickedAt.current > 1500) {
       return;
     }
-    const index = shownNodes.findIndex((node) => node.id === selectedNodeId);
-    if (index < 0) return;
+    if (!shownNodes.some((node) => node.id === selectedNodeId)) return;
     const wasCollapsed = modeRef.current === 'collapsed';
     if (wasCollapsed) animateDrawer('half');
-    const timer = setTimeout(
-      () => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }),
-      wasCollapsed ? 260 : 60,
-    );
+    const id = selectedNodeId;
+    const timer = setTimeout(() => scrollToNode(id), wasCollapsed ? 260 : 60);
     return () => clearTimeout(timer);
   }, [selectedNodeId, shownKey]);
 
@@ -370,8 +385,11 @@ export const EventCardList: React.FC<{
           ref={listRef}
           // Cards not drawn yet: jump near it by the average card height, then center it.
           onScrollToIndexFailed={({ index, averageItemLength }) => {
+            const id = shownRef.current[index]?.id;
+            if (!id) return;
             listRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: false });
-            setTimeout(() => listRef.current?.scrollToIndex({ index, viewPosition: 0.5, animated: true }), 80);
+            if (retryTimer.current) clearTimeout(retryTimer.current);
+            retryTimer.current = setTimeout(() => scrollToNode(id), 80);
           }}
           style={styles.list}
           data={shownNodes}
