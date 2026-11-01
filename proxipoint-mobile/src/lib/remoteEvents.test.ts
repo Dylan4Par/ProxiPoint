@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { LOCALRADAR_HANDLE } from './aggregated';
-import { isRemoteNodeId, mergeRemoteNodes, parseEventsResponse, remoteEventToNode, timingStatus, type ApiEvent } from './remoteEvents';
+import { isRemoteNodeId, mergeRemoteNodes, parseEventsResponse, photoFields, remoteEventToNode, timingStatus, type ApiEvent } from './remoteEvents';
 
 const scraped: ApiEvent = {
   id: '6f1c0e1e-0000-4000-8000-000000000001',
@@ -96,4 +96,41 @@ test('a refresh replaces remote nodes, keeps local ones and what you did', () =>
   assert.equal(next[a.id].imHere, true);
   assert.equal(next[a.id].attendeeCount, 1);
   assert.equal(next['seed-1'], local);
+});
+
+test('a stock photo comes with its credit, and is dropped if incomplete', () => {
+  const withPhoto = remoteEventToNode({
+    ...scraped,
+    cover_photo: {
+      provider: 'pexels',
+      url: 'https://images.pexels.com/photos/1/m.jpeg',
+      large_url: 'https://images.pexels.com/photos/1/l.jpeg',
+      page_url: 'https://www.pexels.com/photo/1/',
+      photographer: ' Ann Lee ',
+      photographer_url: 'https://www.pexels.com/@ann',
+    },
+  });
+  assert.equal(withPhoto.coverPhotoUri, 'https://images.pexels.com/photos/1/m.jpeg');
+  assert.equal(withPhoto.coverPhotoLargeUri, 'https://images.pexels.com/photos/1/l.jpeg');
+  assert.deepEqual(withPhoto.photoCredit, {
+    provider: 'Pexels',
+    photographer: 'Ann Lee',
+    photographerUrl: 'https://www.pexels.com/@ann',
+    pageUrl: 'https://www.pexels.com/photo/1/',
+  });
+
+  // No large size: the card size is used everywhere.
+  const small = photoFields({ provider: 'pexels', url: 'https://images.pexels.com/a.jpeg', page_url: 'https://www.pexels.com/photo/a/', photographer: 'Bo' });
+  assert.equal(small.coverPhotoLargeUri, 'https://images.pexels.com/a.jpeg');
+  assert.equal(small.photoCredit?.photographerUrl, null);
+
+  // A photo we can't credit isn't shown.
+  for (const bad of [
+    { provider: 'pexels', url: 'https://images.pexels.com/a.jpeg', page_url: 'https://www.pexels.com/photo/a/', photographer: '' },
+    { provider: 'pexels', url: 'http://insecure.example/a.jpeg', page_url: 'https://www.pexels.com/photo/a/', photographer: 'Bo' },
+    { provider: 'pexels', url: 'https://images.pexels.com/a.jpeg', page_url: '', photographer: 'Bo' },
+  ]) {
+    assert.deepEqual(photoFields(bad), { coverPhotoUri: null, coverPhotoLargeUri: null, photoCredit: null });
+  }
+  assert.equal(remoteEventToNode(scraped).coverPhotoUri, null);
 });

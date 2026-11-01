@@ -17,6 +17,14 @@ import type {
   PreviewGeofence,
 } from '../types/beacon';
 
+export interface PhotoCredit {
+  provider: string; // 'Pexels'
+  photographer: string;
+  photographerUrl: string | null;
+  /** The photo's page on the provider's site. */
+  pageUrl: string;
+}
+
 export interface RemoteEventsState {
   status: 'off' | 'loading' | 'ok' | 'error';
   count: number;
@@ -81,6 +89,10 @@ export interface DiscoveryNode {
   /** Set when the host hid the exact spot; others only see the area name. */
   locationPrivacy?: { level: 'street' | 'neighborhood' | 'city'; regionName: string } | null;
   coverPhotoUri?: string | null;
+  /** Bigger version of the photo for full-width spots (details sheet); falls back to coverPhotoUri. */
+  coverPhotoLargeUri?: string | null;
+  /** Credit for a stock photo (Pexels requires showing it, with a link back). */
+  photoCredit?: PhotoCredit | null;
   /** Other people who tapped "I'm here" (live Points only; a count, never names). */
   hereCount?: number;
   /** You tapped "I'm here". Only counts while the Point is live. */

@@ -6,7 +6,7 @@
  * exact spot, only the area's point and name (no venue). Aggregated events (source 'external')
  * are listed by @LocalRadar and link to their venue's page; see lib/aggregated.ts.
  */
-import type { DiscoveryNode } from '../stores/useDiscoveryStore';
+import type { DiscoveryNode, PhotoCredit } from '../stores/useDiscoveryStore';
 import { LOCALRADAR_HANDLE, venueHandleFor, type PointSource } from './aggregated';
 import { canonicalizeTags } from './hashtags';
 
@@ -37,6 +37,16 @@ export interface ApiEvent {
     region_name?: string;
   };
   distance_m?: number;
+  /** Stock photo for the event's tag (Pexels), with the credit the app must show. */
+  cover_photo?: {
+    provider: string;
+    url: string;
+    large_url?: string;
+    page_url: string;
+    photographer: string;
+    photographer_url?: string;
+    avg_color?: string;
+  };
 }
 
 /** Remote nodes' ids start with this, so a refresh replaces them without touching local ones. */
@@ -137,11 +147,36 @@ export function remoteEventToNode(ev: ApiEvent, now = new Date()): DiscoveryNode
       ev.location.precision === 'exact'
         ? null
         : { level: ev.location.precision, regionName: ev.location.region_name ?? '' },
-    coverPhotoUri: null,
+    ...photoFields(ev.cover_photo),
     startsAt: start.toISOString(),
     endsAt: end.toISOString(),
     x: 0,
     y: 0,
+  };
+}
+
+const httpsUrl = (v: unknown): string | null => (isStr(v) && v.startsWith('https://') ? v : null);
+
+/** Cover photo, its large version, and the credit; nothing unless it's complete. */
+export function photoFields(photo: ApiEvent['cover_photo']): {
+  coverPhotoUri: string | null;
+  coverPhotoLargeUri: string | null;
+  photoCredit: PhotoCredit | null;
+} {
+  const url = httpsUrl(photo?.url);
+  const pageUrl = httpsUrl(photo?.page_url);
+  if (!photo || !url || !pageUrl || !isStr(photo.photographer) || !photo.photographer.trim()) {
+    return { coverPhotoUri: null, coverPhotoLargeUri: null, photoCredit: null };
+  }
+  return {
+    coverPhotoUri: url,
+    coverPhotoLargeUri: httpsUrl(photo.large_url) ?? url,
+    photoCredit: {
+      provider: photo.provider === 'pexels' ? 'Pexels' : photo.provider,
+      photographer: photo.photographer.trim(),
+      photographerUrl: httpsUrl(photo.photographer_url),
+      pageUrl,
+    },
   };
 }
 
