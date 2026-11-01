@@ -3,6 +3,7 @@ import { canonicalizeTags } from '../lib/hashtags';
 import { BackHandler, StyleSheet, StatusBar, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useProximitySocket } from '../hooks/useProximitySocket';
+import { useRemoteEvents } from '../hooks/useRemoteEvents';
 import { DiscoveryMapCanvas } from '../components/discovery/DiscoveryMapCanvas';
 import { TopFilterHeader } from '../components/discovery/TopFilterHeader';
 import { EventCardList } from '../components/discovery/EventCardList';
@@ -68,6 +69,7 @@ export const DiscoverScreen: React.FC = () => {
   const { mode, colors: c } = useTheme();
   // Live duplex telemetry socket hook
   useProximitySocket();
+  useRemoteEvents(); // upcoming events from the backend (EXPO_PUBLIC_EVENTS_URL)
   // Opens on the Discover feed; the map lives on Explore Map.
   const [tab, setTab] = useState<ScreenTab>('discover');
   // Profile tab: the profile itself, or My Drops opened from it.
