@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { defaultUnits, formatDistanceIn, formatRadiusIn, formatRangeWords, getUnits, searchRanges, setUnits } from './units';
+import { defaultUnits, formatDistanceIn, formatDistanceWordsIn, formatRadiusIn, formatRangeWords, getUnits, searchRanges, setUnits } from './units';
 import { formatDistance } from './discoverFeed';
 
 test('metric distances', () => {
@@ -44,4 +44,18 @@ test('formatDistance follows the setting', () => {
 test('ranges in words for the distance menu', () => {
   assert.deepEqual(searchRanges('imperial').map((r) => formatRangeWords(r.meters, 'imperial')), ['1 mile', '3 miles', '5 miles', '15 miles', 'Any distance']);
   assert.deepEqual(searchRanges('metric').map((r) => formatRangeWords(r.meters, 'metric')), ['1 km', '5 km', '10 km', '25 km', 'Any distance']);
+});
+
+test('distances in words for Discover cards', () => {
+  const mi = 1609.344;
+  assert.equal(formatDistanceWordsIn(12 * mi, 'imperial'), '12 miles');
+  assert.equal(formatDistanceWordsIn(1.4 * mi, 'imperial'), '1.4 miles');
+  assert.equal(formatDistanceWordsIn(1.02 * mi, 'imperial'), '1 mile');
+  assert.equal(formatDistanceWordsIn(320, 'imperial'), '350 yards');
+  assert.equal(formatDistanceWordsIn(3, 'imperial'), '10 yards');
+  assert.equal(formatDistanceWordsIn(800, 'metric'), '800 meters');
+  assert.equal(formatDistanceWordsIn(1000, 'metric'), '1 kilometer');
+  assert.equal(formatDistanceWordsIn(1400, 'metric'), '1.4 kilometers');
+  assert.equal(formatDistanceWordsIn(25300, 'metric'), '25 kilometers');
+  assert.equal(formatDistanceWordsIn(undefined, 'metric'), null);
 });
