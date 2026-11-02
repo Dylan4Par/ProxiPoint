@@ -413,7 +413,7 @@ const createStyles = (c: ThemeColors) =>
     rsvpBtnOn: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
     rsvpText: { color: c.onAccent, fontSize: 13, fontWeight: '800', letterSpacing: 0.6 },
     rsvpTextOn: { color: c.accent },
-    controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 6, minHeight: 12 },
+    controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 2, minHeight: 12 },
     dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: c.borderStrong },
     dotOn: { width: 18, backgroundColor: c.accent },
