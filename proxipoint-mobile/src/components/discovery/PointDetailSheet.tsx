@@ -98,7 +98,7 @@ interface NodeView {
   venueHandle: string | null;
   photoUri: string | null;
   /** Stock photo credit (Pexels): shown under the photo, as Pexels requires. */
-  photoCredit: { provider: string; photographer: string; photographerUrl: string | null; pageUrl: string } | null;
+  photoCredit: { provider: string; photographer: string; photographerUrl: string | null; pageUrl: string | null } | null;
   startsAt: Date | null;
   endsAt: Date | null;
   maxAttendance: number | null;
@@ -169,14 +169,12 @@ function readNode(node: unknown): NodeView {
 
 function readPhotoCredit(value: unknown): NodeView['photoCredit'] {
   const v = value as Record<string, unknown> | null | undefined;
-  if (!v) return null;
-  const pageUrl = safeUrl(v.pageUrl);
-  if (!pageUrl || typeof v.photographer !== 'string' || !v.photographer.trim()) return null;
+  if (!v || typeof v.photographer !== 'string' || !v.photographer.trim()) return null;
   return {
-    provider: str(v.provider) || 'Pexels',
+    provider: str(v.provider),
     photographer: v.photographer.trim(),
     photographerUrl: safeUrl(v.photographerUrl),
-    pageUrl,
+    pageUrl: safeUrl(v.pageUrl),
   };
 }
 
@@ -380,7 +378,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
           <Image source={{ uri: view.photoUri }} style={styles.cover} resizeMode="cover" />
         ) : null}
         {view.photoUri && view.photoCredit ? (
-          // Stock photo credit: the photographer and a link to the photo on Pexels (required).
+          // Photo credit: the photographer, and "on Pexels/Unsplash" with a link when it's from there
+          // (required for Pexels). Our own photos without a photographer show no credit.
           <Text style={styles.photoCredit} testID="point-detail-photo-credit">
             Photo:{' '}
             <Text
@@ -390,14 +389,18 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
             >
               {view.photoCredit.photographer}
             </Text>
-            {' on '}
-            <Text
-              style={styles.photoCreditLink}
-              onPress={() => openLink(view.photoCredit?.pageUrl ?? null)}
-              accessibilityRole="link"
-            >
-              {view.photoCredit.provider}
-            </Text>
+            {view.photoCredit.provider ? (
+              <>
+                {' on '}
+                <Text
+                  style={styles.photoCreditLink}
+                  onPress={() => openLink(view.photoCredit?.pageUrl ?? null)}
+                  accessibilityRole="link"
+                >
+                  {view.photoCredit.provider}
+                </Text>
+              </>
+            ) : null}
           </Text>
         ) : null}
 

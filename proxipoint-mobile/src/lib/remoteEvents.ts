@@ -38,14 +38,19 @@ export interface ApiEvent {
   };
   distance_m?: number;
   /** Stock photo for the event's tag (Pexels), with the credit the app must show. */
+  /**
+   * Photo for the card: from our own collection (provider 'catalog', by tag or category) or
+   * Pexels. Pexels photos must be credited; ours are credited when a photographer is recorded.
+   */
   cover_photo?: {
     provider: string;
     url: string;
     large_url?: string;
-    page_url: string;
-    photographer: string;
+    page_url?: string;
+    photographer?: string;
     photographer_url?: string;
     avg_color?: string;
+    license?: string;
   };
 }
 
@@ -157,26 +162,39 @@ export function remoteEventToNode(ev: ApiEvent, now = new Date()): DiscoveryNode
 
 const httpsUrl = (v: unknown): string | null => (isStr(v) && v.startsWith('https://') ? v : null);
 
-/** Cover photo, its large version, and the credit; nothing unless it's complete. */
+const CREDITED_SOURCES: Record<string, string> = { pexels: 'Pexels', unsplash: 'Unsplash' };
+
+/**
+ * Cover photo, its large version, and the credit.
+ * - Pexels photos (from the scraper) are shown only with their credit, which Pexels requires.
+ * - Our own collection ('catalog') is shown as is; the credit appears when a photographer is
+ *   recorded, with "on Pexels/Unsplash" when the photo came from there.
+ */
 export function photoFields(photo: ApiEvent['cover_photo']): {
   coverPhotoUri: string | null;
   coverPhotoLargeUri: string | null;
   photoCredit: PhotoCredit | null;
 } {
+  const none = { coverPhotoUri: null, coverPhotoLargeUri: null, photoCredit: null };
   const url = httpsUrl(photo?.url);
-  const pageUrl = httpsUrl(photo?.page_url);
-  if (!photo || !url || !pageUrl || !isStr(photo.photographer) || !photo.photographer.trim()) {
-    return { coverPhotoUri: null, coverPhotoLargeUri: null, photoCredit: null };
-  }
+  if (!photo || !url) return none;
+  const pageUrl = httpsUrl(photo.page_url);
+  const photographer = isStr(photo.photographer) ? photo.photographer.trim() : '';
+  const isPexels = photo.provider === 'pexels';
+  if (isPexels && (!pageUrl || !photographer)) return none;
+
+  const source = isPexels ? 'pexels' : (photo.license ?? '').trim().toLowerCase();
   return {
     coverPhotoUri: url,
     coverPhotoLargeUri: httpsUrl(photo.large_url) ?? url,
-    photoCredit: {
-      provider: photo.provider === 'pexels' ? 'Pexels' : photo.provider,
-      photographer: photo.photographer.trim(),
-      photographerUrl: httpsUrl(photo.photographer_url),
-      pageUrl,
-    },
+    photoCredit: photographer
+      ? {
+          provider: CREDITED_SOURCES[source] ?? '',
+          photographer,
+          photographerUrl: httpsUrl(photo.photographer_url),
+          pageUrl,
+        }
+      : null,
   };
 }
 

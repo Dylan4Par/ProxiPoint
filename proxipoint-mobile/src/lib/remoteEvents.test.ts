@@ -98,7 +98,7 @@ test('a refresh replaces remote nodes, keeps local ones and what you did', () =>
   assert.equal(next['seed-1'], local);
 });
 
-test('a stock photo comes with its credit, and is dropped if incomplete', () => {
+test('a Pexels photo comes with its credit, and is dropped if it cannot be credited', () => {
   const withPhoto = remoteEventToNode({
     ...scraped,
     cover_photo: {
@@ -118,19 +118,32 @@ test('a stock photo comes with its credit, and is dropped if incomplete', () => 
     photographerUrl: 'https://www.pexels.com/@ann',
     pageUrl: 'https://www.pexels.com/photo/1/',
   });
-
-  // No large size: the card size is used everywhere.
-  const small = photoFields({ provider: 'pexels', url: 'https://images.pexels.com/a.jpeg', page_url: 'https://www.pexels.com/photo/a/', photographer: 'Bo' });
-  assert.equal(small.coverPhotoLargeUri, 'https://images.pexels.com/a.jpeg');
-  assert.equal(small.photoCredit?.photographerUrl, null);
-
-  // A photo we can't credit isn't shown.
+  const none = { coverPhotoUri: null, coverPhotoLargeUri: null, photoCredit: null };
   for (const bad of [
     { provider: 'pexels', url: 'https://images.pexels.com/a.jpeg', page_url: 'https://www.pexels.com/photo/a/', photographer: '' },
+    { provider: 'pexels', url: 'https://images.pexels.com/a.jpeg', photographer: 'Bo' },
     { provider: 'pexels', url: 'http://insecure.example/a.jpeg', page_url: 'https://www.pexels.com/photo/a/', photographer: 'Bo' },
-    { provider: 'pexels', url: 'https://images.pexels.com/a.jpeg', page_url: '', photographer: 'Bo' },
   ]) {
-    assert.deepEqual(photoFields(bad), { coverPhotoUri: null, coverPhotoLargeUri: null, photoCredit: null });
+    assert.deepEqual(photoFields(bad), none);
   }
   assert.equal(remoteEventToNode(scraped).coverPhotoUri, null);
+});
+
+test('photos from our own collection show with or without a credit', () => {
+  const base = 'https://proxipoint-assets.sfo3.cdn.digitaloceanspaces.com/tag-photos/tags/live-music/01-ab';
+  // Our own photo: shown, no credit line.
+  const own = photoFields({ provider: 'catalog', url: `${base}-square.jpg`, large_url: `${base}-wide.jpg`, license: 'own' });
+  assert.equal(own.coverPhotoUri, `${base}-square.jpg`);
+  assert.equal(own.coverPhotoLargeUri, `${base}-wide.jpg`);
+  assert.equal(own.photoCredit, null);
+  // Downloaded from Unsplash with a photographer: "Photo: Bo on Unsplash".
+  const credited = photoFields({
+    provider: 'catalog', url: `${base}-square.jpg`, license: 'Unsplash',
+    page_url: 'https://unsplash.com/photos/x', photographer: 'Bo',
+  });
+  assert.deepEqual(credited.photoCredit, { provider: 'Unsplash', photographer: 'Bo', photographerUrl: null, pageUrl: 'https://unsplash.com/photos/x' });
+  // Bought, with a photographer: credited by name only.
+  assert.equal(photoFields({ provider: 'catalog', url: `${base}-square.jpg`, license: 'purchased', photographer: 'Cy' }).photoCredit?.provider, '');
+  // No usable image: nothing.
+  assert.equal(photoFields({ provider: 'catalog', url: 'http://x/a.jpg' }).coverPhotoUri, null);
 });
