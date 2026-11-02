@@ -16,6 +16,7 @@ import type {
   PersistedBeacon,
   PreviewGeofence,
 } from '../types/beacon';
+import type { EventFacts } from '../lib/eventDetails';
 
 export interface PhotoCredit {
   /** Where it's from, for "on Pexels"; '' when not worth naming (own photos). */
@@ -94,6 +95,8 @@ export interface DiscoveryNode {
   coverPhotoLargeUri?: string | null;
   /** Credit for a stock photo (Pexels requires showing it, with a link back). */
   photoCredit?: PhotoCredit | null;
+  /** Key facts of a gathered event: price, age limit, door rules, a one-line hook. */
+  facts?: EventFacts | null;
   /** Other people who tapped "I'm here" (live Points only; a count, never names). */
   hereCount?: number;
   /** You tapped "I'm here". Only counts while the Point is live. */

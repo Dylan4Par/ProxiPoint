@@ -14,6 +14,7 @@ import {
   View,
 } from 'react-native';
 import {
+  TriangleAlert,
   CalendarClock,
   CalendarPlus,
   Check,
@@ -43,6 +44,7 @@ import { useNavBarHeight } from './BottomNavBar';
 import { formatBeaconDate, formatBeaconTime } from '../../lib/beaconWindow';
 import { SHARE_BASE_URL } from '../../lib/droppedPoint';
 import { displayEventUrl, normalizeEventUrl, linkSiteName } from '../../lib/eventLink';
+import type { EventFacts } from '../../lib/eventDetails';
 import { isLiveNode } from '../../lib/liveStatus';
 import { hereCountNow, hereLabel } from '../../lib/nearbyInterest';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
@@ -111,6 +113,8 @@ interface NodeView {
   imHere: boolean;
   /** Optional link (tickets, event page, venue site), https only. */
   url: string | null;
+  /** Gathered events: price, age limit, door rules (lib/eventDetails). */
+  facts: EventFacts | null;
 }
 
 function str(value: unknown): string {
@@ -130,6 +134,17 @@ function safeUrl(value: unknown): string | null {
   if (typeof value !== 'string') return null;
   const url = normalizeEventUrl(value);
   return url ? url : null;
+}
+
+function readFacts(value: unknown): EventFacts | null {
+  const f = value as Partial<EventFacts> | null | undefined;
+  if (!f || typeof f !== 'object') return null;
+  return {
+    priceLabel: typeof f.priceLabel === 'string' ? f.priceLabel : null,
+    ageLabel: typeof f.ageLabel === 'string' ? f.ageLabel : null,
+    notices: Array.isArray(f.notices) ? f.notices.filter((x): x is string => typeof x === 'string') : [],
+    hook: typeof f.hook === 'string' ? f.hook : '',
+  };
 }
 
 function readNode(node: unknown): NodeView {
@@ -153,6 +168,7 @@ function readNode(node: unknown): NodeView {
     venueHandle: str(n.venueHandle) || null,
     photoUri: str(n.coverPhotoLargeUri) || str(n.coverPhotoUri) || str(n.photoUri) || str(n.imageUrl) || null,
     photoCredit: readPhotoCredit(n.photoCredit),
+    facts: readFacts(n.facts),
     startsAt: date(n.startsAt),
     endsAt: date(n.endsAt),
     maxAttendance: num(n.maxAttendance),
@@ -422,6 +438,11 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
                     </View>
                   ),
                 )}
+                {view.facts?.ageLabel ? (
+                  <View style={styles.extraTag} testID="point-detail-age">
+                    <Text style={styles.extraTagText}>{view.facts.ageLabel}</Text>
+                  </View>
+                ) : null}
               </View>
             ) : null}
             <Text style={styles.title}>{view.title}</Text>
@@ -484,6 +505,11 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
               <Text style={styles.soonText}>{view.status}</Text>
             </View>
           ) : null}
+          {view.facts?.priceLabel ? (
+            <View style={styles.priceChip} testID="point-detail-price" accessibilityLabel={`Price: ${view.facts.priceLabel}`}>
+              <Text style={styles.priceText}>{view.facts.priceLabel}</Text>
+            </View>
+          ) : null}
           {view.distanceMeters != null ? (
             <View style={styles.distanceChip}>
               <View style={styles.greenDot} />
@@ -497,6 +523,14 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
             </View>
           ) : null}
         </View>
+
+        {view.facts && view.facts.notices.length > 0 ? (
+          // What to know before you go (age, ID, bags, cash, sold out), up front.
+          <View style={styles.noticePill} testID="point-detail-notices" accessibilityRole="text">
+            <TriangleAlert size={14} color={c.amber} strokeWidth={2.5} />
+            <Text style={styles.noticeText}>{view.facts.notices.join(' • ')}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.card}>
           <Row Icon={CalendarClock} text={whenText(view)} />
@@ -512,7 +546,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
             text={view.requiresApproval ? 'The host approves each RSVP' : 'Anyone can RSVP'}
           />
           {/* The Point's link (tickets, event page, venue site): tap to open it. */}
-          {view.url ? (
+          {view.url && !view.aggregated ? (
             <TouchableOpacity
               style={styles.row}
               onPress={() => {
@@ -531,31 +565,34 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
           ) : null}
         </View>
 
-        {/* Gathered events show a short lead from the source's description (the server
-            sends only that) with a credit and a link: the full write-up is the source's, read
-            on its own page. Events people post here show their full description. */}
+        {/* Gathered events: the facts above, one factual line here, and the source's page for the
+            full story and tickets (ProxiPoint isn't a ticketing site). Events people post show
+            their full description. */}
         {view.aggregated && (view.description || view.url) ? (
           <View style={styles.card}>
-            <Text style={styles.sectionLabel}>ABOUT</Text>
             {view.description ? (
-              <Text style={styles.description} numberOfLines={4}>
-                {view.description}
-              </Text>
+              <>
+                <Text style={styles.sectionLabel}>ABOUT</Text>
+                <Text style={styles.description} numberOfLines={4}>
+                  {view.description}
+                </Text>
+              </>
             ) : null}
             {view.url ? (
               <TouchableOpacity
-                style={styles.row}
+                style={styles.sourceBtn}
                 onPress={() => openLink(view.url)}
                 accessibilityRole="link"
-                accessibilityLabel={`Read the full description on ${linkSiteName(view.url)}`}
+                accessibilityLabel={`View the original event and tickets on ${linkSiteName(view.url)}`}
                 testID="point-detail-source"
               >
-                <Text style={styles.sourceText} numberOfLines={1}>
-                  {view.description ? 'From ' : 'Details on '}
-                  <Text style={styles.linkText}>{linkSiteName(view.url)}</Text>
-                  {view.description ? ' · Read more' : ''}
-                </Text>
-                <ExternalLink size={13} color={c.accent} strokeWidth={2.25} />
+                <View style={styles.sourceCopy}>
+                  <Text style={styles.sourceBtnText}>View original event & tickets</Text>
+                  <Text style={styles.sourceSite} numberOfLines={1}>
+                    {linkSiteName(view.url)}
+                  </Text>
+                </View>
+                <ExternalLink size={16} color={c.accent} strokeWidth={2.25} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -721,7 +758,40 @@ const createStyles = (c: ThemeColors) =>
   subNote: { color: c.textMuted, fontSize: 11, lineHeight: 15, marginTop: -4, marginLeft: 26 },
   sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   description: { color: c.textBody, fontSize: 14, lineHeight: 20 },
-  sourceText: { flex: 1, color: c.textMuted, fontSize: 12 },
+  priceChip: {
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  priceText: { color: c.text, fontSize: 11, fontWeight: '800' },
+  noticePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: c.amberTint,
+    borderColor: c.amberBorder,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  noticeText: { flex: 1, color: c.amber, fontSize: 12, fontWeight: '700', lineHeight: 17 },
+  sourceBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderWidth: 1,
+    borderColor: c.accent,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  sourceCopy: { flex: 1 },
+  sourceBtnText: { color: c.accent, fontSize: 14, fontWeight: '800' },
+  sourceSite: { color: c.textMuted, fontSize: 11, marginTop: 1 },
   actions: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
   rsvpBtn: {
     flex: 1,

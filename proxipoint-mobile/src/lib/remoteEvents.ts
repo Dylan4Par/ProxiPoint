@@ -9,6 +9,7 @@
 import type { DiscoveryNode, PhotoCredit } from '../stores/useDiscoveryStore';
 import { LOCALRADAR_HANDLE, venueHandleFor, type PointSource } from './aggregated';
 import { canonicalizeTags } from './hashtags';
+import { eventFacts, type ApiEventDetails } from './eventDetails';
 
 export interface ApiEventVenue {
   id: string;
@@ -39,6 +40,8 @@ export interface ApiEvent {
     region_name?: string;
   };
   distance_m?: number;
+  /** Gathered events: price, age limit, door rules and a one-line hook (see lib/eventDetails). */
+  details?: ApiEventDetails;
   /**
    * Photo for the card: from our own collection (provider 'catalog', by tag or category) or
    * Pexels. Pexels photos must be credited; ours are credited when a photographer is recorded.
@@ -154,6 +157,7 @@ export function remoteEventToNode(ev: ApiEvent, now = new Date()): DiscoveryNode
         ? null
         : { level: ev.location.precision, regionName: ev.location.region_name ?? '' },
     ...photoFields(ev.cover_photo),
+    facts: eventFacts(ev.details),
     startsAt: start.toISOString(),
     endsAt: end.toISOString(),
     x: 0,
