@@ -509,7 +509,7 @@ const SEED_POINTS: SeedPoint[] = [
     id: 'pt-pub-trivia',
     url: 'https://example.com/brickhouse-trivia',
     title: 'Wednesday Pub Trivia',
-    tags: ['#TriviaTournament', '#CraftBeer'],
+    tags: ['#BarTrivia', '#CraftBeer'],
     venue: 'The Brickhouse Tap',
     host: '@quizmasterjen',
     description: 'Six rounds, teams up to six. Prizes for first place and best team name.',
