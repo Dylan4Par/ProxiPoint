@@ -10,7 +10,6 @@ import { deckPicks, type RecNode } from '../lib/recommend';
 import { RecommendationDeck } from '../components/activity/RecommendationDeck';
 import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
 import {
-  matchesDiscoverFilters,
   setMapRange,
   useFollowedTagsFilter,
   useMapRange,
@@ -42,6 +41,7 @@ import {
   type FeedNode,
 } from '../lib/discoverFeed';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
+import { discoverFeedAllows, rankByTagMatches, useDiscoverTagFilter } from '../lib/discoverTagFilter';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
@@ -147,22 +147,28 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const whenLabel = timeWindowLabel(timeWindow) ?? formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) });
   // Only times that reach now count as "happening nearby" (Tomorrow or This weekend skip it).
   const windowIncludesNow = timeWindow.start <= now + 60000;
-  const allowed = (node: FeedNode) =>
-    visible(node) &&
-    inRange(center, node, rangeMeters) &&
-    matchesDiscoverFilters(node, {
-      selectedTag,
-      liveOnly,
-      myChannelsOnly,
-      followedTags: followed.filter,
-      area: center,
-      rangeMeters,
-    });
-  const filterKey = `${selectedTag}|${liveOnly}|${myChannelsOnly}|${followed.filter?.join(',') ?? ''}`;
+  // Discover's own #tag filters (Filter & sort): Any / All of up to 5 tags.
+  const tagFilter = useDiscoverTagFilter();
+  const allowedByFilters = discoverFeedAllows({
+    center,
+    rangeMeters,
+    selectedTag,
+    liveOnly,
+    myChannelsOnly,
+    followedTags: followed.filter,
+    tags: tagFilter.tags,
+    mode: tagFilter.mode,
+  });
+  const allowed = (node: FeedNode) => visible(node) && allowedByFilters(node);
+  const filterKey = `${selectedTag}|${liveOnly}|${myChannelsOnly}|${followed.filter?.join(',') ?? ''}|${tagFilter.mode}:${tagFilter.tags.join(',')}`;
 
   // ---- Feed (no search) ----
   const { nearby, upcoming } = useMemo(
-    () => splitFeed(nodes, now, allowed),
+    () => {
+      const feed = splitFeed(nodes, now, allowed);
+      // "Any" of several #tags: Points matching more of them come first in Happening nearby.
+      return { ...feed, nearby: rankByTagMatches(feed.nearby, tagFilter.tags, tagFilter.mode) };
+    },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, timeWindow.start, timeWindow.end, filterKey],
   );

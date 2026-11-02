@@ -28,6 +28,18 @@ import { bestHashtagFor, searchHashtags } from '../../lib/hashtags';
 /** Short labels for the three Sort by buttons. */
 const SORT_SHORT: Record<PointSort, string> = { closest: 'Nearest First', soonest: 'Soonest', popular: 'Most Going' };
 import { MAX_ACTIVE_TAGS, useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import {
+  MAX_DISCOVER_TAGS,
+  addDiscoverTag,
+  clearDiscoverTags,
+  discoverFeedAllows,
+  removeDiscoverTag,
+  setTagMatchMode,
+  showEventsLabel,
+  useDiscoverTagFilter,
+  type TagMatchMode,
+} from '../../lib/discoverTagFilter';
+import { countFeed } from '../../lib/discoverFeed';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 interface TopFilterHeaderProps {
@@ -119,7 +131,11 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   // Discover (embedded) has Distance in the bar; Explore Map keeps it in the Filter & sort sheet.
   // The badge counts only what's set inside the sheet.
   const distanceInBar = embedded;
-  const activeCount = (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (!distanceInBar && rangeMeters != null ? 1 : 0);
+  const tagFilter = useDiscoverTagFilter();
+  const activeCount =
+    (sort !== DEFAULT_POINT_SORT ? 1 : 0) +
+    (!distanceInBar && rangeMeters != null ? 1 : 0) +
+    (distanceInBar ? tagFilter.tags.length : 0); // Discover: each #tag filter counts
   const rangeLabel =
     rangeMeters == null ? 'Any distance' : ranges.find((r) => r.meters === rangeMeters)?.label ?? formatRadiusIn(rangeMeters, units);
   // Distance dropdown, opened under its button.
@@ -147,6 +163,51 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
     const best = bestHashtagFor(newTagInput, activeTags);
     if (best) addListedTag(best);
   };
+  // ---- Discover's Filter & sort: its own #tag filters (Any / All) and a live count ----------
+  const dKeys = new Set(tagFilter.tags.map(keyOf));
+  const dFull = tagFilter.tags.length >= MAX_DISCOVER_TAGS;
+  const quickAdd = followedList.filter((tag) => !dKeys.has(keyOf(tag)));
+  const dMatches = distanceInBar && newTagInput.trim() ? searchHashtags(newTagInput, { exclude: tagFilter.tags, limit: 6 }) : [];
+  const addToShelf = (tag: string) => {
+    if (!addDiscoverTag(tag)) {
+      if (dFull) setLimitNote(true);
+      return;
+    }
+    setNewTagInput('');
+    setLimitNote(false);
+  };
+  const nodes = useDiscoveryStore((st) => st.nodes);
+  const viewPlace = useDiscoveryStore((st) => st.viewPlace);
+  // Live count for the button: the same filters as the Discover feed (only worked out while open).
+  const eventCount =
+    distanceInBar && tagModalOpen
+      ? countFeed(
+          nodes as never,
+          Date.now(),
+          discoverFeedAllows({
+            center: { latitude: viewPlace.latitude, longitude: viewPlace.longitude },
+            rangeMeters,
+            selectedTag,
+            liveOnly,
+            myChannelsOnly,
+            followedTags: followed.filter,
+            tags: tagFilter.tags,
+            mode: tagFilter.mode,
+          }),
+        )
+      : 0;
+  const canClearAll = tagFilter.tags.length > 0 || tagFilter.mode !== 'any' || sort !== DEFAULT_POINT_SORT;
+  const clearAll = () => {
+    clearDiscoverTags();
+    setPointSort(DEFAULT_POINT_SORT);
+    setNewTagInput('');
+    setLimitNote(false);
+  };
+  const MATCH_MODES: Array<{ id: TagMatchMode; label: string; logic: string }> = [
+    { id: 'any', label: 'Any of these', logic: 'OR' },
+    { id: 'all', label: 'All of these', logic: 'AND' },
+  ];
+
   const toggleFollowed = (tag: string) => {
     if (activeKeys.has(keyOf(tag))) {
       removeTag(activeTagFor(tag));
@@ -416,10 +477,215 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filter & sort</Text>
-              <TouchableOpacity onPress={() => setTagModalOpen(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
-                <X size={20} color={c.textMuted} strokeWidth={2.5} />
+              <View style={styles.modalHeaderActions}>
+                {distanceInBar ? (
+                  <TouchableOpacity
+                    onPress={clearAll}
+                    disabled={!canClearAll}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityState={{ disabled: !canClearAll }}
+                    testID="filter-clear-all"
+                  >
+                    <Text style={[styles.clearAllText, !canClearAll && styles.clearAllOff]}>Clear All</Text>
+                  </TouchableOpacity>
+                ) : null}
+                <TouchableOpacity onPress={() => setTagModalOpen(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
+                  <X size={20} color={c.textMuted} strokeWidth={2.5} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {distanceInBar ? (
+            <>
+            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
+              {/* Zone 1: active #tag filters, each with × to drop it. */}
+              <Text style={[styles.sectionSubtitle, dFull && styles.activeCountFull]} testID="filter-active-count">
+                Active tag filters ({tagFilter.tags.length}/{MAX_DISCOVER_TAGS})
+              </Text>
+              <View style={styles.activeShelf} testID="filter-active-shelf">
+                {tagFilter.tags.length ? (
+                  tagFilter.tags.map((tag) => (
+                    <TouchableOpacity
+                      key={tag}
+                      style={[styles.editorChip, styles.activeChip]}
+                      onPress={() => {
+                        removeDiscoverTag(tag);
+                        setLimitNote(false);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Remove ${tag}`}
+                      testID={`filter-active-${keyOf(tag)}`}
+                    >
+                      <Text style={[styles.editorChipText, styles.activeChipText]}>{tag}</Text>
+                      <X size={14} color={c.green} strokeWidth={3} />
+                    </TouchableOpacity>
+                  ))
+                ) : (
+                  <Text style={styles.shelfEmpty}>No tag filters: showing everything. Add tags below.</Text>
+                )}
+              </View>
+
+              {/* Any (OR, default) or All (AND): only matters with two or more tags. */}
+              {tagFilter.tags.length >= 2 ? (
+                <>
+                  <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Match mode</Text>
+                  <View style={styles.sortSegment} accessibilityRole="radiogroup" testID="filter-match-mode">
+                    {MATCH_MODES.map((option) => {
+                      const on = tagFilter.mode === option.id;
+                      return (
+                        <TouchableOpacity
+                          key={option.id}
+                          style={[styles.sortSegmentBtn, on && styles.sortSegmentBtnOn]}
+                          onPress={() => setTagMatchMode(option.id)}
+                          accessibilityRole="radio"
+                          accessibilityState={{ selected: on }}
+                          accessibilityLabel={`${option.label} (${option.logic})`}
+                          testID={`filter-match-${option.id}`}
+                        >
+                          <Text style={[styles.sortSegmentText, on && styles.sortSegmentTextOn]} numberOfLines={1}>
+                            {option.label} · {option.logic}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                  <Text style={styles.sortNote}>
+                    {tagFilter.mode === 'any'
+                      ? 'Events with at least one of these tags. More matches rank higher.'
+                      : 'Only events with every one of these tags.'}
+                  </Text>
+                </>
+              ) : null}
+
+              <View style={styles.tagDivider} />
+
+              {/* Zone 2: find a tag, or quick-add one you follow. */}
+              {dFull ? (
+                <View style={styles.maxBadge} testID="filter-max-badge" accessibilityRole="text">
+                  <Text style={styles.maxBadgeText}>
+                    {MAX_DISCOVER_TAGS} of {MAX_DISCOVER_TAGS} Selected (Max)
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.addTagRow}>
+                  <TextInput
+                    style={styles.addTagInput}
+                    placeholder="Find a hashtag, e.g. Pickleball"
+                    placeholderTextColor={c.iconFaint}
+                    value={newTagInput}
+                    onChangeText={(text) => {
+                      setNewTagInput(text);
+                      setLimitNote(false);
+                    }}
+                    onSubmitEditing={() => {
+                      const best = bestHashtagFor(newTagInput, tagFilter.tags);
+                      if (best) addToShelf(best);
+                    }}
+                    returnKeyType="done"
+                    testID="filter-tag-input"
+                  />
+                  <TouchableOpacity
+                    style={styles.addTagBtn}
+                    onPress={() => {
+                      const best = bestHashtagFor(newTagInput, tagFilter.tags);
+                      if (best) addToShelf(best);
+                    }}
+                  >
+                    <Text style={styles.addTagBtnText}>+ Add</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+              {!dFull && newTagInput.trim() ? (
+                dMatches.length ? (
+                  <View style={styles.chipWrap} testID="filter-tag-matches">
+                    {dMatches.map((entry) => (
+                      <TouchableOpacity
+                        key={entry.tag}
+                        style={[styles.editorChip, styles.matchChip]}
+                        onPress={() => addToShelf(entry.tag)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Add ${entry.tag}`}
+                      >
+                        <Text style={[styles.editorChipText, styles.matchChipText]}>+ {entry.tag}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={styles.limitNote} testID="filter-no-match">
+                    No hashtag matches “{newTagInput.trim()}”. Try another word.
+                  </Text>
+                )
+              ) : null}
+              {limitNote ? (
+                <Text style={styles.limitNote} testID="filter-limit-note">
+                  {MAX_DISCOVER_TAGS} tag filters at most. Remove one to add another.
+                </Text>
+              ) : null}
+
+              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Quick-add from followed</Text>
+              {quickAdd.length ? (
+                <View style={styles.chipWrap}>
+                  {quickAdd.map((tag) => (
+                    <TouchableOpacity
+                      key={`quick-${tag}`}
+                      style={[styles.editorChip, styles.followedOffChip, dFull && styles.chipDisabled]}
+                      onPress={() => addToShelf(tag)}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add ${tag} to the filters`}
+                      testID={`filter-quick-${keyOf(tag)}`}
+                    >
+                      <Plus size={14} color={c.textMuted} strokeWidth={3} />
+                      <Text style={styles.editorChipText}>{tag}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              ) : (
+                <Text style={styles.followedNote}>
+                  {followedList.length ? 'All your followed tags are already filters.' : 'Follow tags on your Profile to quick-add them here.'}
+                </Text>
+              )}
+
+              {/* Sort: three side-by-side buttons. */}
+              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Sort by</Text>
+              <View style={styles.sortSegment} accessibilityRole="radiogroup">
+                {POINT_SORTS.map((option) => {
+                  const on = sort === option.id;
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.sortSegmentBtn, on && styles.sortSegmentBtnOn]}
+                      onPress={() => setPointSort(option.id)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={`${option.label}: ${option.hint}`}
+                      testID={`sort-${option.id}`}
+                    >
+                      <Text style={[styles.sortSegmentText, on && styles.sortSegmentTextOn]} numberOfLines={1}>
+                        {SORT_SHORT[option.id]}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.sortNote}>Boosted Points stay at the top, labeled.</Text>
+            </ScrollView>
+
+            {/* The button shows what you'll get: "Show 18 Events", or a warning when nothing matches. */}
+            <View style={styles.sheetButtons}>
+              <TouchableOpacity
+                style={[styles.saveBtn, styles.doneBtn, eventCount === 0 && styles.noEventsBtn]}
+                onPress={() => setTagModalOpen(false)}
+                accessibilityRole="button"
+                accessibilityHint="Closes the filters"
+                testID="filter-show-events"
+              >
+                <Text style={[styles.saveBtnText, eventCount === 0 && styles.noEventsText]}>{showEventsLabel(eventCount)}</Text>
               </TouchableOpacity>
             </View>
+            </>
+            ) : (
+            <>
 
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
               {/* Hashtag chips: up to MAX_ACTIVE_TAGS active at once. */}
@@ -605,6 +871,8 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 <Text style={styles.saveBtnText}>Done</Text>
               </TouchableOpacity>
             </View>
+            </>
+            )}
           </View>
         </View>
       </Modal>
@@ -788,6 +1056,24 @@ const createStyles = (c: ThemeColors) =>
     borderWidth: 1,
     borderColor: c.accent,
   },
+  modalHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: 16 },
+  clearAllText: { color: c.accent, fontSize: 13, fontWeight: '800' },
+  clearAllOff: { color: c.textFaint },
+  activeShelf: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    padding: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+    minHeight: 50,
+    alignItems: 'center',
+  },
+  shelfEmpty: { color: c.textFaint, fontSize: 12 },
+  noEventsBtn: { backgroundColor: c.amberTint, borderWidth: 1, borderColor: c.amberBorder },
+  noEventsText: { color: c.amber },
   rangePillLabel: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
   rangePillText: { color: c.accent, fontSize: 12, fontWeight: '800' },
   /* Discover's Filter button: the word instead of the icon. */
