@@ -44,6 +44,7 @@ import {
 import { isNodeAllowed, useModeration } from '../lib/moderation';
 import { discoverFeedAllows, rankByTagMatches, removeDiscoverTag, useDiscoverTagFilter } from '../lib/discoverTagFilter';
 import { shortPlace } from '../lib/discoverMiniBar';
+import { countByHost, extraPill } from '../lib/cardExtraPill';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
@@ -251,6 +252,9 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         )
       : null;
 
+  // Each host's Point count, for the cards' "New Host" pill.
+  const hostCounts = useMemo(() => countByHost(Object.values(nodes || {}) as DiscoveryNode[]), [nodes]);
+
   // ---- Sticky mini bar: once the title and search scroll away (past MINI_BAR_AT) -------------
   const scrollRef = useRef<ScrollView | null>(null);
   const [miniBar, setMiniBar] = useState(false);
@@ -299,6 +303,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   ];
 
   return (
+    <HostCountsContext.Provider value={hostCounts}>
     <View style={styles.screen}>
     <ScrollView
       ref={scrollRef}
@@ -616,6 +621,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       {mapPill('discover-mini-map')}
     </Animated.View>
     </View>
+    </HostCountsContext.Provider>
   );
 };
 
@@ -952,6 +958,20 @@ const EventRow: React.FC<{
   boosted?: boolean;
   onWhyBoosted?: () => void;
 }> = ({ node, distanceMeters, onOpen, onToggleRsvp, boosted = false, onWhyBoosted }) => (
+  <EventRowCard node={node} distanceMeters={distanceMeters} onOpen={onOpen} onToggleRsvp={onToggleRsvp} boosted={boosted} onWhyBoosted={onWhyBoosted} />
+);
+
+/** How many Points each host has listed, for "New Host" (set once by the feed). */
+const HostCountsContext = React.createContext<Map<string, number>>(new Map());
+
+const EventRowCard: React.FC<{
+  node: DiscoveryNode;
+  distanceMeters?: number | null;
+  onOpen: () => void;
+  onToggleRsvp: () => void;
+  boosted: boolean;
+  onWhyBoosted?: () => void;
+}> = ({ node, distanceMeters, onOpen, onToggleRsvp, boosted, onWhyBoosted }) => (
   <PointCard
     node={node}
     distanceMeters={distanceMeters}
@@ -960,6 +980,7 @@ const EventRow: React.FC<{
     onOpen={onOpen}
     onToggleRsvp={onToggleRsvp}
     distanceOnly
+    extra={extraPill(node, React.useContext(HostCountsContext))}
     testID={`discover-event-${node.id}`}
   />
 );
