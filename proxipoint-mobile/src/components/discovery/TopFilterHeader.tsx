@@ -132,8 +132,9 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   // The badge counts only what's set inside the sheet.
   const distanceInBar = embedded;
   const tagFilter = useDiscoverTagFilter();
+  // Sort only orders Explore Map's card list, so it lives (and counts) only in Explore's sheet.
   const activeCount =
-    (sort !== DEFAULT_POINT_SORT ? 1 : 0) +
+    (!distanceInBar && sort !== DEFAULT_POINT_SORT ? 1 : 0) +
     (!distanceInBar && rangeMeters != null ? 1 : 0) +
     (distanceInBar ? tagFilter.tags.length : 0); // Discover: each #tag filter counts
   const rangeLabel =
@@ -196,10 +197,9 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           }),
         )
       : 0;
-  const canClearAll = tagFilter.tags.length > 0 || tagFilter.mode !== 'any' || sort !== DEFAULT_POINT_SORT;
+  const canClearAll = tagFilter.tags.length > 0 || tagFilter.mode !== 'any';
   const clearAll = () => {
     clearDiscoverTags();
-    setPointSort(DEFAULT_POINT_SORT);
     setNewTagInput('');
     setLimitNote(false);
   };
@@ -476,7 +476,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           <View style={styles.sheet} testID="filter-sheet">
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Filter & sort</Text>
+              <Text style={styles.modalTitle}>{distanceInBar ? 'Filter' : 'Filter & sort'}</Text>
               <View style={styles.modalHeaderActions}>
                 {distanceInBar ? (
                   <TouchableOpacity
@@ -646,29 +646,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 </Text>
               )}
 
-              {/* Sort: three side-by-side buttons. */}
-              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Sort by</Text>
-              <View style={styles.sortSegment} accessibilityRole="radiogroup">
-                {POINT_SORTS.map((option) => {
-                  const on = sort === option.id;
-                  return (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.sortSegmentBtn, on && styles.sortSegmentBtnOn]}
-                      onPress={() => setPointSort(option.id)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: on }}
-                      accessibilityLabel={`${option.label}: ${option.hint}`}
-                      testID={`sort-${option.id}`}
-                    >
-                      <Text style={[styles.sortSegmentText, on && styles.sortSegmentTextOn]} numberOfLines={1}>
-                        {SORT_SHORT[option.id]}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={styles.sortNote}>Boosted Points stay at the top, labeled.</Text>
             </ScrollView>
 
             {/* The button shows what you'll get: "Show 18 Events", or a warning when nothing matches. */}
