@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Linking, Platform, ScrollView, useWindowDimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, MapPin, Search, Settings, Users, X, Zap } from 'lucide-react-native';
+import { Alert, Animated, Linking, Platform, ScrollView, useWindowDimensions, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Settings, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { PointCard } from '../components/discovery/PointCard';
-import { searchRanges, useUnits } from '../lib/units';
+import { formatRadiusIn, searchRanges, useUnits } from '../lib/units';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
 import { matchesInterests, placeBoosts, upNextPlans, type PlanRole } from '../lib/discoverSlots';
 import { deckPicks, type RecNode } from '../lib/recommend';
@@ -35,13 +35,15 @@ import {
   searchChannels,
   searchPoints,
   splitFeed,
+  countFeed,
   suggestTags,
   timeLabel,
   type ChannelPick,
   type FeedNode,
 } from '../lib/discoverFeed';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
-import { discoverFeedAllows, rankByTagMatches, useDiscoverTagFilter } from '../lib/discoverTagFilter';
+import { discoverFeedAllows, rankByTagMatches, removeDiscoverTag, useDiscoverTagFilter } from '../lib/discoverTagFilter';
+import { miniBarContext } from '../lib/discoverMiniBar';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
@@ -82,6 +84,8 @@ interface DiscoverFeedScreenProps {
 }
 
 const tagKey = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
+/** Scrolled this far (the title and search are gone), the sticky mini bar shows. */
+const MINI_BAR_AT = 120;
 /** Channel rows shown above the Points for a plain search ("All" shows the rest). */
 const MAX_CHANNEL_ROWS = 3;
 
@@ -246,11 +250,44 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         )
       : null;
 
+  // ---- Sticky mini bar: once the title and search scroll away (past MINI_BAR_AT) -------------
+  const scrollRef = useRef<ScrollView | null>(null);
+  const [miniBar, setMiniBar] = useState(false);
+  const miniAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(miniAnim, { toValue: miniBar ? 1 : 0, duration: 180, useNativeDriver: true }).start();
+  }, [miniBar, miniAnim]);
+  const setSelectedTag = useDiscoveryStore((state) => state.setSelectedTag);
+  // Every Point the feed matches (not just the ones listed), for "Map (524)".
+  const matchCount = useMemo(
+    () => countFeed(nodes, now, allowed),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, timeWindow.start, timeWindow.end, filterKey],
+  );
+  const context = miniBarContext(
+    placeLabel,
+    rangeMeters == null ? null : formatRadiusIn(rangeMeters, units),
+    whenLabel,
+  );
+  const miniTags = [
+    ...(selectedTag && selectedTag !== 'All' ? [{ tag: selectedTag, clear: () => setSelectedTag('All') }] : []),
+    ...tagFilter.tags
+      .filter((tag) => tagKey(tag) !== tagKey(selectedTag ?? ''))
+      .map((tag) => ({ tag, clear: () => removeDiscoverTag(tag) })),
+  ];
+
   return (
+    <View style={styles.screen}>
     <ScrollView
+      ref={scrollRef}
       style={styles.scroll}
       contentContainerStyle={styles.content}
       keyboardShouldPersistTaps="handled"
+      scrollEventThrottle={32}
+      onScroll={(event) => {
+        const show = event.nativeEvent.contentOffset.y > MINI_BAR_AT;
+        if (show !== miniBar) setMiniBar(show);
+      }}
       testID="discover-feed"
     >
       <View style={styles.header}>
@@ -497,6 +534,63 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         </>
       )}
     </ScrollView>
+
+    {/* Sticky mini bar: where · range · dates (tap: back to the top to change them), the
+        #tags filtering the feed (× to drop one), and Map with how many Points match. */}
+    <Animated.View
+      pointerEvents={miniBar ? 'box-none' : 'none'}
+      style={[
+        styles.miniBar,
+        { opacity: miniAnim, transform: [{ translateY: miniAnim.interpolate({ inputRange: [0, 1], outputRange: [-12, 0] }) }] },
+      ]}
+      accessibilityElementsHidden={!miniBar}
+      importantForAccessibility={miniBar ? 'auto' : 'no-hide-descendants'}
+      testID="discover-mini-bar"
+    >
+      <TouchableOpacity
+        style={styles.miniContext}
+        onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
+        accessibilityRole="button"
+        accessibilityLabel={`${context}. Back to the top to change where, how far or when`}
+        testID="discover-mini-context"
+      >
+        <Search size={15} color={c.textMuted} strokeWidth={2.5} />
+        <Text style={styles.miniContextText} numberOfLines={1}>
+          {context}
+        </Text>
+      </TouchableOpacity>
+      {miniTags.length ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniTags} contentContainerStyle={styles.miniTagsRow}>
+          {miniTags.map(({ tag, clear }) => (
+            <TouchableOpacity
+              key={tag}
+              style={styles.miniTag}
+              onPress={clear}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove the ${tag} filter`}
+            >
+              <Text style={styles.miniTagText} numberOfLines={1}>
+                {tag}
+              </Text>
+              <X size={12} color={c.accent} strokeWidth={3} />
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
+      ) : (
+        <View style={styles.miniSpacer} />
+      )}
+      <TouchableOpacity
+        style={styles.miniMap}
+        onPress={onOpenMap}
+        accessibilityRole="button"
+        accessibilityLabel={`Map, ${matchCount} ${matchCount === 1 ? 'Point' : 'Points'}`}
+        testID="discover-mini-map"
+      >
+        <MapIcon size={15} color={c.onAccent} strokeWidth={2.5} />
+        <Text style={styles.miniMapText}>Map ({matchCount > 999 ? '999+' : matchCount})</Text>
+      </TouchableOpacity>
+    </Animated.View>
+    </View>
   );
 };
 
@@ -846,7 +940,66 @@ const EventRow: React.FC<{
 
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
+    screen: { flex: 1, backgroundColor: c.base },
     scroll: { flex: 1, backgroundColor: c.base },
+    miniBar: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: 50,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 12,
+      backgroundColor: c.base,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 4,
+    },
+    miniContext: {
+      flexShrink: 1,
+      maxWidth: '58%',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      height: 34,
+      paddingHorizontal: 10,
+      borderRadius: 17,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    miniContextText: { flexShrink: 1, color: c.text, fontSize: 12, fontWeight: '700' },
+    miniTags: { flex: 1 },
+    miniTagsRow: { gap: 6, alignItems: 'center' },
+    miniSpacer: { flex: 1 },
+    miniTag: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      height: 28,
+      paddingHorizontal: 9,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: c.accent,
+      backgroundColor: c.surface,
+    },
+    miniTagText: { color: c.accent, fontSize: 11, fontWeight: '800' },
+    miniMap: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      height: 34,
+      paddingHorizontal: 12,
+      borderRadius: 17,
+      backgroundColor: c.accent,
+    },
+    miniMapText: { color: c.onAccent, fontSize: 12, fontWeight: '800' },
     content: { paddingHorizontal: 16, paddingBottom: 28 },
     header: {
       flexDirection: 'row',
