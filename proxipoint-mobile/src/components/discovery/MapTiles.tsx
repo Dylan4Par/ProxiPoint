@@ -1,7 +1,9 @@
 import React, { memo, useMemo } from 'react';
-import { Image, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
+import { Image } from 'expo-image';
 import { toCanvasCoordinates } from '../../stores/useDiscoveryStore';
 import { MAP_TILE_URLS } from '../../lib/mapTileUrls';
+export { wideLayersFor } from '../../lib/mapTileLayers';
 
 /**
  * Real street map under the Discover pins: Esri's grey "Canvas" basemap plus its street-name
@@ -104,97 +106,59 @@ function tilesFor(
   return tiles;
 }
 
+/** One tile, saved on the phone so a reopened area costs no new download. */
+const TileImage = ({ uri, tile }: { uri: string; tile: Tile }) => (
+  <Image
+    source={{ uri }}
+    cachePolicy="disk"
+    contentFit="fill"
+    transition={150}
+    style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
+  />
+);
+
 export const MapTiles: React.FC<{
   latitude: number;
   longitude: number;
   mode: 'dark' | 'light';
   /** Laid over the tiles to blend them with the app's colours. */
   tint: string;
-}> = memo(({ latitude, longitude, mode, tint }) => {
+  /** How many of the wider layers to draw (wideLayersFor); the streets always show. */
+  wideLayers?: number;
+}> = memo(({ latitude, longitude, mode, tint, wideLayers = 0 }) => {
   const tiles = useMemo(() => tilesFor({ latitude, longitude }, mode), [latitude, longitude, mode]);
   const wide = useMemo(
     () => tilesFor({ latitude, longitude }, mode, WIDE_ZOOM, WIDE_MIN, WIDE_MAX),
     [latitude, longitude, mode],
   );
+  // Only worked out (and downloaded) once the view is wide enough to need them.
   const far = useMemo(
-    () => tilesFor({ latitude, longitude }, mode, FAR_ZOOM, FAR_MIN, FAR_MAX),
-    [latitude, longitude, mode],
+    () => (wideLayers >= 1 ? tilesFor({ latitude, longitude }, mode, FAR_ZOOM, FAR_MIN, FAR_MAX) : []),
+    [latitude, longitude, mode, wideLayers >= 1],
   );
   const outer = useMemo(
-    () => tilesFor({ latitude, longitude }, mode, OUTER_ZOOM, OUTER_MIN, OUTER_MAX),
-    [latitude, longitude, mode],
+    () => (wideLayers >= 2 ? tilesFor({ latitude, longitude }, mode, OUTER_ZOOM, OUTER_MIN, OUTER_MAX) : []),
+    [latitude, longitude, mode, wideLayers >= 2],
   );
   const region = useMemo(
-    () => tilesFor({ latitude, longitude }, mode, REGION_ZOOM, REGION_MIN, REGION_MAX),
-    [latitude, longitude, mode],
+    () => (wideLayers >= 3 ? tilesFor({ latitude, longitude }, mode, REGION_ZOOM, REGION_MIN, REGION_MAX) : []),
+    [latitude, longitude, mode, wideLayers >= 3],
   );
   const metro = useMemo(
-    () => tilesFor({ latitude, longitude }, mode, METRO_ZOOM, METRO_MIN, METRO_MAX),
-    [latitude, longitude, mode],
+    () => (wideLayers >= 4 ? tilesFor({ latitude, longitude }, mode, METRO_ZOOM, METRO_MIN, METRO_MAX) : []),
+    [latitude, longitude, mode, wideLayers >= 4],
   );
   return (
     <View style={styles.layer} pointerEvents="none">
-      {/* The region, for the furthest zooms (35–70 miles across), coarsest underneath */}
-      {metro.map((tile) => (
-        <Image
-          key={`m-${tile.key}`}
-          source={{ uri: tile.base }}
-          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
-          fadeDuration={150}
-        />
-      ))}
-      {region.map((tile) => (
-        <Image
-          key={`r-${tile.key}`}
-          source={{ uri: tile.base }}
-          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
-          fadeDuration={150}
-        />
-      ))}
-      {/* Outer surroundings */}
-      {outer.map((tile) => (
-        <Image
-          key={`o-${tile.key}`}
-          source={{ uri: tile.base }}
-          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
-          fadeDuration={150}
-        />
-      ))}
-      {/* Far surroundings (only seen at the furthest zoom) */}
-      {far.map((tile) => (
-        <Image
-          key={`f-${tile.key}`}
-          source={{ uri: tile.base }}
-          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
-          fadeDuration={150}
-        />
-      ))}
-      {/* Wide, softer surroundings (seen when zoomed far out) */}
-      {wide.map((tile) => (
-        <Image
-          key={`w-${tile.key}`}
-          source={{ uri: tile.base }}
-          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
-          fadeDuration={150}
-        />
-      ))}
-      {tiles.map((tile) => (
-        <Image
-          key={`b-${tile.key}`}
-          source={{ uri: tile.base }}
-          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
-          fadeDuration={150}
-        />
-      ))}
+      {/* Coarsest underneath, sharpest on top: the region (35–70 miles across), then closer in */}
+      {metro.map((tile) => <TileImage key={`m-${tile.key}`} uri={tile.base} tile={tile} />)}
+      {region.map((tile) => <TileImage key={`r-${tile.key}`} uri={tile.base} tile={tile} />)}
+      {outer.map((tile) => <TileImage key={`o-${tile.key}`} uri={tile.base} tile={tile} />)}
+      {far.map((tile) => <TileImage key={`f-${tile.key}`} uri={tile.base} tile={tile} />)}
+      {wide.map((tile) => <TileImage key={`w-${tile.key}`} uri={tile.base} tile={tile} />)}
+      {tiles.map((tile) => <TileImage key={`b-${tile.key}`} uri={tile.base} tile={tile} />)}
       <View style={[styles.tintLayer, { backgroundColor: tint }]} />
-      {tiles.map((tile) => (
-        <Image
-          key={`l-${tile.key}`}
-          source={{ uri: tile.labels }}
-          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
-          fadeDuration={150}
-        />
-      ))}
+      {tiles.map((tile) => <TileImage key={`l-${tile.key}`} uri={tile.labels} tile={tile} />)}
     </View>
   );
 });

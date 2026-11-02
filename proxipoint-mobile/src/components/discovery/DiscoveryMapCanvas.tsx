@@ -16,7 +16,7 @@ import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
-import { MapTiles } from './MapTiles';
+import { MapTiles, wideLayersFor } from './MapTiles';
 import { MapPinGlyph } from './MapPinGlyph';
 import { MapRecenterButton, MapZoomStack, mapControlPositions } from './MapControls';
 import { CARD_SHEET_RADIUS } from './EventCardList';
@@ -278,6 +278,18 @@ export const DiscoveryMapCanvas: React.FC<{
 
   // ---- Clusters: pins that would overlap on screen become one bubble --------------------------
   const clusterZoom = Math.pow(1.15, clusterStep);
+  // Wider map layers load only once the view is zoomed out far enough to need them, and stay
+  // loaded for this area (map tiles are billed per download).
+  const neededLayers = wideLayersFor(Dimensions.get('window').width / (clusterZoom * WORLD_SCALE));
+  const [wideLayers, setWideLayers] = useState(neededLayers);
+  useEffect(() => {
+    if (neededLayers > wideLayers) setWideLayers(neededLayers);
+  }, [neededLayers, wideLayers]);
+  // A new area starts over from what its view needs.
+  useEffect(() => {
+    setWideLayers(neededLayers);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [viewPlace.latitude, viewPlace.longitude]);
   const { singles, clusters, hiddenLabels } = useMemo(() => {
     // Each pin / bubble takes up a box on screen (the circle plus its #tag label underneath).
     // Anything whose boxes would touch is merged, and merging repeats until nothing touches,
@@ -1002,6 +1014,7 @@ export const DiscoveryMapCanvas: React.FC<{
           longitude={viewPlace.longitude}
           mode={mode}
           tint={mode === 'light' ? 'rgba(233, 238, 245, 0.12)' : 'rgba(10, 17, 32, 0.28)'}
+          wideLayers={wideLayers}
         />
 
         {/* You: at the middle of the map when it's showing your area; elsewhere (or hidden,
