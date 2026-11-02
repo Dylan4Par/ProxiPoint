@@ -487,11 +487,10 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             </View>
           ) : null}
 
-          {/* ---- Nearby now (only when the chosen time reaches now) ---- */}
-          {windowIncludesNow ? (
+          {/* ---- Nearby now (only when the chosen time reaches now, and something is) ---- */}
+          {windowIncludesNow && nearbyPlaced.length ? (
           <>
           <SectionHeader label="HAPPENING NEARBY" />
-          {nearby.length ? (
             <View style={styles.list}>
               {nearbyPlaced.map(({ item: node, boosted }) => (
                 <EventRow
@@ -504,13 +503,6 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
                 />
               ))}
             </View>
-          ) : (
-            <Text style={styles.emptyText}>
-              Nothing live or starting in the next two hours
-              {rangeMeters == null ? ' around here' : ` within ${rangeLabel}`}.
-            </Text>
-          )}
-
           </>
           ) : null}
 
