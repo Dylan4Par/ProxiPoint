@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Car, Check, Info, PersonStanding, User, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
@@ -6,6 +6,7 @@ import { distanceLabel, goingLabel, pointTiming, type TimingKind } from '../../l
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
+import type { ExtraPillKind } from '../../lib/cardExtraPill';
 import { nearestCityLabel } from '../../lib/mapArea';
 import { CITY_LIST } from '../../lib/places';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
@@ -59,8 +60,13 @@ export const PointCard: React.FC<{
   now?: number;
   /** Discover: just the distance, in words ("12 miles"), no travel time. */
   distanceOnly?: boolean;
+  /**
+   * Discover: a third pill (price, New Host or Popular; lib/cardExtraPill), shown only when it
+   * fits on the row beside the others without crowding RSVP. Replaces the plain price pill.
+   */
+  extra?: { kind: ExtraPillKind; label: string } | null;
   testID?: string;
-}> = ({ node, onOpen, onToggleRsvp, boosted = false, onWhyBoosted, selected = false, distanceMeters, now, distanceOnly = false, testID }) => {
+}> = ({ node, onOpen, onToggleRsvp, boosted = false, onWhyBoosted, selected = false, distanceMeters, now, distanceOnly = false, extra, testID }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c, mode } = useTheme();
   const pills = PILLS[mode === 'light' ? 'light' : 'dark'];
@@ -74,6 +80,17 @@ export const PointCard: React.FC<{
     ? formatDistanceWordsIn(distanceMeters ?? node.distanceMeters, getUnits())
     : distanceLabel(distanceMeters ?? node.distanceMeters, distanceMeters == null ? node.eta : null);
   const going = goingLabel(node.attendeeCount);
+  // The extra pill is laid out (invisible) first; it stays only if its right edge is inside the
+  // pills' row, so it never wraps under or pushes against RSVP.
+  const [extraFits, setExtraFits] = useState<boolean | null>(null);
+  const pillsWidth = useRef(0);
+  const extraEdge = useRef(0);
+  const extraKey = extra ? `${extra.kind}:${extra.label}` : '';
+  useEffect(() => setExtraFits(null), [extraKey]);
+  const judgeExtra = () => {
+    if (!pillsWidth.current || !extraEdge.current) return;
+    setExtraFits(extraEdge.current <= pillsWidth.current + 0.5);
+  };
   const TravelIcon = node.etaMode === 'drive' ? Car : PersonStanding;
   const timingColors = timing ? pills[timing.kind as TimingKind] : null;
 
@@ -145,7 +162,13 @@ export const PointCard: React.FC<{
       </View>
 
       <View style={styles.bottom}>
-        <View style={styles.pills}>
+        <View
+          style={[styles.pills, extra !== undefined && styles.pillsOneRow]}
+          onLayout={(e) => {
+            pillsWidth.current = e.nativeEvent.layout.width;
+            judgeExtra();
+          }}
+        >
           {timing && timingColors ? (
             <View style={[styles.pill, { backgroundColor: timingColors.bg }]}>
               {timing.kind === 'live' ? <View style={[styles.dot, { backgroundColor: timingColors.dot }]} /> : null}
@@ -162,7 +185,22 @@ export const PointCard: React.FC<{
               {!distanceOnly && distanceMeters == null && node.eta ? <TravelIcon size={13} color={pills.distance.fg} strokeWidth={2.25} /> : null}
             </View>
           ) : null}
-          {node.facts?.priceLabel ? (
+          {extra !== undefined ? (
+            extra && extraFits !== false ? (
+              <View
+                style={[styles.pill, { backgroundColor: pills.later.bg }, extraFits === null && styles.measuring]}
+                onLayout={(e) => {
+                  extraEdge.current = e.nativeEvent.layout.x + e.nativeEvent.layout.width;
+                  judgeExtra();
+                }}
+                testID={`point-card-${extra.kind}`}
+              >
+                <Text style={[styles.pillText, styles.pillTextPlain, { color: pills.later.fg }]} numberOfLines={1}>
+                  {extra.label}
+                </Text>
+              </View>
+            ) : null
+          ) : node.facts?.priceLabel ? (
             <View style={[styles.pill, { backgroundColor: pills.later.bg }]} testID="point-card-price">
               <Text style={[styles.pillText, styles.pillTextPlain, { color: pills.later.fg }]} numberOfLines={1}>
                 {node.facts.priceLabel}
@@ -235,6 +273,9 @@ const createStyles = (c: ThemeColors) =>
     via: { color: c.textFaint, fontStyle: 'italic' },
     bottom: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
     pills: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 5 },
+    // Discover: one row; anything that doesn't fit is left out rather than wrapped.
+    pillsOneRow: { flexWrap: 'nowrap', overflow: 'hidden' },
+    measuring: { opacity: 0 },
     pill: {
       flexDirection: 'row',
       alignItems: 'center',
