@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Check, ChevronLeft, ChevronRight, Flame, Sparkles, Zap } from 'lucide-react-native';
+import { Check, Flame, Sparkles, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../discovery/CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
@@ -26,7 +26,6 @@ function shuffleKey(seed: number, id: string): number {
   return (h >>> 0) / 4294967296;
 }
 const CARD_HEIGHT = 162;
-const ARROW_SIZE = 30;
 
 /**
  * Discover → FEATURED RECOMMENDATIONS: a stack of picks that turns to the next card every 5 seconds,
@@ -262,31 +261,6 @@ export const RecommendationDeck: React.FC<{
             </View>
           </TouchableOpacity>
         </Animated.View>
-        {/* Arrows on the card's sides: step back / forward by hand (also restarts the 5s timer). */}
-        {count > 1 ? (
-          <>
-            <TouchableOpacity
-              style={[styles.arrow, styles.arrowLeft, { top: cardHeight / 2 - ARROW_SIZE / 2 }]}
-              onPress={() => flip(-1)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Previous recommendation"
-              testID="recs-prev"
-            >
-              <ChevronLeft size={18} color={c.accent} strokeWidth={2.75} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.arrow, styles.arrowRight, { top: cardHeight / 2 - ARROW_SIZE / 2 }]}
-              onPress={() => flip(1)}
-              hitSlop={10}
-              accessibilityRole="button"
-              accessibilityLabel="Next recommendation"
-              testID="recs-next"
-            >
-              <ChevronRight size={18} color={c.accent} strokeWidth={2.75} />
-            </TouchableOpacity>
-          </>
-        ) : null}
       </View>
 
       {count > 1 ? (
@@ -324,26 +298,6 @@ const createStyles = (c: ThemeColors) =>
     },
     // Peeking cards: narrower and lower, so the stack reads as a deck.
     ghost: { position: 'absolute', left: 0, right: 0 },
-    // Small round arrows straddling the card's left and right edges.
-    arrow: {
-      position: 'absolute',
-      zIndex: 5,
-      width: ARROW_SIZE,
-      height: ARROW_SIZE,
-      borderRadius: ARROW_SIZE / 2,
-      alignItems: 'center',
-      justifyContent: 'center',
-      backgroundColor: c.surface,
-      borderWidth: 1,
-      borderColor: c.accentBorder,
-      shadowColor: '#000',
-      shadowOpacity: 0.12,
-      shadowRadius: 4,
-      shadowOffset: { width: 0, height: 1 },
-      elevation: 4,
-    },
-    arrowLeft: { left: -12 },
-    arrowRight: { right: -12 },
     ghostMid: { top: 7, transform: [{ scaleX: 0.95 }], opacity: 0.7, borderColor: c.border },
     ghostBack: { top: 14, transform: [{ scaleX: 0.9 }], opacity: 0.45, borderColor: c.border },
     front: { position: 'absolute', top: 0, left: 0, right: 0 },
