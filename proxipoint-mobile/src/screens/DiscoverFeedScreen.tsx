@@ -270,6 +270,19 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   // (and, for a #tag, opens the map on it, like "Show on map").
   const mapCount = searching ? results.length : matchCount;
   const openMapFromBar = () => (searching && exactTag ? onShowTagOnMap(exactTag) : onOpenMap());
+  // Map (N): at the end of the filter row, and in the mini bar once that's scrolled away.
+  const mapPill = (testID: string) => (
+    <TouchableOpacity
+      style={styles.miniMap}
+      onPress={openMapFromBar}
+      accessibilityRole="button"
+      accessibilityLabel={`Map, ${mapCount} ${mapCount === 1 ? 'Point' : 'Points'}`}
+      testID={testID}
+    >
+      <MapIcon size={15} color={c.onAccent} strokeWidth={2.5} />
+      <Text style={styles.miniMapText}>Map ({mapCount > 999 ? '999+' : mapCount})</Text>
+    </TouchableOpacity>
+  );
   const miniTags = [
     ...(selectedTag && selectedTag !== 'All' ? [{ tag: selectedTag, clear: () => setSelectedTag('All') }] : []),
     ...tagFilter.tags
@@ -328,7 +341,12 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       </View>
 
       {/* ---- Where, when and filters: the same header as Explore Map ---- */}
-      {filterHeader}
+      {/* The same Map (N) button as the mini bar, pinned at the end of the filter row. */}
+      {React.isValidElement(filterHeader)
+        ? React.cloneElement(filterHeader as React.ReactElement<{ chipRowEnd?: React.ReactNode }>, {
+            chipRowEnd: mapPill('discover-map'),
+          })
+        : filterHeader}
 
       {searching ? (
         <>
@@ -464,7 +482,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
           {/* ---- Nearby now (only when the chosen time reaches now) ---- */}
           {windowIncludesNow ? (
           <>
-          <SectionHeader label="HAPPENING NEARBY" action="Map" onAction={onOpenMap} />
+          <SectionHeader label="HAPPENING NEARBY" />
           {nearby.length ? (
             <View style={styles.list}>
               {nearbyPlaced.map(({ item: node, boosted }) => (
@@ -595,16 +613,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       ) : (
         <View style={styles.miniSpacer} />
       )}
-      <TouchableOpacity
-        style={styles.miniMap}
-        onPress={openMapFromBar}
-        accessibilityRole="button"
-        accessibilityLabel={`Map, ${mapCount} ${mapCount === 1 ? 'Point' : 'Points'}`}
-        testID="discover-mini-map"
-      >
-        <MapIcon size={15} color={c.onAccent} strokeWidth={2.5} />
-        <Text style={styles.miniMapText}>Map ({mapCount > 999 ? '999+' : mapCount})</Text>
-      </TouchableOpacity>
+      {mapPill('discover-mini-map')}
     </Animated.View>
     </View>
   );
