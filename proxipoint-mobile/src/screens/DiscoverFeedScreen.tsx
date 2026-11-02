@@ -3,7 +3,7 @@ import { Alert, Animated, Linking, Platform, ScrollView, useWindowDimensions, St
 import { CalendarCheck, CalendarDays, Check, ChevronDown, ChevronRight, Hash, Info, Map as MapIcon, MapPin, Search, Settings, Users, X, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { PointCard } from '../components/discovery/PointCard';
-import { formatRadiusIn, searchRanges, useUnits } from '../lib/units';
+import { searchRanges, useUnits } from '../lib/units';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
 import { matchesInterests, placeBoosts, upNextPlans, type PlanRole } from '../lib/discoverSlots';
 import { deckPicks, type RecNode } from '../lib/recommend';
@@ -43,7 +43,7 @@ import {
 } from '../lib/discoverFeed';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
 import { discoverFeedAllows, rankByTagMatches, removeDiscoverTag, useDiscoverTagFilter } from '../lib/discoverTagFilter';
-import { miniBarContext } from '../lib/discoverMiniBar';
+import { shortPlace } from '../lib/discoverMiniBar';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
@@ -264,11 +264,8 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, timeWindow.start, timeWindow.end, filterKey],
   );
-  const context = miniBarContext(
-    placeLabel,
-    rangeMeters == null ? null : formatRadiusIn(rangeMeters, units),
-    whenLabel,
-  );
+  // Just the city: distance and dates are a tap away at the top.
+  const context = shortPlace(placeLabel);
   // Searching: the bar shows what's searched (× clears it), and Map counts the search's Points
   // (and, for a #tag, opens the map on it, like "Show on map").
   const mapCount = searching ? results.length : matchCount;
@@ -555,7 +552,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
         style={styles.miniContext}
         onPress={() => scrollRef.current?.scrollTo({ y: 0, animated: true })}
         accessibilityRole="button"
-        accessibilityLabel={`${context}. Back to the top to change where, how far or when`}
+        accessibilityLabel={`Exploring ${context}. Back to the top to change where, how far or when`}
         testID="discover-mini-context"
       >
         <Search size={15} color={c.textMuted} strokeWidth={2.5} />
@@ -982,7 +979,7 @@ const createStyles = (c: ThemeColors) =>
     },
     miniContext: {
       flexShrink: 1,
-      maxWidth: '58%',
+      maxWidth: '45%',
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
