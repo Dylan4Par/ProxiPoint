@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Car, Check, ChevronLeft, ChevronRight, Flame, PersonStanding, Sparkles, Zap } from 'lucide-react-native';
+import { Check, ChevronLeft, ChevronRight, Flame, Sparkles, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../discovery/CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
-import { distanceLabel, pointTiming } from '../../lib/pointCard';
+import { pointTiming } from '../../lib/pointCard';
+import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { formatClock } from '../../lib/calendarRange';
 import { formatCount } from '../../lib/discoverFeed';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
@@ -40,6 +41,7 @@ export const RecommendationDeck: React.FC<{
   onToggleRsvp: (id: string) => void;
 }> = ({ picks, mode = 'boosted', onOpenPoint, onToggleRsvp }) => {
   const styles = useThemedStyles(createStyles);
+  useUnits(); // re-render when Settings switches miles / km
   const { colors: c } = useTheme();
   // Shuffled once per visit to the Feed (this deck remounts each time), and kept in that order
   // while you're here, even as the list refreshes.
@@ -147,8 +149,8 @@ export const RecommendationDeck: React.FC<{
   const featured = mode === 'boosted' && pick.boosted;
   const timing = pick.live ? null : pointTiming(node);
   const endsAt = pick.live && node.endsAt ? new Date(node.endsAt) : null;
-  const distance = distanceLabel(node.distanceMeters, node.eta)?.replace(' • ', ' · ') ?? null;
-  const TravelIcon = node.etaMode === 'drive' ? Car : PersonStanding;
+  // Just the distance, in words ("13 miles"), like Discover's cards: no travel time.
+  const distance = formatDistanceWordsIn(node.distanceMeters, getUnits());
   const going = node.attendeeCount && node.attendeeCount > 0 ? ` (${formatCount(node.attendeeCount)})` : '';
 
   const frontStyle = {
@@ -225,7 +227,6 @@ export const RecommendationDeck: React.FC<{
               {distance ? (
                 <>
                   <Text style={styles.metaDot}>·</Text>
-                  <TravelIcon size={13} color={c.textMuted} strokeWidth={2.25} />
                   <Text style={[styles.metaText, styles.metaShrink]} numberOfLines={1}>
                     {distance}
                   </Text>
@@ -346,7 +347,8 @@ const createStyles = (c: ThemeColors) =>
     ghostMid: { top: 7, transform: [{ scaleX: 0.95 }], opacity: 0.7, borderColor: c.border },
     ghostBack: { top: 14, transform: [{ scaleX: 0.9 }], opacity: 0.45, borderColor: c.border },
     front: { position: 'absolute', top: 0, left: 0, right: 0 },
-    frontCard: { padding: 14, gap: 12, justifyContent: 'space-between' },
+    // Rows centered with a fixed gap, so the space above the first row and below the buttons is even.
+    frontCard: { padding: 14, gap: 12, justifyContent: 'center' },
     cardBoosted: { borderColor: 'rgba(245, 158, 11, 0.7)' },
     emptyCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderWidth: 1, borderColor: c.border },
     emptyText: { flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 18 },
