@@ -814,7 +814,10 @@ export const DiscoveryMapCanvas: React.FC<{
   const lastFitKey = useRef(0);
   useEffect(() => {
     if (!fitRequest || fitRequest.key === lastFitKey.current) return;
-    if (viewSize.current.width <= 0) return; // measureFrame handles it once the map has a size
+    // Not measured yet (the map was just created, e.g. by switching tabs): viewSize still holds a
+    // placeholder, so a fit worked out now lands in the wrong place. measureNow fits it instead,
+    // with the map's real size, on its first layout.
+    if (!laidOut.current) return;
     const fit = fitTargetFor(fitRequest);
     if (!fit) return;
     lastFitKey.current = fitRequest.key;
@@ -824,7 +827,7 @@ export const DiscoveryMapCanvas: React.FC<{
   }, [fitRequest?.key]);
   useEffect(() => {
     if (!focusRequest || focusRequest.key === lastFocusKey.current) return;
-    if (viewSize.current.width <= 0) return; // measureFrame handles it once the map has a size
+    if (!laidOut.current) return; // measureNow handles it with the real size on first layout
     lastFocusKey.current = focusRequest.key;
     userMoved.current = true;
     animateTo(focusTargetFor(focusRequest));
