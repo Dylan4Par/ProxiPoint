@@ -12,7 +12,7 @@ import {
   Switch,
 } from 'react-native';
 import { tourTarget } from '../tour/tourTargets';
-import { CalendarDays, ChevronLeft, ChevronRight, Minus, Plus, SlidersHorizontal, X } from 'lucide-react-native';
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Minus, Plus, SlidersHorizontal, X } from 'lucide-react-native';
 import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort, type PointSort } from '../../lib/pointSort';
 import {
   setFollowedOnly,
@@ -22,7 +22,7 @@ import {
   useMapRange,
   useMyChannelsOnly,
 } from '../../lib/discoverFilters';
-import { searchRanges, useUnits } from '../../lib/units';
+import { formatRadiusIn, searchRanges, useUnits } from '../../lib/units';
 import { bestHashtagFor, searchHashtags } from '../../lib/hashtags';
 
 /** Short labels for the three Sort by buttons. */
@@ -116,8 +116,16 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const activeTagFor = (tag: string) => tags.find((t) => keyOf(t) === keyOf(tag)) ?? tag;
   const units = useUnits();
   const ranges = searchRanges(units);
-  const activeCount =
-    (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (rangeMeters != null ? 1 : 0);
+  // Distance has its own button in the bar, so the badge counts only what's inside the sheet.
+  const activeCount = sort !== DEFAULT_POINT_SORT ? 1 : 0;
+  const rangeLabel =
+    rangeMeters == null ? 'Any distance' : ranges.find((r) => r.meters === rangeMeters)?.label ?? formatRadiusIn(rangeMeters, units);
+  // Distance dropdown, opened under its button.
+  const rangeBtn = useRef<View | null>(null);
+  const [rangeMenu, setRangeMenu] = useState<{ x: number; y: number } | null>(null);
+  const openRangeMenu = () => {
+    rangeBtn.current?.measureInWindow((x, y, _w, h) => setRangeMenu({ x, y: y + h + 6 }));
+  };
   const [newTagInput, setNewTagInput] = useState('');
 
   // Only tags on the allowed list (lib/hashtags): typing shows the matches; + Add takes the exact
@@ -216,6 +224,39 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
 
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
       <View style={styles.chipArea} ref={tourTarget('map-filter-rail')} collapsable={false}>
+      {/* Locked at the start of the row (they don't scroll away): Filter & sort, and Distance. */}
+      <View style={styles.lockedChips}>
+          {/* Filter & sort, first in the row. The badge counts choices that aren't the defaults. */}
+          <TouchableOpacity
+            style={[styles.addTagPill, activeCount > 0 && styles.filterBtnActive]}
+            activeOpacity={0.8}
+            onPress={() => setTagModalOpen(true)}
+            accessibilityRole="button"
+            accessibilityLabel={activeCount ? `Filter and sort, ${activeCount} on` : 'Filter and sort'}
+            testID="filter-manage-tags"
+          >
+            <SlidersHorizontal size={16} color={activeCount ? c.onAccent : c.accent} strokeWidth={2.5} />
+            {activeCount > 0 ? (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{activeCount}</Text>
+              </View>
+            ) : null}
+          </TouchableOpacity>
+          <View ref={rangeBtn} collapsable={false}>
+          <TouchableOpacity
+            style={styles.rangePill}
+            activeOpacity={0.8}
+            onPress={openRangeMenu}
+            accessibilityRole="button"
+            accessibilityLabel={`Distance: ${rangeMeters == null ? 'any' : `within ${rangeLabel}`}. Change`}
+            testID="filter-range-button"
+          >
+            <Text style={styles.rangePillText}>{rangeLabel}</Text>
+            <ChevronDown size={14} color={c.accent} strokeWidth={2.75} />
+          </TouchableOpacity>
+          </View>
+      </View>
+      <View style={styles.chipScrollArea}>
       <ScrollView
         ref={chipScroll}
         horizontal
@@ -232,22 +273,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         }}
         onContentSizeChange={(content) => setChipView((v) => (v.content === content ? v : { ...v, content }))}
       >
-        {/* Filter & sort, first in the row. The badge counts choices that aren't the defaults. */}
-        <TouchableOpacity
-          style={[styles.addTagPill, activeCount > 0 && styles.filterBtnActive]}
-          activeOpacity={0.8}
-          onPress={() => setTagModalOpen(true)}
-          accessibilityRole="button"
-          accessibilityLabel={activeCount ? `Filter and sort, ${activeCount} on` : 'Filter and sort'}
-          testID="filter-manage-tags"
-        >
-          <SlidersHorizontal size={16} color={activeCount ? c.onAccent : c.accent} strokeWidth={2.5} />
-          {activeCount > 0 ? (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{activeCount}</Text>
-            </View>
-          ) : null}
-        </TouchableOpacity>
         {tags.map((tag) => {
           const isAll = tag === 'All';
           // "All" means no filters at all, so it isn't highlighted while Live Now is on.
@@ -308,6 +333,41 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         </TouchableOpacity>
       ) : null}
       </View>
+      </View>
+
+      {/* Distance dropdown */}
+      <Modal visible={rangeMenu != null} transparent animationType="fade" statusBarTranslucent onRequestClose={() => setRangeMenu(null)}>
+        <TouchableWithoutFeedback onPress={() => setRangeMenu(null)}>
+          <View style={StyleSheet.absoluteFill} />
+        </TouchableWithoutFeedback>
+        {rangeMenu ? (
+          <View style={[styles.rangeMenu, { top: rangeMenu.y, left: rangeMenu.x }]} accessibilityRole="menu" testID="filter-range-menu">
+            <Text style={styles.rangeMenuTitle}>From the middle of the area</Text>
+            {ranges.map((option) => {
+              const on = rangeMeters === option.meters;
+              return (
+                <TouchableOpacity
+                  key={option.label}
+                  style={[styles.rangeMenuItem, on && styles.rangeMenuItemOn]}
+                  onPress={() => {
+                    setMapRange(option.meters);
+                    setRangeMenu(null);
+                  }}
+                  accessibilityRole="menuitem"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={option.meters == null ? 'Any distance' : `Within ${option.label}`}
+                  testID={`filter-range-${option.meters ?? 'any'}`}
+                >
+                  <Text style={[styles.rangeMenuText, on && styles.rangeMenuTextOn]}>
+                    {option.meters == null ? 'Any distance' : `Within ${option.label}`}
+                  </Text>
+                  {on ? <Check size={16} color={c.accent} strokeWidth={2.75} /> : null}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        ) : null}
+      </Modal>
 
       {/* Filter & sort sheet */}
       <Modal
@@ -443,28 +503,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               <Text style={styles.followedNote}>From your Profile. Tap + to use one as a filter, − to take it off.</Text>
               </>
               ) : null}
-
-              {/* Distance from the middle of the area being explored. */}
-              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Distance</Text>
-              <View style={styles.rangeRow} accessibilityRole="radiogroup">
-                {ranges.map((option) => {
-                  const on = rangeMeters === option.meters;
-                  return (
-                    <TouchableOpacity
-                      key={option.label}
-                      style={[styles.rangeChip, on && styles.rangeChipOn]}
-                      onPress={() => setMapRange(option.meters)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: on }}
-                      accessibilityLabel={option.meters == null ? 'Any distance' : `Within ${option.label}`}
-                      testID={`filter-range-${option.meters ?? 'any'}`}
-                    >
-                      <Text style={[styles.rangeText, on && styles.rangeTextOn]}>{option.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={styles.sortNote}>From the middle of the area you're exploring.</Text>
 
               {/* Sort: three side-by-side buttons. */}
               <Text style={styles.sectionSubtitle}>Sort by</Text>
@@ -678,7 +716,47 @@ const createStyles = (c: ThemeColors) =>
     color: c.sky,
     fontWeight: '700',
   },
-  chipArea: { position: 'relative' },
+  chipArea: { position: 'relative', flexDirection: 'row', alignItems: 'flex-end' },
+  lockedChips: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingTop: 12 },
+  chipScrollArea: { flex: 1, position: 'relative' },
+  rangePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    height: 32,
+    paddingHorizontal: 12,
+    borderRadius: 16,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.accent,
+  },
+  rangePillText: { color: c.accent, fontSize: 12, fontWeight: '800' },
+  rangeMenu: {
+    position: 'absolute',
+    minWidth: 190,
+    paddingVertical: 6,
+    borderRadius: 14,
+    backgroundColor: c.surface,
+    borderWidth: 1,
+    borderColor: c.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+  },
+  rangeMenuTitle: { color: c.textFaint, fontSize: 11, fontWeight: '600', paddingHorizontal: 14, paddingVertical: 6 },
+  rangeMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+  },
+  rangeMenuItemOn: { backgroundColor: c.border },
+  rangeMenuText: { color: c.textSecondary, fontSize: 14, fontWeight: '600' },
+  rangeMenuTextOn: { color: c.accent, fontWeight: '800' },
   /* Small round arrow over the chip row's edge, centered on the chips (below the 12pt top padding). */
   moreArrow: {
     position: 'absolute',
@@ -692,7 +770,8 @@ const createStyles = (c: ThemeColors) =>
   moreArrowLeft: { left: 0, borderTopRightRadius: 16, borderBottomRightRadius: 16 },
   moreArrowRight: { right: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
   tagScrollContainer: {
-    paddingHorizontal: 16,
+    paddingLeft: 8,
+    paddingRight: 16,
     paddingTop: 12,
     gap: 8,
     alignItems: 'center',
@@ -840,18 +919,6 @@ const createStyles = (c: ThemeColors) =>
   sortLabelOn: { color: c.accent },
   sortHint: { color: c.textMuted, fontSize: 12 },
   sortNote: { color: c.textFaint, fontSize: 11, marginTop: 8, marginBottom: 16 },
-  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  rangeChip: {
-    paddingHorizontal: 16,
-    paddingVertical: 9,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: c.border,
-    backgroundColor: c.surface,
-  },
-  rangeChipOn: { backgroundColor: c.accent, borderColor: c.accent },
-  rangeText: { color: c.textSecondary, fontSize: 14, fontWeight: '700' },
-  rangeTextOn: { color: c.onAccent },
   sortSegment: {
     flexDirection: 'row',
     padding: 4,
