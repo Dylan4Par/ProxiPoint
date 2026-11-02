@@ -210,7 +210,11 @@ export const RecommendationDeck: React.FC<{
                 </View>
               ) : null}
               {pick.live ? (
-                <LiveBadge label="LIVE NOW" />
+                // LiveBadge pins itself to the top of its row and draws its glow 2 px outside its box:
+                // centered here, with room for the glow, so it lines up with FEATURED.
+                <View style={styles.liveWrap}>
+                  <LiveBadge label="LIVE NOW" />
+                </View>
               ) : timing ? (
                 <View style={styles.timePill}>
                   <Text style={styles.timeText}>{timing.label}</Text>
@@ -313,17 +317,20 @@ const createStyles = (c: ThemeColors) =>
     tag: { color: c.accent, fontWeight: '800' },
     where: { color: c.textMuted, fontWeight: '600' },
     title: { color: c.text, fontSize: 17, fontWeight: '800' },
+    // Same outline as the LIVE NOW pill's glow (1.5 px, radius 9, 2 px beyond its 3 px padding),
+    // so the two read as a matched pair.
     badge: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
       paddingHorizontal: 8,
-      paddingVertical: 3,
-      borderRadius: 8,
+      paddingVertical: 3.5,
+      borderRadius: 9,
       backgroundColor: 'rgba(245, 158, 11, 0.12)',
-      borderWidth: 1,
+      borderWidth: 1.5,
       borderColor: 'rgba(245, 158, 11, 0.6)',
     },
+    liveWrap: { alignSelf: 'center', marginHorizontal: 2 },
     badgeText: { color: GOLD, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
     badgePopular: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
     badgeTextPopular: { color: c.accent },
