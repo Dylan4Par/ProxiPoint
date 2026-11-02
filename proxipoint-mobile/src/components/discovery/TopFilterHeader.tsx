@@ -116,8 +116,10 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const activeTagFor = (tag: string) => tags.find((t) => keyOf(t) === keyOf(tag)) ?? tag;
   const units = useUnits();
   const ranges = searchRanges(units);
-  // Distance has its own button in the bar, so the badge counts only what's inside the sheet.
-  const activeCount = sort !== DEFAULT_POINT_SORT ? 1 : 0;
+  // Discover (embedded) has Distance in the bar; Explore Map keeps it in the Filter & sort sheet.
+  // The badge counts only what's set inside the sheet.
+  const distanceInBar = embedded;
+  const activeCount = (sort !== DEFAULT_POINT_SORT ? 1 : 0) + (!distanceInBar && rangeMeters != null ? 1 : 0);
   const rangeLabel =
     rangeMeters == null ? 'Any distance' : ranges.find((r) => r.meters === rangeMeters)?.label ?? formatRadiusIn(rangeMeters, units);
   // Distance dropdown, opened under its button.
@@ -224,24 +226,29 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
 
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
       <View style={styles.chipArea} ref={tourTarget('map-filter-rail')} collapsable={false}>
-      {/* Locked at the start of the row (they don't scroll away): Filter & sort, and Distance. */}
+      {/* Locked at the start of the row (they don't scroll away): Filter & sort, and on Discover, Distance. */}
       <View style={styles.lockedChips}>
           {/* Filter & sort, first in the row. The badge counts choices that aren't the defaults. */}
           <TouchableOpacity
-            style={[styles.addTagPill, activeCount > 0 && styles.filterBtnActive]}
+            style={[styles.addTagPill, distanceInBar && styles.filterWordPill, activeCount > 0 && styles.filterBtnActive]}
             activeOpacity={0.8}
             onPress={() => setTagModalOpen(true)}
             accessibilityRole="button"
             accessibilityLabel={activeCount ? `Filter and sort, ${activeCount} on` : 'Filter and sort'}
             testID="filter-manage-tags"
           >
-            <SlidersHorizontal size={16} color={activeCount ? c.onAccent : c.accent} strokeWidth={2.5} />
+            {distanceInBar ? (
+              <Text style={[styles.filterWord, activeCount > 0 && styles.filterWordActive]}>Filter</Text>
+            ) : (
+              <SlidersHorizontal size={16} color={activeCount ? c.onAccent : c.accent} strokeWidth={2.5} />
+            )}
             {activeCount > 0 ? (
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>{activeCount}</Text>
               </View>
             ) : null}
           </TouchableOpacity>
+          {distanceInBar ? (
           <View ref={rangeBtn} collapsable={false}>
           <TouchableOpacity
             style={styles.rangePill}
@@ -251,10 +258,12 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             accessibilityLabel={`Distance: ${rangeMeters == null ? 'any' : `within ${rangeLabel}`}. Change`}
             testID="filter-range-button"
           >
+            <Text style={styles.rangePillLabel}>Distance:</Text>
             <Text style={styles.rangePillText}>{rangeLabel}</Text>
             <ChevronDown size={14} color={c.accent} strokeWidth={2.75} />
           </TouchableOpacity>
           </View>
+          ) : null}
       </View>
       <View style={styles.chipScrollArea}>
       <ScrollView
@@ -273,8 +282,24 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         }}
         onContentSizeChange={(content) => setChipView((v) => (v.content === content ? v : { ...v, content }))}
       >
+        {distanceInBar && onToggleLiveOnly ? (
+          // Discover has no "All" chip: Live Now leads the row, and tapping the active #tag again
+          // turns it off (back to everything).
+          <TouchableOpacity
+            style={[styles.tagPill, styles.livePill, liveOnly && styles.livePillActive]}
+            onPress={onToggleLiveOnly}
+            accessibilityRole="button"
+            accessibilityState={{ selected: liveOnly }}
+            accessibilityLabel="Live now"
+            testID="filter-live-now"
+          >
+            <View style={[styles.liveDot, liveOnly && styles.liveDotActive]} />
+            <Text style={[styles.tagText, styles.liveText, liveOnly && styles.liveTextActive]}>Live Now</Text>
+          </TouchableOpacity>
+        ) : null}
         {tags.map((tag) => {
           const isAll = tag === 'All';
+          if (isAll && distanceInBar) return null;
           // "All" means no filters at all, so it isn't highlighted while Live Now is on.
           const isActive = selectedTag === tag && !(isAll && liveOnly);
           const pill = (
@@ -282,9 +307,14 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               key={tag}
               style={[styles.tagPill, isActive && styles.tagPillActive]}
               onPress={() => {
+                if (distanceInBar && isActive) {
+                  setSelectedTag('All'); // no All chip on Discover: tap the active #tag to clear it
+                  return;
+                }
                 setSelectedTag(tag);
                 if (isAll && liveOnly) onToggleLiveOnly?.();
               }}
+              accessibilityState={{ selected: isActive }}
             >
               <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
                 {tag}
@@ -501,6 +531,32 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                 })}
               </View>
               <Text style={styles.followedNote}>From your Profile. Tap + to use one as a filter, − to take it off.</Text>
+              </>
+              ) : null}
+
+              {/* Distance from the middle of the area being explored (Discover has it in the bar). */}
+              {!distanceInBar ? (
+              <>
+              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Distance</Text>
+              <View style={styles.rangeRow} accessibilityRole="radiogroup">
+                {ranges.map((option) => {
+                  const on = rangeMeters === option.meters;
+                  return (
+                    <TouchableOpacity
+                      key={option.label}
+                      style={[styles.rangeChip, on && styles.rangeChipOn]}
+                      onPress={() => setMapRange(option.meters)}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      accessibilityLabel={option.meters == null ? 'Any distance' : `Within ${option.label}`}
+                      testID={`filter-range-${option.meters ?? 'any'}`}
+                    >
+                      <Text style={[styles.rangeText, on && styles.rangeTextOn]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+              <Text style={styles.sortNote}>From the middle of the area you're exploring.</Text>
               </>
               ) : null}
 
@@ -730,7 +786,24 @@ const createStyles = (c: ThemeColors) =>
     borderWidth: 1,
     borderColor: c.accent,
   },
+  rangePillLabel: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
   rangePillText: { color: c.accent, fontSize: 12, fontWeight: '800' },
+  /* Discover's Filter button: the word instead of the icon. */
+  filterWordPill: { width: undefined, paddingHorizontal: 14 },
+  filterWord: { color: c.accent, fontSize: 12, fontWeight: '800' },
+  filterWordActive: { color: c.onAccent },
+  rangeRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  rangeChip: {
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  rangeChipOn: { backgroundColor: c.accent, borderColor: c.accent },
+  rangeText: { color: c.textSecondary, fontSize: 14, fontWeight: '700' },
+  rangeTextOn: { color: c.onAccent },
   rangeMenu: {
     position: 'absolute',
     minWidth: 190,
