@@ -35,7 +35,7 @@ import {
   searchChannels,
   searchPoints,
   splitFeed,
-  countFeed,
+  feedMatches,
   suggestTags,
   timeLabel,
   type ChannelPick,
@@ -64,7 +64,8 @@ interface DiscoverFeedScreenProps {
   onOpenChannel: (id: string) => void;
   /** Channels tab, on the list of channels to join. */
   onBrowseChannels: () => void;
-  onOpenMap: () => void;
+  /** Explore Map; `fit` = spots to zoom out to show (Map (N): every Point it counted). */
+  onOpenMap: (fit?: Array<{ latitude: number; longitude: number }>) => void;
   /** Gear at the top right: opens Settings. */
   onOpenSettings: () => void;
   /** Explore Map filtered to this #tag. */
@@ -259,8 +260,8 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   }, [miniBar, miniAnim]);
   const setSelectedTag = useDiscoveryStore((state) => state.setSelectedTag);
   // Every Point the feed matches (not just the ones listed), for "Map (524)".
-  const matchCount = useMemo(
-    () => countFeed(nodes, now, allowed),
+  const matched = useMemo(
+    () => feedMatches(nodes, now, allowed),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [nodes, now, moderation, viewPlace.latitude, viewPlace.longitude, rangeMeters, timeWindow.start, timeWindow.end, filterKey],
   );
@@ -268,8 +269,15 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const context = shortPlace(placeLabel);
   // Searching: the bar shows what's searched (× clears it), and Map counts the search's Points
   // (and, for a #tag, opens the map on it, like "Show on map").
-  const mapCount = searching ? results.length : matchCount;
-  const openMapFromBar = () => (searching && exactTag ? onShowTagOnMap(exactTag) : onOpenMap());
+  const mapCount = searching ? results.length : matched.length;
+  // Opens Explore Map zoomed out to show every one of those Points.
+  const openMapFromBar = () => {
+    if (searching && exactTag) return onShowTagOnMap(exactTag);
+    const spots = (searching ? results : matched)
+      .map((node) => ({ latitude: Number(node.latitude), longitude: Number(node.longitude) }))
+      .filter((p) => Number.isFinite(p.latitude) && Number.isFinite(p.longitude));
+    onOpenMap(spots);
+  };
   // Map (N): at the end of the filter row, and in the mini bar once that's scrolled away.
   const mapPill = (testID: string, compact = false) => (
     <TouchableOpacity

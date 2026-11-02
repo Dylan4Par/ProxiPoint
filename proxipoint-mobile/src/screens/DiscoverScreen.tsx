@@ -90,6 +90,8 @@ export const DiscoverScreen: React.FC = () => {
   // Search opened from another tab (Channels' search button). New key = new request.
   const [searchRequest, setSearchRequest] = useState<{ key: number; text?: string } | null>(null);
   const [mapFocus, setMapFocus] = useState<{ latitude: number; longitude: number; key: number } | null>(null);
+  // Discover's Map (N): open Explore Map zoomed out to show every one of those Points.
+  const [mapFit, setMapFit] = useState<{ points: Array<{ latitude: number; longitude: number }>; key: number } | null>(null);
   const [dropOpen, setDropOpen] = useState(false);
   // How much of the Explore Map the card list covers (the map stays full size under it).
   const [cardsCover, setCardsCover] = useState(0);
@@ -413,6 +415,7 @@ export const DiscoverScreen: React.FC = () => {
     setPlaceId(null);
     setPostFromMap(null);
     setMapFocus(null);
+    setMapFit(null);
     setSearchRequest(null); // one-shot: Discover shouldn't refocus search on later visits
     setTab(next);
   };
@@ -607,7 +610,10 @@ export const DiscoverScreen: React.FC = () => {
             goTo('channels');
             setChannelsSegment('manage');
           }}
-          onOpenMap={() => goTo('map')}
+          onOpenMap={(fit) => {
+            goTo('map');
+            if (fit?.length) setMapFit({ points: fit, key: Date.now() });
+          }}
           onOpenSettings={() => openSettings()}
           // Same area picker as the map's city pill, so Discover and the map stay on one place.
           onPickLocation={() => setCityPickerOpen(true)}
@@ -669,6 +675,7 @@ export const DiscoverScreen: React.FC = () => {
                 setPostFromMap(place ? { latitude: place.latitude, longitude: place.longitude } : null);
               }}
               focusRequest={mapFocus}
+              fitRequest={mapFit}
               // Panned or zoomed away: make what's on screen the area (Discover follows).
               onReturnHome={returnHome}
               onSearchArea={(area) => {

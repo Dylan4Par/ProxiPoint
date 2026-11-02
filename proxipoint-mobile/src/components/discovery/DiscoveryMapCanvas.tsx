@@ -17,6 +17,7 @@ import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
 import { MapTiles, wideLayersFor } from './MapTiles';
+import { fitView } from '../../lib/mapFit';
 import { MapPinGlyph } from './MapPinGlyph';
 import { MapRecenterButton, MapZoomStack, mapControlPositions } from './MapControls';
 import { CARD_SHEET_RADIUS } from './EventCardList';
@@ -143,6 +144,8 @@ export const DiscoveryMapCanvas: React.FC<{
   onOpenPost?: (id: string) => void;
   /** Slide the map to this spot (e.g. "Show on map" from a post). New key = new request. */
   focusRequest?: { latitude: number; longitude: number; key: number } | null;
+  /** Zoom and move so all these spots are in view (Discover's Map (N)). New key = new request. */
+  fitRequest?: { points: Array<{ latitude: number; longitude: number }>; key: number } | null;
   /**
    * "Search this area": make the middle of what's on screen the new area (Points load around it,
    * Discover follows). Shown once you've panned or zoomed out well away; leave out to hide it.
@@ -161,6 +164,7 @@ export const DiscoveryMapCanvas: React.FC<{
   onDropPoint,
   onOpenPost,
   focusRequest = null,
+  fitRequest = null,
   onSearchArea,
   onReturnHome,
 }) => {
@@ -652,6 +656,25 @@ export const DiscoveryMapCanvas: React.FC<{
     };
   };
 
+  /** Zoom and pan that put every spot of a fit request in the visible map (null: no spots). */
+  const fitTargetFor = (
+    req: { points: Array<{ latitude: number; longitude: number }> },
+    visibleHeight = visibleMapHeight(),
+  ) => {
+    const world = req.points.map((p) => toCanvasCoordinates(p.latitude, p.longitude, viewPlace.latitude, viewPlace.longitude));
+    const fit = fitView(
+      world,
+      { width: viewSize.current.width, height: visibleHeight },
+      // Not closer than two steps out from the closest zoom; one spot opens at the usual zoom.
+      { min: MIN_ZOOM, max: MAX_ZOOM / ZOOM_STEP ** 2, single: DEFAULT_ZOOM },
+    );
+    if (!fit) return null;
+    return {
+      z: fit.z,
+      target: { x: fit.screenX + WORLD_OFFSET - fit.z * fit.x, y: fit.screenY + WORLD_OFFSET - fit.z * fit.y },
+    };
+  };
+
   /** Height of the map not hidden by the detail sheet. */
   // Latest values for timers and layout callbacks (which can run after a render).
   const coveredRef = useRef<number | null>(coveredFromY);
@@ -738,7 +761,21 @@ export const DiscoveryMapCanvas: React.FC<{
           currentPan.current = next;
           calculateBounds(next.x, next.y);
         }
-        if (focusRequest && focusRequest.key !== lastFocusKey.current) {
+        const fit =
+          fitRequest && fitRequest.key !== lastFitKey.current
+            ? fitTargetFor(fitRequest, Math.max(80, h - coveredBottomRef.current))
+            : null;
+        if (fitRequest && fit) {
+          // Opened from Discover's Map (N): zoomed to show every one of those Points.
+          lastFitKey.current = fitRequest.key;
+          userMoved.current = true;
+          stopMove();
+          zoom.setValue(fit.z);
+          currentZoom.current = fit.z;
+          pan.setValue(fit.target);
+          currentPan.current = fit.target;
+          calculateBounds(fit.target.x, fit.target.y, fit.z);
+        } else if (focusRequest && focusRequest.key !== lastFocusKey.current) {
           // Opened to show a spot (e.g. a pinned post): start there instead of on you.
           lastFocusKey.current = focusRequest.key;
           userMoved.current = true;
@@ -773,6 +810,18 @@ export const DiscoveryMapCanvas: React.FC<{
 
   // "Show on map" for a spot: slide there now if the map is laid out, otherwise on first layout.
   const lastFocusKey = useRef(0);
+  // Fit a set of spots (Discover's Map (N)): the same, zooming as well.
+  const lastFitKey = useRef(0);
+  useEffect(() => {
+    if (!fitRequest || fitRequest.key === lastFitKey.current) return;
+    if (viewSize.current.width <= 0) return; // measureFrame handles it once the map has a size
+    const fit = fitTargetFor(fitRequest);
+    if (!fit) return;
+    lastFitKey.current = fitRequest.key;
+    userMoved.current = true;
+    animateTo(fit.target, fit.z);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fitRequest?.key]);
   useEffect(() => {
     if (!focusRequest || focusRequest.key === lastFocusKey.current) return;
     if (viewSize.current.width <= 0) return; // measureFrame handles it once the map has a size
