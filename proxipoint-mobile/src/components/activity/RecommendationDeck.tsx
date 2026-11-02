@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, PanResponder, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Check, Flame, Sparkles, Zap } from 'lucide-react-native';
+import { AccessibilityInfo, Animated, Easing, PanResponder, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Check, Flame, Share2, Sparkles, Zap } from 'lucide-react-native';
 import { CategoryBadge } from '../discovery/CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
 import { pointTiming } from '../../lib/pointCard';
+import { pointShareContent } from '../../lib/pointShare';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { formatClock } from '../../lib/calendarRange';
 import { formatCount } from '../../lib/discoverFeed';
@@ -237,13 +238,28 @@ export const RecommendationDeck: React.FC<{
             </View>
 
             <View style={styles.actions}>
+              {/* Share: the phone's share sheet with the title, when · where and link. (Tapping
+                  the card itself still opens the Point.) */}
               <TouchableOpacity
                 style={styles.viewBtn}
-                onPress={() => onOpenPoint(node.id)}
+                onPress={() => {
+                  const { message, url } = pointShareContent({
+                    id: node.id,
+                    title: node.title,
+                    startsAt: node.startsAt,
+                    endsAt: node.endsAt,
+                    live: pick.live,
+                    where,
+                  });
+                  Share.share(Platform.OS === 'ios' ? { message, url } : { message: `${message}\n${url}` }).catch(() => undefined);
+                  setTimerKey((k) => k + 1); // don't turn the card while the share sheet is up
+                }}
                 accessibilityRole="button"
-                testID="activity-rec-view"
+                accessibilityLabel={`Share ${node.title}`}
+                testID="activity-rec-share"
               >
-                <Text style={styles.viewText}>VIEW DROP</Text>
+                <Share2 size={16} color={c.accent} strokeWidth={2.5} />
+                <Text style={styles.viewText}>Share</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.rsvpBtn, node.isRsvpd && styles.rsvpBtnOn]}
@@ -351,6 +367,8 @@ const createStyles = (c: ThemeColors) =>
     // View Drop: outlined; RSVP: filled (the main action).
     viewBtn: {
       flex: 1,
+      flexDirection: 'row',
+      gap: 6,
       minHeight: 42,
       borderRadius: 12,
       backgroundColor: c.base,
@@ -359,7 +377,7 @@ const createStyles = (c: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    viewText: { color: c.text, fontSize: 13, fontWeight: '800', letterSpacing: 1 },
+    viewText: { color: c.accent, fontSize: 14, fontWeight: '800' },
     rsvpBtn: {
       flex: 1,
       flexDirection: 'row',
