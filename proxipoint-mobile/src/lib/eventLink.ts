@@ -24,3 +24,9 @@ export function displayEventUrl(url: string): string {
     .replace(/^www\./i, '')
     .replace(/[/?#]+$/, '');
 }
+
+/** The site a link points to, for crediting it: "thedairy.org", "events.humanitix.com". */
+export function linkSiteName(url: string): string {
+  const match = /^https?:\/\/([^/?#:]+)/i.exec(url.trim());
+  return match ? match[1].toLowerCase().replace(/^www\./, '') : '';
+}

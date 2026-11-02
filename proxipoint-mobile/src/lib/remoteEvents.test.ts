@@ -147,3 +147,16 @@ test('photos from our own collection show with or without a credit', () => {
   // No usable image: nothing.
   assert.equal(photoFields({ provider: 'catalog', url: 'http://x/a.jpg' }).coverPhotoUri, null);
 });
+
+test('details become facts on the node', () => {
+  const node = remoteEventToNode({
+    ...scraped,
+    description: 'Featuring Nolan Gasser, with The Mighty Mighty.',
+    description_is_excerpt: true,
+    details: { hook: 'Featuring Nolan Gasser, with The Mighty Mighty.', price_min: 30, price_max: 55, min_age: 21, notices: ['id_required'] },
+  });
+  assert.equal(node.facts?.priceLabel, 'From $30');
+  assert.equal(node.facts?.ageLabel, '21+');
+  assert.deepEqual(node.facts?.notices, ['Age 21+ only', 'Valid ID required at door']);
+  assert.equal(remoteEventToNode(scraped).facts, null);
+});

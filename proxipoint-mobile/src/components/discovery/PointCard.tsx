@@ -79,7 +79,7 @@ export const PointCard: React.FC<{
       style={[styles.card, selected && styles.cardSelected]}
       onPress={onOpen}
       accessibilityRole="button"
-      accessibilityLabel={[node.title, timing?.label, where, distance, boosted ? 'Boosted' : null].filter(Boolean).join('. ')}
+      accessibilityLabel={[node.title, timing?.label, where, distance, node.facts?.priceLabel, boosted ? 'Boosted' : null].filter(Boolean).join('. ')}
       accessibilityHint="Opens the details"
       testID={testID ?? `point-card-${node.id}`}
     >
@@ -156,6 +156,13 @@ export const PointCard: React.FC<{
                 {distance}
               </Text>
               {distanceMeters == null && node.eta ? <TravelIcon size={13} color={pills.distance.fg} strokeWidth={2.25} /> : null}
+            </View>
+          ) : null}
+          {node.facts?.priceLabel ? (
+            <View style={[styles.pill, { backgroundColor: pills.later.bg }]} testID="point-card-price">
+              <Text style={[styles.pillText, styles.pillTextPlain, { color: pills.later.fg }]} numberOfLines={1}>
+                {node.facts.priceLabel}
+              </Text>
             </View>
           ) : null}
         </View>
