@@ -637,6 +637,9 @@ export const DiscoveryMapCanvas: React.FC<{
   coveredRef.current = coveredFromY;
   const coveredBottomRef = useRef(coveredBottom);
   coveredBottomRef.current = coveredBottom;
+  // The Point whose details are open (if any): the map opens on it rather than on you.
+  const openDetailRef = useRef<string | null>(showAlwaysId);
+  openDetailRef.current = showAlwaysId;
   const selectedPosRef = useRef<{ x: number; y: number } | null>(null);
   selectedPosRef.current =
     selectedNode && selectedNode.x != null && selectedNode.y != null ? { x: selectedNode.x, y: selectedNode.y } : null;
@@ -713,6 +716,19 @@ export const DiscoveryMapCanvas: React.FC<{
           lastFocusKey.current = focusRequest.key;
           userMoved.current = true;
           const target = focusTargetFor(focusRequest, Math.max(80, h - coveredBottomRef.current));
+          pan.setValue(target);
+          currentPan.current = target;
+          calculateBounds(target.x, target.y);
+        } else if (firstLayout && selectedPosRef.current && openDetailRef.current) {
+          // Opened with a Point's details showing (tapped on Discover, a profile or a channel):
+          // start on that Point, in the middle of the map above the sheet, not on you.
+          userMoved.current = true;
+          const spot = selectedPosRef.current;
+          const z = currentZoom.current;
+          const target = {
+            x: w / 2 + WORLD_OFFSET - z * spot.x,
+            y: visibleMapHeight() / 2 + WORLD_OFFSET - z * spot.y,
+          };
           pan.setValue(target);
           currentPan.current = target;
           calculateBounds(target.x, target.y);
