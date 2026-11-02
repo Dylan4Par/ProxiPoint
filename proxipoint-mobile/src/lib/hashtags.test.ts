@@ -68,7 +68,7 @@ test('every old spelling points at a tag that is on the list', () => {
 test('the newer tags: holidays, milestones and their old spellings', () => {
   assert.equal(categoryOfTag('#Christmas')?.label, 'Holidays & Seasonal');
   assert.equal(categoryOfTag('#Wedding')?.label, 'Celebrations & Milestones');
-  assert.equal(canonicalTag('#Trivia'), '#TriviaTournament', 'an old spelling');
+  assert.equal(canonicalTag('#trivia'), '#Trivia', 'a listed tag now');
   assert.equal(canonicalTag('#trivianight'), '#TriviaNight', 'a listed tag now');
   assert.equal(canonicalTag('#VinylNight'), '#VinylNight');
   assert.ok(searchHashtags('halloween').some((e) => e.tag === '#PumpkinPatch'), 'description search');

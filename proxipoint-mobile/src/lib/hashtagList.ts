@@ -3687,5 +3687,13 @@ export const HASHTAG_LIST: HashtagEntry[] = [
     'description': 'Evening markets with food, makers and music',
     'icon': 'ShoppingBasket',
     'radius': 'metro'
+  },
+  {
+    'id': 'trivia',
+    'tag': '#Trivia',
+    'category': 'social-hobbies',
+    'description': 'Trivia of any kind: bar, library, themed and online',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
   }
 ];
