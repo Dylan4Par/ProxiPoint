@@ -58,6 +58,8 @@ interface TopFilterHeaderProps {
   topRow?: React.ReactNode;
   /** Inside a page (Discover): no glass background, less padding on top. */
   embedded?: boolean;
+  /** Pinned at the right end of the chip row (Discover's Map (N) button). */
+  chipRowEnd?: React.ReactNode;
 }
 
 export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
@@ -70,6 +72,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   showAvatar = true,
   topRow,
   embedded = false,
+  chipRowEnd = null,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -425,6 +428,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         </TouchableOpacity>
       ) : null}
       </View>
+      {chipRowEnd ? <View style={styles.chipRowEnd}>{chipRowEnd}</View> : null}
       </View>
 
       {/* Distance dropdown */}
@@ -1021,6 +1025,7 @@ const createStyles = (c: ThemeColors) =>
   chipArea: { position: 'relative', flexDirection: 'row', alignItems: 'flex-end' },
   lockedChips: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingTop: 12 },
   chipScrollArea: { flex: 1, position: 'relative' },
+  chipRowEnd: { paddingTop: 12, paddingLeft: 4, paddingRight: 16 },
   rangePill: {
     flexDirection: 'row',
     alignItems: 'center',
