@@ -22,7 +22,7 @@ import {
   useMapRange,
   useMyChannelsOnly,
 } from '../../lib/discoverFilters';
-import { formatRadiusIn, searchRanges, useUnits } from '../../lib/units';
+import { formatRangeWords, searchRanges, useUnits } from '../../lib/units';
 import { bestHashtagFor, searchHashtags } from '../../lib/hashtags';
 
 /** Short labels for the three Sort by buttons. */
@@ -137,8 +137,8 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
     (!distanceInBar && sort !== DEFAULT_POINT_SORT ? 1 : 0) +
     (!distanceInBar && rangeMeters != null ? 1 : 0) +
     (distanceInBar ? tagFilter.tags.length : 0); // Discover: each #tag filter counts
-  const rangeLabel =
-    rangeMeters == null ? 'Any distance' : ranges.find((r) => r.meters === rangeMeters)?.label ?? formatRadiusIn(rangeMeters, units);
+  // Discover's distance button and menu, in words: "15 miles", "Within 1 mile", "Any distance".
+  const rangeLabel = formatRangeWords(rangeMeters, units);
   // Distance dropdown, opened under its button.
   const rangeBtn = useRef<View | null>(null);
   const [rangeMenu, setRangeMenu] = useState<{ x: number; y: number } | null>(null);
@@ -319,7 +319,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             accessibilityLabel={`Distance: ${rangeMeters == null ? 'any' : `within ${rangeLabel}`}. Change`}
             testID="filter-range-button"
           >
-            <Text style={styles.rangePillLabel}>Distance:</Text>
             <Text style={styles.rangePillText}>{rangeLabel}</Text>
             <ChevronDown size={14} color={c.accent} strokeWidth={2.75} />
           </TouchableOpacity>
@@ -448,11 +447,11 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   }}
                   accessibilityRole="menuitem"
                   accessibilityState={{ selected: on }}
-                  accessibilityLabel={option.meters == null ? 'Any distance' : `Within ${option.label}`}
+                  accessibilityLabel={option.meters == null ? 'Any distance' : `Within ${formatRangeWords(option.meters, units)}`}
                   testID={`filter-range-${option.meters ?? 'any'}`}
                 >
                   <Text style={[styles.rangeMenuText, on && styles.rangeMenuTextOn]}>
-                    {option.meters == null ? 'Any distance' : `Within ${option.label}`}
+                    {option.meters == null ? 'Any distance' : `Within ${formatRangeWords(option.meters, units)}`}
                   </Text>
                   {on ? <Check size={16} color={c.accent} strokeWidth={2.75} /> : null}
                 </TouchableOpacity>
@@ -1051,7 +1050,6 @@ const createStyles = (c: ThemeColors) =>
   shelfEmpty: { color: c.textFaint, fontSize: 12 },
   noEventsBtn: { backgroundColor: c.amberTint, borderWidth: 1, borderColor: c.amberBorder },
   noEventsText: { color: c.amber },
-  rangePillLabel: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
   rangePillText: { color: c.accent, fontSize: 12, fontWeight: '800' },
   /* Discover's Filter button: the word instead of the icon. */
   filterWordPill: { width: undefined, paddingHorizontal: 14 },
