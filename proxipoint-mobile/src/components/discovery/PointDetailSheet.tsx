@@ -42,7 +42,7 @@ import { hostOf } from '../../lib/moderation';
 import { useNavBarHeight } from './BottomNavBar';
 import { formatBeaconDate, formatBeaconTime } from '../../lib/beaconWindow';
 import { SHARE_BASE_URL } from '../../lib/droppedPoint';
-import { displayEventUrl, normalizeEventUrl } from '../../lib/eventLink';
+import { displayEventUrl, normalizeEventUrl, linkSiteName } from '../../lib/eventLink';
 import { isLiveNode } from '../../lib/liveStatus';
 import { hereCountNow, hereLabel } from '../../lib/nearbyInterest';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
@@ -531,7 +531,35 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
           ) : null}
         </View>
 
-        {view.description ? (
+        {/* Gathered events show a short lead from the source's description (the server
+            sends only that) with a credit and a link: the full write-up is the source's, read
+            on its own page. Events people post here show their full description. */}
+        {view.aggregated && (view.description || view.url) ? (
+          <View style={styles.card}>
+            <Text style={styles.sectionLabel}>ABOUT</Text>
+            {view.description ? (
+              <Text style={styles.description} numberOfLines={4}>
+                {view.description}
+              </Text>
+            ) : null}
+            {view.url ? (
+              <TouchableOpacity
+                style={styles.row}
+                onPress={() => openLink(view.url)}
+                accessibilityRole="link"
+                accessibilityLabel={`Read the full description on ${linkSiteName(view.url)}`}
+                testID="point-detail-source"
+              >
+                <Text style={styles.sourceText} numberOfLines={1}>
+                  {view.description ? 'From ' : 'Details on '}
+                  <Text style={styles.linkText}>{linkSiteName(view.url)}</Text>
+                  {view.description ? ' · Read more' : ''}
+                </Text>
+                <ExternalLink size={13} color={c.accent} strokeWidth={2.25} />
+              </TouchableOpacity>
+            ) : null}
+          </View>
+        ) : view.description ? (
           <View style={styles.card}>
             <Text style={styles.sectionLabel}>ABOUT</Text>
             <Text style={styles.description}>{view.description}</Text>
@@ -693,6 +721,7 @@ const createStyles = (c: ThemeColors) =>
   subNote: { color: c.textMuted, fontSize: 11, lineHeight: 15, marginTop: -4, marginLeft: 26 },
   sectionLabel: { color: c.textMuted, fontSize: 11, fontWeight: '800', letterSpacing: 1.2 },
   description: { color: c.textBody, fontSize: 14, lineHeight: 20 },
+  sourceText: { flex: 1, color: c.textMuted, fontSize: 12 },
   actions: { flexDirection: 'row', gap: 10, alignItems: 'stretch' },
   rsvpBtn: {
     flex: 1,

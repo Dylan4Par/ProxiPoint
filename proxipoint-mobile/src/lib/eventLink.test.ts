@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { displayEventUrl, normalizeEventUrl } from './eventLink';
+import { displayEventUrl, linkSiteName, normalizeEventUrl } from './eventLink';
 
 test('links: https added, junk refused, empty is fine', () => {
   assert.equal(normalizeEventUrl(''), '');
@@ -16,4 +16,10 @@ test('links: https added, junk refused, empty is fine', () => {
 test('display drops the scheme, www and a trailing slash', () => {
   assert.equal(displayEventUrl('https://www.rustyanchor.com/'), 'rustyanchor.com');
   assert.equal(displayEventUrl('https://tickets.example.com/fall-show'), 'tickets.example.com/fall-show');
+});
+
+test('site name for crediting a source', () => {
+  assert.equal(linkSiteName('https://www.thedairy.org/event/watch-you-rise/'), 'thedairy.org');
+  assert.equal(linkSiteName('https://events.humanitix.com/nolan-gasser'), 'events.humanitix.com');
+  assert.equal(linkSiteName('not a link'), '');
 });

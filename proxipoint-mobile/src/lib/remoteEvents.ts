@@ -21,7 +21,9 @@ export interface ApiEventVenue {
 export interface ApiEvent {
   id: string;
   title: string;
+  /** For gathered events (source 'external'), only a short lead from the source's text. */
   description?: string;
+  description_is_excerpt?: boolean;
   starts_at: string;
   ends_at: string;
   status: string;
@@ -37,7 +39,6 @@ export interface ApiEvent {
     region_name?: string;
   };
   distance_m?: number;
-  /** Stock photo for the event's tag (Pexels), with the credit the app must show. */
   /**
    * Photo for the card: from our own collection (provider 'catalog', by tag or category) or
    * Pexels. Pexels photos must be credited; ours are credited when a photographer is recorded.
