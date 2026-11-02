@@ -23,11 +23,21 @@ const WIDE_MAX = 2800;
 const FAR_ZOOM = 12;
 const FAR_MIN = -5600;
 const FAR_MAX = 7000;
-/** Widest, coarsest: about 60 km across, so the 15-mile-wide furthest zoom (taller than it is
- * wide on a phone) never runs off the edge of the map, even after panning a bit. */
+/** About 60 km across: fills a view around 15–20 miles wide. */
 const OUTER_ZOOM = 11;
 const OUTER_MIN = -13000;
 const OUTER_MAX = 14000;
+/** About 180 km across: the 35-mile views (web zoom 10). */
+const REGION_ZOOM = 10;
+const REGION_MIN = -40000;
+const REGION_MAX = 41000;
+/**
+ * About 340 km across: the furthest zoom, 70 miles wide (web zoom 9), is about twice as tall on
+ * a phone, so this keeps it covered even after panning a bit.
+ */
+const METRO_ZOOM = 9;
+const METRO_MIN = -76000;
+const METRO_MAX = 77000;
 /** Map world (same numbers as DiscoveryMapCanvas): 1400 × 1400, you / the city at (480, 480). */
 const WORLD_SIZE = 1400;
 const ORIGIN = 480;
@@ -114,9 +124,34 @@ export const MapTiles: React.FC<{
     () => tilesFor({ latitude, longitude }, mode, OUTER_ZOOM, OUTER_MIN, OUTER_MAX),
     [latitude, longitude, mode],
   );
+  const region = useMemo(
+    () => tilesFor({ latitude, longitude }, mode, REGION_ZOOM, REGION_MIN, REGION_MAX),
+    [latitude, longitude, mode],
+  );
+  const metro = useMemo(
+    () => tilesFor({ latitude, longitude }, mode, METRO_ZOOM, METRO_MIN, METRO_MAX),
+    [latitude, longitude, mode],
+  );
   return (
     <View style={styles.layer} pointerEvents="none">
-      {/* Outermost surroundings (the edges of the furthest zoom) */}
+      {/* The region, for the furthest zooms (35–70 miles across), coarsest underneath */}
+      {metro.map((tile) => (
+        <Image
+          key={`m-${tile.key}`}
+          source={{ uri: tile.base }}
+          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
+          fadeDuration={150}
+        />
+      ))}
+      {region.map((tile) => (
+        <Image
+          key={`r-${tile.key}`}
+          source={{ uri: tile.base }}
+          style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
+          fadeDuration={150}
+        />
+      ))}
+      {/* Outer surroundings */}
       {outer.map((tile) => (
         <Image
           key={`o-${tile.key}`}
@@ -170,9 +205,10 @@ const styles = StyleSheet.create({
   tile: { position: 'absolute' },
   tintLayer: {
     position: 'absolute',
-    left: FAR_MIN,
-    top: FAR_MIN,
-    width: FAR_MAX - FAR_MIN,
-    height: FAR_MAX - FAR_MIN,
+    // Over every layer, so the colour is the same at any zoom.
+    left: METRO_MIN,
+    top: METRO_MIN,
+    width: METRO_MAX - METRO_MIN,
+    height: METRO_MAX - METRO_MIN,
   },
 });

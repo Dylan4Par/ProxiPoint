@@ -52,8 +52,11 @@ const CENTER_OFFSET_Y = CANVAS_HEIGHT / 2 - (BEACON_WORLD_Y - WORLD_OFFSET);
 // Zoom: the map scales from its top-left corner, so a world point w is drawn at
 //   screen = pan - WORLD_OFFSET + zoom * w
 // Pins, labels and your own dot are counter-scaled so they stay the same size on screen.
-/** Furthest out: the map shows this much across (15 miles), whatever the phone's width. */
-const MAX_VIEW_WIDTH_METERS = 15 * 1609.344;
+/**
+ * Furthest out: the map shows this much across (70 miles, about web zoom 9: the whole regional
+ * metro corridor), whatever the phone's width. MapTiles has layers out that far.
+ */
+const MAX_VIEW_WIDTH_METERS = 70 * 1609.344;
 const MIN_ZOOM = width / (MAX_VIEW_WIDTH_METERS * WORLD_SCALE);
 const MAX_ZOOM = 3;
 
