@@ -307,13 +307,22 @@ export function searchChannels(channels: Channel[], query: string): Channel[] {
   });
 }
 
+/** Every Point the feed would list (not ended, passing allow), before its display limits. */
+export function feedMatches<T extends FeedNode>(
+  nodes: Record<string, T> | T[] | null | undefined,
+  now = Date.now(),
+  allow: (node: T) => boolean = () => true,
+): T[] {
+  return (Array.isArray(nodes) ? nodes : Object.values(nodes ?? {})).filter(
+    (node) => node && node.origin !== 'local' && !isEnded(node, now) && allow(node),
+  );
+}
+
 /** How many Points the feed would list (not ended, passing allow), before its display limits. */
 export function countFeed(
   nodes: Record<string, FeedNode> | FeedNode[] | null | undefined,
   now = Date.now(),
   allow: (node: FeedNode) => boolean = () => true,
 ): number {
-  return (Array.isArray(nodes) ? nodes : Object.values(nodes ?? {})).filter(
-    (node) => node && node.origin !== 'local' && !isEnded(node, now) && allow(node),
-  ).length;
+  return feedMatches(nodes, now, allow).length;
 }
