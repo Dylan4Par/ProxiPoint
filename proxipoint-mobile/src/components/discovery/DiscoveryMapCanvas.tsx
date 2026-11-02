@@ -80,6 +80,12 @@ const FOOTPRINT_W = 50;
 /** About how far around the area's center Points are loaded (for "Search this area" on zoom-out). */
 const AREA_RANGE_METERS = 1500;
 const FOOTPRINT_H = 50;
+/**
+ * A pin is drawn from its head (17 px above its point) down to the bottom of its #tag label
+ * (about 46 px below), so its middle is this far below the point. Centering a Point lifts it by
+ * this much, so the pin and its label sit in the middle with room above the detail sheet.
+ */
+const MARKER_VISUAL_SHIFT = 14;
 /** Where a #tag label sits below a pin / bubble, in screen points. */
 const LABEL_TOP = 24;
 const LABEL_BOTTOM = 48;
@@ -641,8 +647,14 @@ export const DiscoveryMapCanvas: React.FC<{
   const openDetailRef = useRef<string | null>(showAlwaysId);
   openDetailRef.current = showAlwaysId;
   const selectedPosRef = useRef<{ x: number; y: number } | null>(null);
-  selectedPosRef.current =
-    selectedNode && selectedNode.x != null && selectedNode.y != null ? { x: selectedNode.x, y: selectedNode.y } : null;
+  // Where the selected Point is drawn: its own pin, or the bubble it's grouped into (whose
+  // middle can be half a pin away from the Point itself).
+  const selectedCluster = clusters.find((cl) => cl.selected) ?? null;
+  selectedPosRef.current = selectedCluster
+    ? { x: selectedCluster.x, y: selectedCluster.y }
+    : selectedNode && selectedNode.x != null && selectedNode.y != null
+      ? { x: selectedNode.x, y: selectedNode.y }
+      : null;
 
   /** Height of the map not hidden by the detail sheet. */
   const visibleMapHeight = () => {
@@ -659,7 +671,7 @@ export const DiscoveryMapCanvas: React.FC<{
     const z = currentZoom.current;
     animateTo({
       x: viewSize.current.width / 2 + WORLD_OFFSET - z * spot.x,
-      y: visibleMapHeight() / 2 + WORLD_OFFSET - z * spot.y,
+      y: visibleMapHeight() / 2 - MARKER_VISUAL_SHIFT + WORLD_OFFSET - z * spot.y,
     });
   };
 
@@ -727,7 +739,7 @@ export const DiscoveryMapCanvas: React.FC<{
           const z = currentZoom.current;
           const target = {
             x: w / 2 + WORLD_OFFSET - z * spot.x,
-            y: visibleMapHeight() / 2 + WORLD_OFFSET - z * spot.y,
+            y: visibleMapHeight() / 2 - MARKER_VISUAL_SHIFT + WORLD_OFFSET - z * spot.y,
           };
           pan.setValue(target);
           currentPan.current = target;
