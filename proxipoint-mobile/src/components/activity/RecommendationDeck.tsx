@@ -179,8 +179,7 @@ export const RecommendationDeck: React.FC<{
             accessibilityHint="Opens the Point on Discover"
             testID={`activity-rec-${node.id}`}
           >
-            {/* Icon tile · #tag · venue with the Featured (or Popular) badge at its right, and the
-                title under them using the card's full width. */}
+            {/* Icon tile · #tag · venue, and the title under them using the card's full width. */}
             <View style={styles.main}>
               <CategoryBadge tag={mainTag} title={node.title} photoUri={node.coverPhotoUri ?? null} size={44} />
               <View style={styles.copy}>
@@ -190,17 +189,6 @@ export const RecommendationDeck: React.FC<{
                     {mainTag && where ? <Text style={styles.where}>{'  ·  '}</Text> : null}
                     {where ? <Text style={styles.where}>{where}</Text> : null}
                   </Text>
-                  {featured ? (
-                    <View style={styles.badge}>
-                      <Zap size={11} color={GOLD} fill={GOLD} strokeWidth={2} />
-                      <Text style={styles.badgeText}>FEATURED</Text>
-                    </View>
-                  ) : mode === 'popular' ? (
-                    <View style={[styles.badge, styles.badgePopular]}>
-                      <Flame size={11} color={c.accent} strokeWidth={2.5} />
-                      <Text style={[styles.badgeText, styles.badgeTextPopular]}>POPULAR</Text>
-                    </View>
-                  ) : null}
                 </View>
                 <Text style={styles.title} numberOfLines={1}>
                   {node.title}
@@ -208,8 +196,19 @@ export const RecommendationDeck: React.FC<{
               </View>
             </View>
 
-            {/* LIVE NOW · Ends 9:30 PM · 1.4 mi · 6 min drive */}
+            {/* FEATURED (or POPULAR) · LIVE NOW · Ends 9:30 PM · 1.4 miles */}
             <View style={styles.meta}>
+              {featured ? (
+                <View style={styles.badge}>
+                  <Zap size={11} color={GOLD} fill={GOLD} strokeWidth={2} />
+                  <Text style={styles.badgeText}>FEATURED</Text>
+                </View>
+              ) : mode === 'popular' ? (
+                <View style={[styles.badge, styles.badgePopular]}>
+                  <Flame size={11} color={c.accent} strokeWidth={2.5} />
+                  <Text style={[styles.badgeText, styles.badgeTextPopular]}>POPULAR</Text>
+                </View>
+              ) : null}
               {pick.live ? (
                 <LiveBadge label="LIVE NOW" />
               ) : timing ? (
