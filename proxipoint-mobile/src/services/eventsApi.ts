@@ -11,8 +11,11 @@ export const EVENTS_URL: string = (process.env.EXPO_PUBLIC_EVENTS_URL ?? '').tri
 
 /** How far ahead to load (the server allows up to 62 days). */
 export const EVENTS_DAYS_AHEAD = 30;
-/** Around the place you're exploring (the server allows 100 m to 100 km). */
-export const EVENTS_RADIUS_M = 50000;
+/**
+ * Around the place you're exploring: the server's maximum (100 m to 100 km), so the map's
+ * furthest zoom (70 miles across) has its events.
+ */
+export const EVENTS_RADIUS_M = 100000;
 
 export interface FetchEventsOptions {
   tenantId: string;
