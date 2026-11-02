@@ -3287,5 +3287,405 @@ export const HASHTAG_LIST: HashtagEntry[] = [
     'description': 'Community & Service',
     'icon': 'HandHeart',
     'radius': 'local'
+  },
+  {
+    'id': 'darts',
+    'tag': '#Darts',
+    'category': 'social-hobbies',
+    'description': 'Dart boards, leagues and casual throws at bars',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'pool-tournament',
+    'tag': '#PoolTournament',
+    'category': 'social-hobbies',
+    'description': 'Billiards tournaments and league nights',
+    'icon': 'Dices',
+    'radius': 'local'
+  },
+  {
+    'id': 'pool-hall',
+    'tag': '#PoolHall',
+    'category': 'social-hobbies',
+    'description': 'Pool halls and open billiards tables',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'foosball',
+    'tag': '#Foosball',
+    'category': 'social-hobbies',
+    'description': 'Foosball tables, matches and tournaments',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'shuffleboard',
+    'tag': '#Shuffleboard',
+    'category': 'social-hobbies',
+    'description': 'Table and deck shuffleboard nights',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'skee-ball',
+    'tag': '#SkeeBall',
+    'category': 'social-hobbies',
+    'description': 'Skee-Ball leagues and arcade lanes',
+    'icon': 'Gamepad2',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'bowling-night',
+    'tag': '#BowlingNight',
+    'category': 'social-hobbies',
+    'description': 'Bowling alley nights and cosmic bowling',
+    'icon': 'Dices',
+    'radius': 'local'
+  },
+  {
+    'id': 'bar-bingo',
+    'tag': '#BarBingo',
+    'category': 'social-hobbies',
+    'description': 'Bingo nights at bars and pubs',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'music-bingo',
+    'tag': '#MusicBingo',
+    'category': 'social-hobbies',
+    'description': 'Bingo played with song clips',
+    'icon': 'Music',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'bar-games',
+    'tag': '#BarGames',
+    'category': 'social-hobbies',
+    'description': 'Bar games: darts, pool, cornhole and more',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'rock-music',
+    'tag': '#RockMusic',
+    'category': 'music-nightlife',
+    'description': 'Live rock bands and rock nights',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'country-music',
+    'tag': '#CountryMusic',
+    'category': 'music-nightlife',
+    'description': 'Country bands, honky-tonks and two-step nights',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'classic-rock',
+    'tag': '#ClassicRock',
+    'category': 'music-nightlife',
+    'description': 'Classic rock bands and tribute acts',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'hard-rock',
+    'tag': '#HardRock',
+    'category': 'music-nightlife',
+    'description': 'Hard rock and metal shows',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'punk-rock',
+    'tag': '#PunkRock',
+    'category': 'music-nightlife',
+    'description': 'Punk shows and DIY gigs',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'blues-jam',
+    'tag': '#BluesJam',
+    'category': 'music-nightlife',
+    'description': 'Blues jams and live blues',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'acoustic-set',
+    'tag': '#AcousticSet',
+    'category': 'music-nightlife',
+    'description': 'Acoustic and unplugged performances',
+    'icon': 'Music',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'hip-hop-night',
+    'tag': '#HipHopNight',
+    'category': 'music-nightlife',
+    'description': 'Hip-hop DJs, MCs and shows',
+    'icon': 'Headphones',
+    'radius': 'local'
+  },
+  {
+    'id': 'reggae-night',
+    'tag': '#ReggaeNight',
+    'category': 'music-nightlife',
+    'description': 'Reggae bands and DJ nights',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'cover-band',
+    'tag': '#CoverBand',
+    'category': 'music-nightlife',
+    'description': 'Cover and tribute bands',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'piano-bar',
+    'tag': '#PianoBar',
+    'category': 'music-nightlife',
+    'description': 'Piano bars and sing-alongs',
+    'icon': 'Music',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'open-mic-music',
+    'tag': '#OpenMicMusic',
+    'category': 'music-nightlife',
+    'description': 'Open mic nights for musicians',
+    'icon': 'Mic',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'sports-bar-hangout',
+    'tag': '#SportsBarHangout',
+    'category': 'sports-fitness',
+    'description': 'Watching the game at a sports bar',
+    'icon': 'Beer',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'tailgate-party',
+    'tag': '#TailgateParty',
+    'category': 'sports-fitness',
+    'description': 'Pre-game tailgates and parking-lot parties',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'ufc-watch-party',
+    'tag': '#UFCWatchParty',
+    'category': 'sports-fitness',
+    'description': 'UFC and MMA fight viewings',
+    'icon': 'Beer',
+    'radius': 'local'
+  },
+  {
+    'id': 'fight-night',
+    'tag': '#FightNight',
+    'category': 'sports-fitness',
+    'description': 'Boxing, MMA and fight-night viewings or events',
+    'icon': 'Beer',
+    'radius': 'local'
+  },
+  {
+    'id': 'march-madness',
+    'tag': '#MarchMadness',
+    'category': 'sports-fitness',
+    'description': 'College basketball tournament watch parties',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'nfl-sunday',
+    'tag': '#NFLSunday',
+    'category': 'sports-fitness',
+    'description': 'NFL game-day viewings',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'college-football-saturday',
+    'tag': '#CollegeFootballSaturday',
+    'category': 'sports-fitness',
+    'description': 'College football game-day viewings',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'premier-league-morning',
+    'tag': '#PremierLeagueMorning',
+    'category': 'sports-fitness',
+    'description': 'Early-morning Premier League viewings',
+    'icon': 'Trophy',
+    'radius': 'local'
+  },
+  {
+    'id': 'beer-tasting',
+    'tag': '#BeerTasting',
+    'category': 'music-nightlife',
+    'description': 'Beer tastings and brewery samplers',
+    'icon': 'Beer',
+    'radius': 'local'
+  },
+  {
+    'id': 'beer-flight',
+    'tag': '#BeerFlight',
+    'category': 'music-nightlife',
+    'description': 'Beer flights and taproom specials',
+    'icon': 'Beer',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'whiskey-tasting',
+    'tag': '#WhiskeyTasting',
+    'category': 'music-nightlife',
+    'description': 'Whiskey tastings and pairings',
+    'icon': 'Wine',
+    'radius': 'local'
+  },
+  {
+    'id': 'bourbon-tasting',
+    'tag': '#BourbonTasting',
+    'category': 'music-nightlife',
+    'description': 'Bourbon tastings and pairings',
+    'icon': 'Wine',
+    'radius': 'local'
+  },
+  {
+    'id': 'tequila-tasting',
+    'tag': '#TequilaTasting',
+    'category': 'music-nightlife',
+    'description': 'Tequila and mezcal tastings',
+    'icon': 'Wine',
+    'radius': 'local'
+  },
+  {
+    'id': 'cocktail-class',
+    'tag': '#CocktailClass',
+    'category': 'music-nightlife',
+    'description': 'Hands-on cocktail-making classes',
+    'icon': 'Wine',
+    'radius': 'local'
+  },
+  {
+    'id': 'mixology-night',
+    'tag': '#MixologyNight',
+    'category': 'music-nightlife',
+    'description': 'Bartender showcases and craft cocktail nights',
+    'icon': 'Wine',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'speakeasy-tour',
+    'tag': '#SpeakeasyTour',
+    'category': 'music-nightlife',
+    'description': 'Speakeasy and hidden bar tours',
+    'icon': 'Wine',
+    'radius': 'metro'
+  },
+  {
+    'id': 'distillery-tour',
+    'tag': '#DistilleryTour',
+    'category': 'music-nightlife',
+    'description': 'Distillery tours and tastings',
+    'icon': 'Wine',
+    'radius': 'metro'
+  },
+  {
+    'id': 'cider-tasting',
+    'tag': '#CiderTasting',
+    'category': 'music-nightlife',
+    'description': 'Cider tastings and cidery events',
+    'icon': 'Wine',
+    'radius': 'local'
+  },
+  {
+    'id': 'tap-takeover',
+    'tag': '#TapTakeover',
+    'category': 'music-nightlife',
+    'description': 'Brewery tap takeovers and new releases',
+    'icon': 'Beer',
+    'radius': 'local'
+  },
+  {
+    'id': 'late-night-bites',
+    'tag': '#LateNightBites',
+    'category': 'food-dining',
+    'description': 'Late-night food and kitchen specials',
+    'icon': 'Utensils',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'arcade-bar',
+    'tag': '#ArcadeBar',
+    'category': 'social-hobbies',
+    'description': 'Barcades and arcade bars',
+    'icon': 'Gamepad2',
+    'radius': 'local'
+  },
+  {
+    'id': 'trivia-night',
+    'tag': '#TriviaNight',
+    'category': 'social-hobbies',
+    'description': 'Weekly trivia nights',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'bar-trivia',
+    'tag': '#BarTrivia',
+    'category': 'social-hobbies',
+    'description': 'Trivia at bars and pubs',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'pub-quiz',
+    'tag': '#PubQuiz',
+    'category': 'social-hobbies',
+    'description': 'Pub quizzes and team quiz nights',
+    'icon': 'Dices',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'comedy-club',
+    'tag': '#ComedyClub',
+    'category': 'music-nightlife',
+    'description': 'Comedy club shows and headliners',
+    'icon': 'PartyPopper',
+    'radius': 'local'
+  },
+  {
+    'id': 'open-mic-comedy',
+    'tag': '#OpenMicComedy',
+    'category': 'music-nightlife',
+    'description': 'Open mic nights for comics',
+    'icon': 'Mic',
+    'radius': 'neighborhood'
+  },
+  {
+    'id': 'dueling-pianos',
+    'tag': '#DuelingPianos',
+    'category': 'music-nightlife',
+    'description': 'Dueling piano shows and request nights',
+    'icon': 'Music',
+    'radius': 'local'
+  },
+  {
+    'id': 'night-market',
+    'tag': '#NightMarket',
+    'category': 'shopping-markets',
+    'description': 'Evening markets with food, makers and music',
+    'icon': 'ShoppingBasket',
+    'radius': 'metro'
   }
 ];

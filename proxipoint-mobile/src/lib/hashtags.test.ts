@@ -68,7 +68,22 @@ test('every old spelling points at a tag that is on the list', () => {
 test('the newer tags: holidays, milestones and their old spellings', () => {
   assert.equal(categoryOfTag('#Christmas')?.label, 'Holidays & Seasonal');
   assert.equal(categoryOfTag('#Wedding')?.label, 'Celebrations & Milestones');
-  assert.equal(canonicalTag('#TriviaNight'), '#TriviaTournament');
+  assert.equal(canonicalTag('#Trivia'), '#TriviaTournament', 'an old spelling');
+  assert.equal(canonicalTag('#trivianight'), '#TriviaNight', 'a listed tag now');
   assert.equal(canonicalTag('#VinylNight'), '#VinylNight');
   assert.ok(searchHashtags('halloween').some((e) => e.tag === '#PumpkinPatch'), 'description search');
+});
+
+test('pub, bar and nightlife tags', () => {
+  for (const tag of ['#Darts', '#PoolTournament', '#SkeeBall', '#MusicBingo', '#RockMusic', '#OpenMicMusic', '#UFCWatchParty',
+    '#NFLSunday', '#CollegeFootballSaturday', '#WhiskeyTasting', '#TapTakeover', '#LateNightBites', '#ArcadeBar',
+    '#PubQuiz', '#DuelingPianos', '#NightMarket']) {
+    assert.equal(canonicalTag(tag.toLowerCase()), tag, tag);
+  }
+  assert.equal(categoryOfTag('#Darts')?.label, 'Social & Hobbies');
+  assert.equal(categoryOfTag('#CountryMusic')?.label, 'Music & Nightlife');
+  assert.equal(categoryOfTag('#NFLSunday')?.label, 'Sports & Fitness');
+  assert.equal(categoryOfTag('#BourbonTasting')?.label, 'Music & Nightlife');
+  assert.equal(categoryOfTag('#LateNightBites')?.label, 'Food & Dining');
+  assert.equal(categoryOfTag('#NightMarket')?.label, 'Shopping & Markets');
 });

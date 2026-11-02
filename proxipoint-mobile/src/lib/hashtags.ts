@@ -30,7 +30,7 @@ export const LEGACY_TAGS: Record<string, string> = {
   brewery: 'CraftBeer', pub: 'CraftBeer', beer: 'CraftBeer', wine: 'WineTasting',
   poetry: 'PoetrySlam', standup: 'StandUpComedy',
   // Games & social
-  trivia: 'TriviaTournament', trivianight: 'TriviaTournament', musicbingo: 'TriviaTournament',
+  trivia: 'TriviaTournament', // (#TriviaNight and #MusicBingo are listed tags now)
   catan: 'BoardGameNight', chess: 'ChessClub', strategy: 'BoardGames', tabletop: 'BoardGames', poker: 'PokerNight',
   dogs: 'DogFriendly', crafts: 'MakersAndCrafts', makers: 'MakersAndCrafts', network: 'Networking',
   // Food
