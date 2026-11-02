@@ -178,30 +178,33 @@ export const RecommendationDeck: React.FC<{
             accessibilityHint="Opens the Point on Discover"
             testID={`activity-rec-${node.id}`}
           >
-            {/* Icon tile · #tag · venue / title, with the Featured (or Popular) badge on the right. */}
+            {/* Icon tile · #tag · venue with the Featured (or Popular) badge at its right, and the
+                title under them using the card's full width. */}
             <View style={styles.main}>
               <CategoryBadge tag={mainTag} title={node.title} photoUri={node.coverPhotoUri ?? null} size={44} />
               <View style={styles.copy}>
-                <Text style={styles.tagLine} numberOfLines={1}>
-                  {mainTag ? <Text style={styles.tag}>{mainTag}</Text> : null}
-                  {mainTag && where ? <Text style={styles.where}>{'  ·  '}</Text> : null}
-                  {where ? <Text style={styles.where}>{where}</Text> : null}
-                </Text>
+                <View style={styles.topLine}>
+                  <Text style={[styles.tagLine, styles.tagLineShrink]} numberOfLines={1}>
+                    {mainTag ? <Text style={styles.tag}>{mainTag}</Text> : null}
+                    {mainTag && where ? <Text style={styles.where}>{'  ·  '}</Text> : null}
+                    {where ? <Text style={styles.where}>{where}</Text> : null}
+                  </Text>
+                  {featured ? (
+                    <View style={styles.badge}>
+                      <Zap size={11} color={GOLD} fill={GOLD} strokeWidth={2} />
+                      <Text style={styles.badgeText}>FEATURED</Text>
+                    </View>
+                  ) : mode === 'popular' ? (
+                    <View style={[styles.badge, styles.badgePopular]}>
+                      <Flame size={11} color={c.accent} strokeWidth={2.5} />
+                      <Text style={[styles.badgeText, styles.badgeTextPopular]}>POPULAR</Text>
+                    </View>
+                  ) : null}
+                </View>
                 <Text style={styles.title} numberOfLines={1}>
                   {node.title}
                 </Text>
               </View>
-              {featured ? (
-                <View style={styles.badge}>
-                  <Zap size={11} color={GOLD} fill={GOLD} strokeWidth={2} />
-                  <Text style={styles.badgeText}>FEATURED</Text>
-                </View>
-              ) : mode === 'popular' ? (
-                <View style={[styles.badge, styles.badgePopular]}>
-                  <Flame size={11} color={c.accent} strokeWidth={2.5} />
-                  <Text style={[styles.badgeText, styles.badgeTextPopular]}>POPULAR</Text>
-                </View>
-              ) : null}
             </View>
 
             {/* LIVE NOW · Ends 9:30 PM · 1.4 mi · 6 min drive */}
@@ -349,7 +352,9 @@ const createStyles = (c: ThemeColors) =>
     emptyText: { flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 18 },
     main: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     copy: { flex: 1, gap: 2 },
+    topLine: { flexDirection: 'row', alignItems: 'center', gap: 8 },
     tagLine: { fontSize: 12.5 },
+    tagLineShrink: { flex: 1 },
     tag: { color: c.accent, fontWeight: '800' },
     where: { color: c.textMuted, fontWeight: '600' },
     title: { color: c.text, fontSize: 17, fontWeight: '800' },
@@ -357,7 +362,6 @@ const createStyles = (c: ThemeColors) =>
       flexDirection: 'row',
       alignItems: 'center',
       gap: 4,
-      alignSelf: 'flex-start',
       paddingHorizontal: 8,
       paddingVertical: 3,
       borderRadius: 8,
