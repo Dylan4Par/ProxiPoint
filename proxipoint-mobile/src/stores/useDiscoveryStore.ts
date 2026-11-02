@@ -18,11 +18,12 @@ import type {
 } from '../types/beacon';
 
 export interface PhotoCredit {
-  provider: string; // 'Pexels'
+  /** Where it's from, for "on Pexels"; '' when not worth naming (own photos). */
+  provider: string;
   photographer: string;
   photographerUrl: string | null;
-  /** The photo's page on the provider's site. */
-  pageUrl: string;
+  /** The photo's source page, when known. */
+  pageUrl: string | null;
 }
 
 export interface RemoteEventsState {
