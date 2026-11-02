@@ -3,7 +3,7 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Car, Check, Info, PersonStanding, User, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
 import { distanceLabel, goingLabel, pointTiming, type TimingKind } from '../../lib/pointCard';
-import { useUnits } from '../../lib/units';
+import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { nearestCityLabel } from '../../lib/mapArea';
@@ -57,8 +57,10 @@ export const PointCard: React.FC<{
   /** Distance to show instead of the distance from you (search: from the searched area). */
   distanceMeters?: number | null;
   now?: number;
+  /** Discover: just the distance, in words ("12 miles"), no travel time. */
+  distanceOnly?: boolean;
   testID?: string;
-}> = ({ node, onOpen, onToggleRsvp, boosted = false, onWhyBoosted, selected = false, distanceMeters, now, testID }) => {
+}> = ({ node, onOpen, onToggleRsvp, boosted = false, onWhyBoosted, selected = false, distanceMeters, now, distanceOnly = false, testID }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c, mode } = useTheme();
   const pills = PILLS[mode === 'light' ? 'light' : 'dark'];
@@ -68,7 +70,9 @@ export const PointCard: React.FC<{
   const timing = pointTiming(node, now);
   // City, top right ("Boulder, CO"); the closest listed city within about 15 mi.
   const city = nearestCityLabel(node, CITY_LIST);
-  const distance = distanceLabel(distanceMeters ?? node.distanceMeters, distanceMeters == null ? node.eta : null);
+  const distance = distanceOnly
+    ? formatDistanceWordsIn(distanceMeters ?? node.distanceMeters, getUnits())
+    : distanceLabel(distanceMeters ?? node.distanceMeters, distanceMeters == null ? node.eta : null);
   const going = goingLabel(node.attendeeCount);
   const TravelIcon = node.etaMode === 'drive' ? Car : PersonStanding;
   const timingColors = timing ? pills[timing.kind as TimingKind] : null;
@@ -155,7 +159,7 @@ export const PointCard: React.FC<{
               <Text style={[styles.pillText, styles.pillTextPlain, { color: pills.distance.fg }]} numberOfLines={1}>
                 {distance}
               </Text>
-              {distanceMeters == null && node.eta ? <TravelIcon size={13} color={pills.distance.fg} strokeWidth={2.25} /> : null}
+              {!distanceOnly && distanceMeters == null && node.eta ? <TravelIcon size={13} color={pills.distance.fg} strokeWidth={2.25} /> : null}
             </View>
           ) : null}
           {node.facts?.priceLabel ? (

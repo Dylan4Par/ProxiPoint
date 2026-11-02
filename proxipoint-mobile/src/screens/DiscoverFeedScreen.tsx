@@ -967,6 +967,7 @@ const EventRow: React.FC<{
     onWhyBoosted={onWhyBoosted}
     onOpen={onOpen}
     onToggleRsvp={onToggleRsvp}
+    distanceOnly
     testID={`discover-event-${node.id}`}
   />
 );

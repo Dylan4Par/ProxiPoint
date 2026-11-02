@@ -43,6 +43,25 @@ export function formatDistanceIn(meters: number | undefined | null, units: Dista
   return `${(meters / 1000).toFixed(meters < 10000 ? 1 : 0)} km`;
 }
 
+const YARDS_PER_METER = 1.0936133;
+
+/**
+ * A measured distance in words, for Discover's cards: "12 miles", "1.4 miles", "1 mile",
+ * "350 yards" (under a quarter mile); "800 meters", "1.4 kilometers", "1 kilometer".
+ */
+export function formatDistanceWordsIn(meters: number | undefined | null, units: DistanceUnits): string | null {
+  if (typeof meters !== 'number' || !Number.isFinite(meters)) return null;
+  const plural = (n: string, one: string, many: string) => `${n} ${n === '1' ? one : many}`;
+  if (units === 'imperial') {
+    const miles = meters / METERS_PER_MILE;
+    if (miles < 0.25) return plural(withCommas(Math.max(10, Math.round((meters * YARDS_PER_METER) / 10) * 10)), 'yard', 'yards');
+    return plural(miles < 10 ? String(Number(miles.toFixed(1))) : withCommas(Math.round(miles)), 'mile', 'miles');
+  }
+  if (meters < 1000) return plural(withCommas(Math.max(10, Math.round(meters / 10) * 10)), 'meter', 'meters');
+  const km = meters / 1000;
+  return plural(km < 10 ? String(Number(km.toFixed(1))) : withCommas(Math.round(km)), 'kilometer', 'kilometers');
+}
+
 /** A round radius or range: "5 km", "500 m", "3 mi", "0.5 mi". */
 export function formatRadiusIn(meters: number, units: DistanceUnits): string {
   if (units === 'imperial') {
