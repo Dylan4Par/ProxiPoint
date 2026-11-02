@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { defaultUnits, formatDistanceIn, formatRadiusIn, getUnits, searchRanges, setUnits } from './units';
+import { defaultUnits, formatDistanceIn, formatRadiusIn, formatRangeWords, getUnits, searchRanges, setUnits } from './units';
 import { formatDistance } from './discoverFeed';
 
 test('metric distances', () => {
@@ -39,4 +39,9 @@ test('formatDistance follows the setting', () => {
   setUnits('metric');
   assert.equal(formatDistance(316), '316m');
   setUnits(before);
+});
+
+test('ranges in words for the distance menu', () => {
+  assert.deepEqual(searchRanges('imperial').map((r) => formatRangeWords(r.meters, 'imperial')), ['1 mile', '3 miles', '5 miles', '15 miles', 'Any distance']);
+  assert.deepEqual(searchRanges('metric').map((r) => formatRangeWords(r.meters, 'metric')), ['1 km', '5 km', '10 km', '25 km', 'Any distance']);
 });

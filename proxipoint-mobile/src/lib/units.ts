@@ -55,6 +55,15 @@ export function formatRadiusIn(meters: number, units: DistanceUnits): string {
   return `${Number.isInteger(km) ? km : km.toFixed(1)} km`;
 }
 
+/** A range in words, for menus: "1 mile", "15 miles", "0.5 miles", "10 km" (null: "Any distance"). */
+export function formatRangeWords(meters: number | null, units: DistanceUnits): string {
+  if (meters == null) return 'Any distance';
+  const short = formatRadiusIn(meters, units);
+  if (!short.endsWith(' mi')) return short;
+  const n = short.slice(0, -3);
+  return `${n} ${n === '1' ? 'mile' : 'miles'}`;
+}
+
 /** Range choices for Discover search in these units (null = any distance). */
 export function searchRanges(units: DistanceUnits): Array<{ label: string; meters: number | null }> {
   const meters =
