@@ -99,16 +99,13 @@ test('a refresh replaces remote nodes, keeps local ones and what you did', () =>
 });
 
 test('a Pexels photo comes with its credit, and is dropped if it cannot be credited', () => {
-  const withPhoto = remoteEventToNode({
-    ...scraped,
-    cover_photo: {
+  const withPhoto = photoFields({
       provider: 'pexels',
       url: 'https://images.pexels.com/photos/1/m.jpeg',
       large_url: 'https://images.pexels.com/photos/1/l.jpeg',
       page_url: 'https://www.pexels.com/photo/1/',
       photographer: ' Ann Lee ',
       photographer_url: 'https://www.pexels.com/@ann',
-    },
   });
   assert.equal(withPhoto.coverPhotoUri, 'https://images.pexels.com/photos/1/m.jpeg');
   assert.equal(withPhoto.coverPhotoLargeUri, 'https://images.pexels.com/photos/1/l.jpeg');
@@ -159,4 +156,19 @@ test('details become facts on the node', () => {
   assert.equal(node.facts?.ageLabel, '21+');
   assert.deepEqual(node.facts?.notices, ['Age 21+ only', 'Valid ID required at door']);
   assert.equal(remoteEventToNode(scraped).facts, null);
+});
+
+test('stock and collection photos are not shown as the event\'s cover; the icon stands in', () => {
+  for (const provider of ['catalog', 'pexels']) {
+    const node = remoteEventToNode({
+      ...scraped,
+      cover_photo: { provider, url: 'https://assets.example/a.jpg', page_url: 'https://www.pexels.com/photo/1/', photographer: 'Ann' },
+    });
+    assert.equal(node.coverPhotoUri, null, provider);
+    assert.equal(node.coverPhotoLargeUri, null);
+    assert.equal(node.photoCredit, null);
+  }
+  // A photo of the event itself (another provider, e.g. the host's upload) still shows.
+  const own = remoteEventToNode({ ...scraped, cover_photo: { provider: 'host', url: 'https://assets.example/me.jpg' } });
+  assert.equal(own.coverPhotoUri, 'https://assets.example/me.jpg');
 });

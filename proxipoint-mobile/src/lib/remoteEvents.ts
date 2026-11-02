@@ -156,13 +156,21 @@ export function remoteEventToNode(ev: ApiEvent, now = new Date()): DiscoveryNode
       ev.location.precision === 'exact'
         ? null
         : { level: ev.location.precision, regionName: ev.location.region_name ?? '' },
-    ...photoFields(ev.cover_photo),
+    // A cover photo only when it's the event's own: stock and collection photos (by tag or
+    // category) aren't of this event, so the category icon stands in for them.
+    ...photoFields(isStockPhoto(ev.cover_photo) ? undefined : ev.cover_photo),
     facts: eventFacts(ev.details),
     startsAt: start.toISOString(),
     endsAt: end.toISOString(),
     x: 0,
     y: 0,
   };
+}
+
+/** Photos picked by tag or category (our collection, Pexels), not taken at or for the event. */
+export const STOCK_PHOTO_PROVIDERS = ['catalog', 'pexels'];
+export function isStockPhoto(photo: ApiEvent['cover_photo']): boolean {
+  return !!photo && STOCK_PHOTO_PROVIDERS.includes(String(photo.provider ?? '').toLowerCase());
 }
 
 const httpsUrl = (v: unknown): string | null => (isStr(v) && v.startsWith('https://') ? v : null);
