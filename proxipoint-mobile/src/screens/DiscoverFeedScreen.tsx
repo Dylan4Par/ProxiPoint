@@ -269,6 +269,10 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     rangeMeters == null ? null : formatRadiusIn(rangeMeters, units),
     whenLabel,
   );
+  // Searching: the bar shows what's searched (× clears it), and Map counts the search's Points
+  // (and, for a #tag, opens the map on it, like "Show on map").
+  const mapCount = searching ? results.length : matchCount;
+  const openMapFromBar = () => (searching && exactTag ? onShowTagOnMap(exactTag) : onOpenMap());
   const miniTags = [
     ...(selectedTag && selectedTag !== 'All' ? [{ tag: selectedTag, clear: () => setSelectedTag('All') }] : []),
     ...tagFilter.tags
@@ -559,8 +563,23 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
           {context}
         </Text>
       </TouchableOpacity>
-      {miniTags.length ? (
+      {miniTags.length || searching ? (
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.miniTags} contentContainerStyle={styles.miniTagsRow}>
+          {searching ? (
+            <TouchableOpacity
+              style={[styles.miniTag, styles.miniSearch]}
+              onPress={() => setQuery('')}
+              accessibilityRole="button"
+              accessibilityLabel={`Searching ${query.trim()}. Clear search`}
+              testID="discover-mini-search"
+            >
+              <Search size={12} color={c.onAccent} strokeWidth={3} />
+              <Text style={[styles.miniTagText, styles.miniSearchText]} numberOfLines={1}>
+                {query.trim()}
+              </Text>
+              <X size={12} color={c.onAccent} strokeWidth={3} />
+            </TouchableOpacity>
+          ) : null}
           {miniTags.map(({ tag, clear }) => (
             <TouchableOpacity
               key={tag}
@@ -581,13 +600,13 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       )}
       <TouchableOpacity
         style={styles.miniMap}
-        onPress={onOpenMap}
+        onPress={openMapFromBar}
         accessibilityRole="button"
-        accessibilityLabel={`Map, ${matchCount} ${matchCount === 1 ? 'Point' : 'Points'}`}
+        accessibilityLabel={`Map, ${mapCount} ${mapCount === 1 ? 'Point' : 'Points'}`}
         testID="discover-mini-map"
       >
         <MapIcon size={15} color={c.onAccent} strokeWidth={2.5} />
-        <Text style={styles.miniMapText}>Map ({matchCount > 999 ? '999+' : matchCount})</Text>
+        <Text style={styles.miniMapText}>Map ({mapCount > 999 ? '999+' : mapCount})</Text>
       </TouchableOpacity>
     </Animated.View>
     </View>
@@ -990,6 +1009,8 @@ const createStyles = (c: ThemeColors) =>
       backgroundColor: c.surface,
     },
     miniTagText: { color: c.accent, fontSize: 11, fontWeight: '800' },
+    miniSearch: { backgroundColor: c.accent, maxWidth: 150 },
+    miniSearchText: { color: c.onAccent, flexShrink: 1 },
     miniMap: {
       flexDirection: 'row',
       alignItems: 'center',
