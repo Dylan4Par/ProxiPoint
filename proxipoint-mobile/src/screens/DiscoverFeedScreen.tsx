@@ -271,15 +271,15 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const mapCount = searching ? results.length : matchCount;
   const openMapFromBar = () => (searching && exactTag ? onShowTagOnMap(exactTag) : onOpenMap());
   // Map (N): at the end of the filter row, and in the mini bar once that's scrolled away.
-  const mapPill = (testID: string) => (
+  const mapPill = (testID: string, compact = false) => (
     <TouchableOpacity
-      style={styles.miniMap}
+      style={[styles.miniMap, compact && styles.mapPillCompact]}
       onPress={openMapFromBar}
       accessibilityRole="button"
       accessibilityLabel={`Map, ${mapCount} ${mapCount === 1 ? 'Point' : 'Points'}`}
       testID={testID}
     >
-      <MapIcon size={15} color={c.onAccent} strokeWidth={2.5} />
+      <MapIcon size={compact ? 13 : 15} color={c.onAccent} strokeWidth={2.5} />
       <Text style={styles.miniMapText}>Map ({mapCount > 999 ? '999+' : mapCount})</Text>
     </TouchableOpacity>
   );
@@ -344,7 +344,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
       {/* The same Map (N) button as the mini bar, pinned at the end of the filter row. */}
       {React.isValidElement(filterHeader)
         ? React.cloneElement(filterHeader as React.ReactElement<{ chipRowEnd?: React.ReactNode }>, {
-            chipRowEnd: mapPill('discover-map'),
+            chipRowEnd: mapPill('discover-map', true),
           })
         : filterHeader}
 
@@ -1027,6 +1027,9 @@ const createStyles = (c: ThemeColors) =>
       backgroundColor: c.accent,
     },
     miniMapText: { color: c.onAccent, fontSize: 12, fontWeight: '800' },
+    // In the filter row: as tall as the chips, with less padding, so Filter, the longest
+    // distance ("Any distance") and Live Now fit beside it. Same text size.
+    mapPillCompact: { height: 32, paddingHorizontal: 8, gap: 4, borderRadius: 16 },
     content: { paddingHorizontal: 16, paddingBottom: 28 },
     header: {
       flexDirection: 'row',

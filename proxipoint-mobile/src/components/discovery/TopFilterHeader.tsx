@@ -333,7 +333,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         ref={chipScroll}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tagScrollContainer}
+        contentContainerStyle={[styles.tagScrollContainer, chipRowEnd ? styles.tagScrollBeforeEnd : null]}
         scrollEventThrottle={32}
         onScroll={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
         // The final position (onScroll is throttled and can miss the last few pixels).
@@ -1025,7 +1025,7 @@ const createStyles = (c: ThemeColors) =>
   chipArea: { position: 'relative', flexDirection: 'row', alignItems: 'flex-end' },
   lockedChips: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 16, paddingTop: 12 },
   chipScrollArea: { flex: 1, position: 'relative' },
-  chipRowEnd: { paddingTop: 12, paddingLeft: 4, paddingRight: 16 },
+  chipRowEnd: { paddingTop: 12, paddingRight: 12 },
   rangePill: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1110,6 +1110,7 @@ const createStyles = (c: ThemeColors) =>
   },
   moreArrowLeft: { left: 0, borderTopRightRadius: 16, borderBottomRightRadius: 16 },
   moreArrowRight: { right: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
+  tagScrollBeforeEnd: { paddingLeft: 6, paddingRight: 6 },
   tagScrollContainer: {
     paddingLeft: 8,
     paddingRight: 16,
