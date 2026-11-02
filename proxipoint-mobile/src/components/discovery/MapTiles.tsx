@@ -1,6 +1,5 @@
 import React, { memo, useMemo } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Image } from 'expo-image';
+import { Image, StyleSheet, View } from 'react-native';
 import { toCanvasCoordinates } from '../../stores/useDiscoveryStore';
 import { MAP_TILE_URLS } from '../../lib/mapTileUrls';
 export { wideLayersFor } from '../../lib/mapTileLayers';
@@ -106,13 +105,15 @@ function tilesFor(
   return tiles;
 }
 
-/** One tile, saved on the phone so a reopened area costs no new download. */
+/**
+ * One tile. React Native's Image keeps downloaded images on the phone (Android: its disk cache;
+ * iOS: `force-cache` uses a saved copy whenever there is one), so a reopened area mostly
+ * costs no new download.
+ */
 const TileImage = ({ uri, tile }: { uri: string; tile: Tile }) => (
   <Image
-    source={{ uri }}
-    cachePolicy="disk"
-    contentFit="fill"
-    transition={150}
+    source={{ uri, cache: 'force-cache' }}
+    fadeDuration={150}
     style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
   />
 );
