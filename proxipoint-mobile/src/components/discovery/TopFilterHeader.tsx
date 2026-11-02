@@ -283,8 +283,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         onContentSizeChange={(content) => setChipView((v) => (v.content === content ? v : { ...v, content }))}
       >
         {distanceInBar && onToggleLiveOnly ? (
-          // Discover has no "All" chip: Live Now leads the row, and tapping the active #tag again
-          // turns it off (back to everything).
+          // Discover's row: Live Now, plus the #tag filtering the page if there is one.
           <TouchableOpacity
             style={[styles.tagPill, styles.livePill, liveOnly && styles.livePillActive]}
             onPress={onToggleLiveOnly}
@@ -299,16 +298,18 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         ) : null}
         {tags.map((tag) => {
           const isAll = tag === 'All';
-          if (isAll && distanceInBar) return null;
           // "All" means no filters at all, so it isn't highlighted while Live Now is on.
           const isActive = selectedTag === tag && !(isAll && liveOnly);
+          // Discover shows no #tag list (or All): only a #tag already filtering the page, with ×
+          // to clear it, so a filter never hides out of sight.
+          if (distanceInBar && (isAll || !isActive)) return null;
           const pill = (
             <TouchableOpacity
               key={tag}
               style={[styles.tagPill, isActive && styles.tagPillActive]}
               onPress={() => {
                 if (distanceInBar && isActive) {
-                  setSelectedTag('All'); // no All chip on Discover: tap the active #tag to clear it
+                  setSelectedTag('All'); // Discover: the × on the active #tag clears it
                   return;
                 }
                 setSelectedTag(tag);
@@ -318,6 +319,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             >
               <Text style={[styles.tagText, isActive && styles.tagTextActive]}>
                 {tag}
+                {distanceInBar ? '  ×' : ''}
               </Text>
             </TouchableOpacity>
           );
