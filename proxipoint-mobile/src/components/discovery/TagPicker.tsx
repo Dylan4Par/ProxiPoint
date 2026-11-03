@@ -31,6 +31,8 @@ export const TagPicker: React.FC<{
   placeholder?: string;
   /** false: no starter / usual tags before typing (matches still show while you type). */
   suggestUpfront?: boolean;
+  /** A white input box (forms whose other fields are boxes, e.g. New channel). */
+  boxed?: boolean;
   testID?: string;
 }> = ({
   value,
@@ -41,6 +43,7 @@ export const TagPicker: React.FC<{
   label = 'Tags',
   placeholder = 'Find a tag',
   suggestUpfront = true,
+  boxed = false,
   testID = 'drop-tags',
 }) => {
   const styles = useThemedStyles(createStyles);
@@ -94,7 +97,7 @@ export const TagPicker: React.FC<{
 
   return (
     <View testID={testID}>
-      <View style={styles.row}>
+      <View style={[styles.row, boxed && styles.rowBoxed]}>
         {label ? <Text style={styles.label}>{label}</Text> : null}
         <View style={styles.chips}>
           {full ? (
@@ -168,6 +171,17 @@ export const TagPicker: React.FC<{
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
     row: { flexDirection: 'row', alignItems: 'flex-start', paddingVertical: 4 },
+    // Same look as the form's other fields: white, rounded, with a border.
+    rowBoxed: {
+      backgroundColor: c.surface,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: c.border,
+      paddingHorizontal: 14,
+      paddingVertical: 9,
+      minHeight: 48,
+      alignItems: 'center',
+    },
     label: { width: 60, color: c.textMuted, fontSize: 12, fontWeight: '600', lineHeight: 30 },
     chips: { flex: 1, flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
     chip: {

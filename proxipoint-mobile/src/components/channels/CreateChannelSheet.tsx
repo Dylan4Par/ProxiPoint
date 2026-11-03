@@ -129,6 +129,7 @@ export const CreateChannelSheet: React.FC<{
             mine={[]}
             limit={CHANNEL_TAG_LIMIT}
             label={null}
+            boxed
             testID="create-channel-tags"
           />
           <Text style={tried && errors.tags ? styles.error : styles.hint}>
