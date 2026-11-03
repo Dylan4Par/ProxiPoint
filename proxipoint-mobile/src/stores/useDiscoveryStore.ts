@@ -168,6 +168,8 @@ export interface DiscoveryState {
   activeTab: 'Nearby' | 'RSVPd';
   selectedTag: string;
   tags: string[];
+  /** Explore Map chips that are showing but not filtering (tap the chip to turn it back on). */
+  offTags: string[];
   previewGeofence: PreviewGeofence | null;
   /** Events loaded from the backend (GET /api/v1/events): 'off' when EXPO_PUBLIC_EVENTS_URL isn't set. */
   remoteEvents: RemoteEventsState;
@@ -183,8 +185,15 @@ export interface DiscoveryState {
   setActiveTab: (tab: 'Nearby' | 'RSVPd') => void;
   setSelectedTag: (tag: string) => void;
   setPreviewGeofence: (preview: PreviewGeofence | null) => void;
+  /** Adds a #tag chip (or turns an existing one back on): it filters Explore Map. */
   addTag: (tag: string) => void;
   removeTag: (tag: string) => void;
+  /** Explore Map: tap a #tag chip to turn its filter on or off (the chip stays). */
+  toggleChipTag: (tag: string) => void;
+  /** Explore Map's "All": every #tag chip off (none filtering). */
+  setAllChipsOff: () => void;
+  /** Explore Map filtered to just this #tag (adds its chip; the others turn off). */
+  soloChipTag: (tag: string) => void;
   toggleRsvp: (id: string) => void;
   /** "I'm here" at a live Point, or take it back. Server side: PUT/DELETE /points/:id/here. */
   toggleHere: (id: string) => void;
@@ -263,6 +272,12 @@ const DEFAULT_SELF = { latitude: 40.061708, longitude: -105.038292 };
 
 /** Most #tags active as filter chips at once (Filter & sort → Your hashtags). */
 export const MAX_ACTIVE_TAGS = 10;
+
+/** Explore Map's #tag filters: the chips (besides All) that are turned on. */
+export function chipFilterTags(tags: string[], offTags: string[]): string[] {
+  const off = new Set(offTags.map(normalizeTag));
+  return tags.filter((tag) => tag !== 'All' && !off.has(normalizeTag(tag)));
+}
 
 interface SeedPoint {
   id: string;
@@ -751,6 +766,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   // The filter chips: 'All' plus up to MAX_ACTIVE_TAGS active #tags.
   // No #tag filters at first, so Explore Map shows everything until some are added (Filter).
   tags: ['All'],
+  offTags: [],
   previewGeofence: null,
   remoteEvents: { status: 'off', count: 0, loadedAt: null, error: null },
 
@@ -797,18 +813,55 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     // Filters only take tags from the allowed list (lib/hashtags), spelled the list's way.
     const cleanTag = canonicalTag(tag);
     if (!cleanTag) return;
+    const key = normalizeTag(cleanTag);
     set((state) => {
-      if (state.tags.some((known) => normalizeTag(known) === normalizeTag(cleanTag))) return state;
-      // At most MAX_ACTIVE_TAGS active filters (not counting 'All'); full = nothing is added.
-      if (state.tags.filter((known) => known !== 'All').length >= MAX_ACTIVE_TAGS) return state;
-      return { tags: [...state.tags, cleanTag] };
+      const offTags = state.offTags.filter((t) => normalizeTag(t) !== key);
+      // Already a chip: just make sure it's on.
+      if (state.tags.some((known) => normalizeTag(known) === key)) {
+        return offTags.length === state.offTags.length ? state : { offTags };
+      }
+      // At most MAX_ACTIVE_TAGS chips (not counting 'All'). When full, an off chip makes room;
+      // with every chip on, nothing is added.
+      let tags = state.tags;
+      if (tags.filter((known) => known !== 'All').length >= MAX_ACTIVE_TAGS) {
+        const spare = tags.find((t) => t !== 'All' && offTags.some((o) => normalizeTag(o) === normalizeTag(t)));
+        if (!spare) return state;
+        tags = tags.filter((t) => t !== spare);
+        return { tags: [...tags, cleanTag], offTags: offTags.filter((t) => normalizeTag(t) !== normalizeTag(spare)) };
+      }
+      return { tags: [...tags, cleanTag], offTags };
     });
+  },
+
+  toggleChipTag: (tag) => {
+    if (tag === 'All') return;
+    const key = normalizeTag(tag);
+    set((state) => {
+      const isOff = state.offTags.some((t) => normalizeTag(t) === key);
+      return {
+        offTags: isOff ? state.offTags.filter((t) => normalizeTag(t) !== key) : [...state.offTags, tag],
+        selectedTag: 'All',
+      };
+    });
+  },
+
+  setAllChipsOff: () =>
+    set((state) => ({ offTags: state.tags.filter((t) => t !== 'All'), selectedTag: 'All' })),
+
+  soloChipTag: (tag) => {
+    get().addTag(tag);
+    const key = normalizeTag(tag);
+    set((state) => ({
+      offTags: state.tags.filter((t) => t !== 'All' && normalizeTag(t) !== key),
+      selectedTag: 'All',
+    }));
   },
 
   removeTag: (tag) => {
     if (tag === 'All') return;
     set((state) => ({
       tags: state.tags.filter((t) => t !== tag),
+      offTags: state.offTags.filter((t) => normalizeTag(t) !== normalizeTag(tag)),
       selectedTag: state.selectedTag === tag ? 'All' : state.selectedTag,
     }));
   },

@@ -24,7 +24,7 @@ import { setExploreTagMode, useExploreTagMode } from '../../lib/exploreTagMode';
 import { formatRangeWords, searchRanges, useUnits } from '../../lib/units';
 import { bestHashtagFor, canonicalTag, searchHashtags } from '../../lib/hashtags';
 
-import { MAX_ACTIVE_TAGS, useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { MAX_ACTIVE_TAGS, chipFilterTags, useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import {
   MAX_DISCOVER_TAGS,
   addDiscoverTag,
@@ -80,6 +80,9 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const tags = useDiscoveryStore((s) => s.tags);
   const addTag = useDiscoveryStore((s) => s.addTag);
   const removeTag = useDiscoveryStore((s) => s.removeTag);
+  const offTags = useDiscoveryStore((s) => s.offTags);
+  const toggleChipTag = useDiscoveryStore((s) => s.toggleChipTag);
+  const setAllChipsOff = useDiscoveryStore((s) => s.setAllChipsOff);
 
   // Settings Modal State
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -112,10 +115,10 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const myChannelsOnly = useMyChannelsOnly();
   const rangeMeters = useMapRange();
   const followed = useFollowedTagsFilter();
-  // Explore Map's #tag filters are the chip row's tags (besides All), at most MAX_ACTIVE_TAGS;
-  // your followed #tags (Profile → Followed Tags) are offered for quick-add.
+  // Explore Map's #tag filters are the chip row's #tags that are turned on (selected chips), at
+  // most MAX_ACTIVE_TAGS; your followed #tags (Profile → Followed Tags) are offered for quick-add.
   const keyOf = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
-  const activeTags = tags.filter((tag) => tag !== 'All');
+  const activeTags = chipFilterTags(tags, offTags);
   const activeKeys = new Set(activeTags.map(keyOf));
   const followedList = followed.tags.map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
   const [limitNote, setLimitNote] = useState(false);
@@ -127,7 +130,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const tagFilter = useDiscoverTagFilter();
   // Sort only orders Explore Map's card list, so it lives (and counts) only in Explore's sheet.
   // The Filter badge: how many #tag filters are on (Discover's own, or Explore's chip tags).
-  const activeCount = distanceInBar ? tagFilter.tags.length : tags.filter((tag) => tag !== 'All').length;
+  const activeCount = distanceInBar ? tagFilter.tags.length : activeTags.length;
   // Discover's distance button and menu, in words: "15 miles", "Within 1 mile", "Any distance".
   const rangeLabel = formatRangeWords(rangeMeters, units);
   // Distance dropdown, opened under its button.
@@ -166,9 +169,9 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           return true;
         },
         remove: (tag: string) => removeTag(activeTagFor(tag)),
+        // Clear All = the chips' "All": every #tag chip turns off (they stay in the row).
         clear: () => {
-          activeTags.forEach((tag) => removeTag(tag));
-          setSelectedTag('All');
+          setAllChipsOff();
           setExploreTagMode('any');
         },
       };
@@ -207,7 +210,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         )
       : countFeed(nodes as never, Date.now(), (node) =>
           matchesDiscoverFilters(node, {
-            selectedTag,
+            selectedTag: null,
             liveOnly,
             activeTab,
             myChannelsOnly,
@@ -364,7 +367,12 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         {tags.map((tag) => {
           const isAll = tag === 'All';
           // "All" means no filters at all, so it isn't highlighted while Live Now is on.
-          const isActive = selectedTag === tag && !(isAll && liveOnly);
+          // Explore Map: each #tag chip is selected while it's filtering; All while none are.
+          const isActive = distanceInBar
+            ? selectedTag === tag && !(isAll && liveOnly)
+            : isAll
+              ? !activeTags.length && !liveOnly
+              : activeKeys.has(keyOf(tag));
           // Discover shows no #tag list (or All): only a #tag already filtering the page, with ×
           // to clear it, so a filter never hides out of sight.
           if (distanceInBar && (isAll || !isActive)) return null;
@@ -377,7 +385,9 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   setSelectedTag('All'); // Discover: the × on the active #tag clears it
                   return;
                 }
-                setSelectedTag(tag);
+                if (distanceInBar) setSelectedTag(tag);
+                else if (isAll) setAllChipsOff();
+                else toggleChipTag(tag);
                 if (isAll && liveOnly) onToggleLiveOnly?.();
               }}
               accessibilityState={{ selected: isActive }}

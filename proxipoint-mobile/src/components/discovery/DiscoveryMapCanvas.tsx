@@ -11,7 +11,7 @@ import {
   PanResponder,
   AccessibilityInfo,
 } from 'react-native';
-import { toCanvasCoordinates, useDiscoveryStore, type DiscoveryNode } from '../../stores/useDiscoveryStore';
+import { chipFilterTags, toCanvasCoordinates, useDiscoveryStore, type DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { matchesDiscoverFilters, useFollowedTagsFilter, useMyChannelsOnly } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
@@ -179,7 +179,6 @@ export const DiscoveryMapCanvas: React.FC<{
   const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
   const setViewportBounds = useDiscoveryStore((s) => s.setViewportBounds);
 
-  const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   const activeTab = useDiscoveryStore((s) => s.activeTab);
   const selfCoordinates = useDiscoveryStore((s) => s.selfCoordinates);
   const viewPlace = useDiscoveryStore((s) => s.viewPlace);
@@ -200,9 +199,12 @@ export const DiscoveryMapCanvas: React.FC<{
   // Explore Map has no distance filter (the map shows what's around), only its #tag filters:
   // the chip row's tags, matched Any / All (Filter menu).
   const rangeMeters = null;
+  // the chip row's #tags that are turned on, matched Any / All (Filter menu). Explore ignores
+  // Discover's single-#tag filter (selectedTag).
   const chipTags = useDiscoveryStore((s) => s.tags);
+  const offTags = useDiscoveryStore((s) => s.offTags);
   const exploreMode = useExploreTagMode();
-  const tagFilter = useMemo(() => ({ tags: chipTags.filter((t) => t !== 'All'), mode: exploreMode }), [chipTags, exploreMode]);
+  const tagFilter = useMemo(() => ({ tags: chipFilterTags(chipTags, offTags), mode: exploreMode }), [chipTags, offTags, exploreMode]);
   const followed = useFollowedTagsFilter(); // Filter & sort → Show only → Include my Followed Tags
   useChannels(); // re-filter when you join or leave a channel
   // Boosted pins are drawn last so they sit on top of nearby pins.
@@ -210,7 +212,7 @@ export const DiscoveryMapCanvas: React.FC<{
     .filter(
       (node) =>
         node.id === showAlwaysId ||
-        matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter }),
+        matchesDiscoverFilters(node, { selectedTag: null, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter }),
     )
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
 
@@ -231,12 +233,13 @@ export const DiscoveryMapCanvas: React.FC<{
           .filter((post) => isPinLive(post, boostClock))
           .filter((post) => postMatchesMapFilter(post, postFilter, boostClock))
           .filter((post) => channelsById.get(post.channelId)?.followed === true)
-          .filter(
-            (post) =>
-              !selectedTag ||
-              selectedTag === 'All' ||
-              (channelsById.get(post.channelId)?.tags ?? []).some((tag) => tagKey(tag) === tagKey(selectedTag)),
-          )
+          .filter((post) => {
+            // The #tag filters, matched against the post's channel tags (Any / All).
+            if (!tagFilter.tags.length) return true;
+            const channelKeys = new Set((channelsById.get(post.channelId)?.tags ?? []).map(tagKey));
+            const hit = (tag: string) => channelKeys.has(tagKey(tag));
+            return tagFilter.mode === 'all' ? tagFilter.tags.every(hit) : tagFilter.tags.some(hit);
+          })
           .map((post) => ({ post, point: nodesById.get(post.place?.pointId ?? '') }))
           // Only while its Point is on the map (same filters as the Points).
           .filter((entry): entry is { post: ChannelPost; point: DiscoveryNode } => Boolean(entry.point))

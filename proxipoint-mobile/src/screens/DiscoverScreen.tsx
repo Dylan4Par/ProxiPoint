@@ -130,7 +130,7 @@ export const DiscoverScreen: React.FC = () => {
   const setViewPlace = useDiscoveryStore((state) => state.setViewPlace);
   const setSelfCoordinates = useDiscoveryStore((state) => state.setSelfCoordinates);
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
-  const addTag = useDiscoveryStore((state) => state.addTag);
+  const soloChipTag = useDiscoveryStore((state) => state.soloChipTag);
   const setSelectedTag = useDiscoveryStore((state) => state.setSelectedTag);
   // Public profile of a host, opened from "Hosted by @x" on the detail sheet.
   const [hostHandle, setHostHandle] = useState<string | null>(null);
@@ -424,12 +424,8 @@ export const DiscoverScreen: React.FC = () => {
 
   // Explore Map filtered to one #tag (from Discover search or Channels alerts).
   const showTagOnMap = (tag: string) => {
-    // Make sure the chip exists in the header, then filter by it.
-    addTag(tag);
-    const known = useDiscoveryStore.getState().tags.find(
-      (t: string) => t.replace(/^#+/, '').toLowerCase() === tag.replace(/^#+/, '').toLowerCase(),
-    );
-    setSelectedTag(known ?? tag);
+    // Its chip on (added if needed), the other #tag chips off.
+    soloChipTag(tag);
     setLiveOnly(false);
     goTo('map');
   };
