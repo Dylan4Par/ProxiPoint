@@ -59,6 +59,9 @@ import type { PointRecap } from '../lib/pointRecap';
 import type { DroppedPoint } from '../lib/droppedPoint';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 import { isMapStyle, setMapStyle } from '../lib/mapStyle';
+import { VenueHubScreen, type VenueTarget } from './VenueHubScreen';
+import { usePlaceIndex } from '../components/channels/PlacePicker';
+import { venueInfo } from '../lib/venues';
 
 /** Where the Distance units setting is saved on the phone. */
 const UNITS_KEY = 'pp.settings.units.v1';
@@ -138,6 +141,16 @@ export const DiscoverScreen: React.FC = () => {
   const setSelectedTag = useDiscoveryStore((state) => state.setSelectedTag);
   // Public profile of a host, opened from "Hosted by @x" on the detail sheet.
   const [hostHandle, setHostHandle] = useState<string | null>(null);
+  // A venue's hub (from an event's venue, Discover search, or a place in Channels).
+  const [venueTarget, setVenueTarget] = useState<VenueTarget | null>(null);
+  useEffect(() => {
+    if (!venueTarget) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setVenueTarget(null);
+      return true;
+    });
+    return () => sub.remove();
+  }, [venueTarget]);
   const detailNode = detailId
     ? (Object.values(discoverNodes || {}) as Array<{ id: string }>).find((node) => node.id === detailId) ?? null
     : null;
@@ -165,6 +178,7 @@ export const DiscoverScreen: React.FC = () => {
   // From a host profile, the feed or a channel: show that Point on Explore Map with its details open.
   const openHostPoint = (id: string) => {
     setHostHandle(null);
+    setVenueTarget(null);
     setTab('map');
     setSelectedNodeId(id);
     setDetailId(id);
@@ -442,9 +456,19 @@ export const DiscoverScreen: React.FC = () => {
     setDropPrefill(null);
   };
 
+  const placeIndex = usePlaceIndex();
+  /** Opens a place's venue hub; false for blocks and intersections (they keep their Channels page). */
+  const openVenueForPlace = (id: string): boolean => {
+    const place = placeIndex.find((p) => p.id === id);
+    if (!place || !venueInfo(place).claimable) return false;
+    setVenueTarget({ placeId: place.id, name: place.name, latitude: place.latitude, longitude: place.longitude, venueId: place.venueId });
+    return true;
+  };
+
   const goTo = (next: ScreenTab) => {
     setDetailId(null);
     setHostHandle(null);
+    setVenueTarget(null);
     setOverlay(null);
     setDropOpen(false);
     setDropPrefill(null);
@@ -662,6 +686,8 @@ export const DiscoverScreen: React.FC = () => {
             setPostId(id);
           }}
           onOpenPlace={(id) => {
+            // Venues and public spaces open their hub; blocks and intersections their Channels page.
+            if (openVenueForPlace(id)) return;
             goTo('channels');
             setPlaceId(id);
           }}
@@ -746,6 +772,7 @@ export const DiscoverScreen: React.FC = () => {
               setDetailTopKey((k) => k + 1);
             }}
             onOpenHost={setHostHandle}
+            onOpenVenue={setVenueTarget}
           />
         </>
       ) : null}
@@ -798,6 +825,7 @@ export const DiscoverScreen: React.FC = () => {
           }}
           placeId={placeId}
           onOpenPlace={(id) => {
+            if (id && openVenueForPlace(id)) return;
             setPlaceId(id);
             // A place opened from a post page replaces it (Back then goes to where the post was opened from).
             if (id) {
@@ -1037,6 +1065,27 @@ export const DiscoverScreen: React.FC = () => {
           // From their Contributions: the post in Channels (closes the profile).
           onOpenPost={(id) => {
             setHostHandle(null);
+            goTo('channels');
+            setPostId(id);
+          }}
+        />
+      ) : null}
+
+      {venueTarget ? (
+        <VenueHubScreen
+          key={`${venueTarget.placeId ?? ''}|${venueTarget.name}`}
+          target={venueTarget}
+          myLocation={selfCoordinates}
+          onBack={() => setVenueTarget(null)}
+          onOpenPoint={openHostPoint}
+          onToggleRsvp={(id) => toggleRsvp(id)}
+          onShowOnMap={(spot) => {
+            setVenueTarget(null);
+            goTo('map');
+            setMapFocus({ ...spot, key: Date.now() });
+          }}
+          onOpenPost={(id) => {
+            setVenueTarget(null);
             goTo('channels');
             setPostId(id);
           }}
