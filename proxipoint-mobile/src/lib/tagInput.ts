@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { displayForSlug, isUsableCustomSlug, slugForTag } from './tagSlug';
 import { parseBeaconTags } from './beaconDraft';
 import { canonicalTag } from './hashtags';
 
@@ -189,6 +190,20 @@ export function addTag(value: string, tag: string, limit = DROP_TAG_LIMIT): stri
   if (!clean || current.length >= limit || current.some((t) => t.toLowerCase() === clean.toLowerCase())) {
     return tagsToInput(current);
   }
+  return tagsToInput([...current, clean]);
+}
+
+/**
+ * Adds someone's own tag (not on the list) as #CapitalizedWords ("acoustic-brunch" ->
+ * #AcousticBrunch). Ignored unless it's a valid, clean slug; listed tags go through addTag.
+ */
+export function addCustomTag(value: string, tag: string, limit = DROP_TAG_LIMIT): string {
+  if (canonicalTag(tag)) return addTag(value, tag, limit);
+  const slug = slugForTag(tag);
+  const current = selectedTags(value);
+  if (!isUsableCustomSlug(slug) || current.length >= limit) return tagsToInput(current);
+  const clean = cleanTagWord(displayForSlug(slug));
+  if (current.some((t) => t.toLowerCase() === clean.toLowerCase())) return tagsToInput(current);
   return tagsToInput([...current, clean]);
 }
 
