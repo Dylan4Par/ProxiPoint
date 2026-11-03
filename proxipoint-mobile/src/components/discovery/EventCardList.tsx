@@ -11,7 +11,7 @@ import {
   PanResponder,
 } from 'react-native';
 import { tourTarget } from '../tour/tourTargets';
-import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
+import { chipFilterTags, useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { PointCard } from './PointCard';
 import { DEFAULT_POINT_SORT, sortPoints } from '../../lib/pointSort';
 import { useChannels } from '../../lib/channels';
@@ -67,7 +67,6 @@ export const EventCardList: React.FC<{
   const viewPlace = useDiscoveryStore((s) => s.viewPlace);
   const setSelectedNodeId = useDiscoveryStore((s) => s.setSelectedNodeId);
 
-  const selectedTag = useDiscoveryStore((s) => s.selectedTag);
   const activeTab = useDiscoveryStore((s) => s.activeTab);
   useModeration(); // re-filter when you report or block someone
   const boostClock = useBoosts(); // re-render when a boost starts or runs out
@@ -76,9 +75,12 @@ export const EventCardList: React.FC<{
   // Explore Map has no distance filter (the map shows what's around), only its #tag filters:
   // the chip row's tags, matched Any / All (Filter menu).
   const rangeMeters = null;
+  // the chip row's #tags that are turned on, matched Any / All (Filter menu). Explore ignores
+  // Discover's single-#tag filter (selectedTag).
   const chipTags = useDiscoveryStore((s) => s.tags);
+  const offTags = useDiscoveryStore((s) => s.offTags);
   const exploreMode = useExploreTagMode();
-  const tagFilter = useMemo(() => ({ tags: chipTags.filter((t) => t !== 'All'), mode: exploreMode }), [chipTags, exploreMode]);
+  const tagFilter = useMemo(() => ({ tags: chipFilterTags(chipTags, offTags), mode: exploreMode }), [chipTags, offTags, exploreMode]);
   const followed = useFollowedTagsFilter(); // Filter & sort → Show only → Include my Followed Tags
   useChannels(); // re-filter when you join or leave a channel
   const sort = DEFAULT_POINT_SORT; // Explore Map lists nearest first (no Sort menu)
@@ -92,7 +94,7 @@ export const EventCardList: React.FC<{
     ? (Object.values(allNodes || {}) as DiscoveryNode[]).sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0))
     : getVisibleNodes();
   const visibleNodes = sortPoints(
-    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter })),
+    source.filter((node) => matchesDiscoverFilters(node, { selectedTag: null, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter })),
     sort,
   )
     .map((node, index) => ({ node, index, boosted: isBoosted(node.id, boostClock) }))
@@ -346,7 +348,7 @@ export const EventCardList: React.FC<{
                 </Text>
                 <Text numberOfLines={1} style={styles.collapsedTitle}>
                   {shownNodes.length} {shownNodes.length === 1 ? 'Point' : 'Points'}
-                  {selectedTag && selectedTag !== 'All' ? ` · ${selectedTag}` : ''}
+                  {tagFilter.tags.length === 1 ? ` · ${tagFilter.tags[0]}` : tagFilter.tags.length > 1 ? ` · ${tagFilter.tags.length} #tags` : ''}
                   {liveOnly ? ' · Live now' : ''}
                 </Text>
               </>
