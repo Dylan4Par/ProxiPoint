@@ -11,6 +11,7 @@ import {
   PanResponder,
   AccessibilityInfo,
 } from 'react-native';
+import { resolveMapMode, useMapStyle } from '../../lib/mapStyle';
 import { chipFilterTags, toCanvasCoordinates, useDiscoveryStore, type DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { matchesDiscoverFilters, useFollowedTagsFilter, useMyChannelsOnly } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
@@ -172,7 +173,9 @@ export const DiscoveryMapCanvas: React.FC<{
   onSearchArea,
   onReturnHome,
 }) => {
-  const { colors: c, mode } = useTheme();
+  const { colors: c, mode: appMode } = useTheme();
+  // Settings → Default map style: Match app, Light or Dark tiles.
+  const mode = resolveMapMode(useMapStyle(), appMode);
   const styles = useThemedStyles(createStyles);
   const nodes = useDiscoveryStore((s) => s.nodes);
   const selectedNodeId = useDiscoveryStore((s) => s.selectedNodeId);

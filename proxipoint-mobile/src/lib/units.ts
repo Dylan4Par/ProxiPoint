@@ -92,6 +92,15 @@ export function searchRanges(units: DistanceUnits): Array<{ label: string; meter
   return [...meters.map((m) => ({ label: formatRadiusIn(m, units), meters: m as number | null })), { label: 'Any', meters: null }];
 }
 
+/** The searchRanges choice closest to `meters` in these units (null = any distance stays null). */
+export function nearestReach(meters: number | null, units: DistanceUnits): number | null {
+  if (meters == null) return null;
+  const choices = searchRanges(units)
+    .map((option) => option.meters)
+    .filter((m): m is number => m != null);
+  return choices.reduce((best, m) => (Math.abs(m - meters) < Math.abs(best - meters) ? m : best), choices[0]);
+}
+
 /** Default Discover range: 10 km, or about 5 miles. */
 export function defaultRangeMeters(units: DistanceUnits): number {
   return units === 'imperial' ? Math.round(5 * METERS_PER_MILE) : 10000;

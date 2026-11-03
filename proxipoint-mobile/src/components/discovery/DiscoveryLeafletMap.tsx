@@ -3,6 +3,7 @@ import { Platform, StyleSheet, View } from 'react-native';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme } from '../../theme/ThemeContext';
+import { resolveMapMode, useMapStyle } from '../../lib/mapStyle';
 import {
   MAP_BACKGROUND,
   buildDiscoveryMapDocument,
@@ -102,8 +103,10 @@ export const DiscoveryLeafletMap: React.FC<DiscoveryLeafletMapProps> = ({
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const startLatitude = center?.latitude ?? selfCoordinates.latitude;
   const startLongitude = center?.longitude ?? selfCoordinates.longitude;
-  // Day/night map style; switching themes reloads the map page.
-  const { mode } = useTheme();
+  // Day/night map style (Settings → Default map style; Match app follows the theme); switching
+  // reloads the map page.
+  const { mode: appMode } = useTheme();
+  const mode = resolveMapMode(useMapStyle(), appMode);
   const background = MAP_BACKGROUND[mode];
   const html = useMemo(
     () =>

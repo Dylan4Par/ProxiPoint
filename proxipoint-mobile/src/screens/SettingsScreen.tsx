@@ -22,6 +22,7 @@ import {
   ChevronRight,
   CreditCard,
   HelpCircle,
+  Home,
   LifeBuoy,
   LogOut,
   Mail,
@@ -31,6 +32,8 @@ import {
   Plus,
   Shield,
   SlidersHorizontal,
+  Trash2,
+  UserX,
   type LucideIcon,
 } from 'lucide-react-native';
 import { profileInitial, type MyProfile, type MySettings } from '../lib/myProfile';
@@ -44,6 +47,12 @@ import { CallSignMark } from '../components/brand/CallSignMark';
 import { LegalDocModal } from '../components/auth/LegalDocModal';
 import type { LegalDocId } from '../lib/legal';
 import { useAuthStore } from '../stores/useAuthStore';
+import { CityPickerSheet } from '../components/discovery/CityPicker';
+import { cityLabel, type CityPlace } from '../lib/places';
+import { formatRangeWords, nearestReach, searchRanges } from '../lib/units';
+import { MAP_STYLE_OPTIONS } from '../lib/mapStyle';
+import { AuthError } from '../services/authApi';
+import { authErrorMessage } from '../lib/authForm';
 
 /**
  * Fills the parent edge to edge. Written out by hand because StyleSheet.absoluteFillObject
@@ -66,6 +75,9 @@ interface SettingsScreenProps {
   initialSection?: SectionId | null;
   /** Help → App guide: closes Settings and runs the Explore Map tour again. */
   onReplayTour?: () => void;
+  /** App settings → Default home area: the app's default area's name, while no home city is set. */
+  defaultAreaLabel?: string;
+  onChangeHomeCity?: (city: CityPlace) => void;
 }
 
 const ROWS: Array<{ id: SectionId; label: string; Icon: LucideIcon }> = [
@@ -106,6 +118,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onChangeSettings,
   initialSection = null,
   onReplayTour,
+  defaultAreaLabel = 'Default area',
+  onChangeHomeCity,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -181,17 +195,59 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               {isOpen ? (
                 <View style={styles.panel}>
                   {id === 'edit' ? (
-                    <EditProfile
-                      profile={profile}
-                      onSave={(next) => {
-                        onSaveProfile(next);
-                        toggle('edit');
-                      }}
-                    />
+                    <>
+                      <EditProfile
+                        profile={profile}
+                        onSave={(next) => {
+                          onSaveProfile(next);
+                          toggle('edit');
+                        }}
+                      />
+                      <View style={styles.subDivider} />
+                      <ContactDetails settings={settings} onChange={onChangeSettings} />
+                    </>
                   ) : null}
                   {id === 'app' ? (
                     <>
                       <AppearancePicker />
+                      {onChangeHomeCity ? (
+                        <DefaultHomeArea
+                          homeCity={profile.homeCity}
+                          defaultAreaLabel={defaultAreaLabel}
+                          trackLocation={profile.trackLocation}
+                          onChange={onChangeHomeCity}
+                        />
+                      ) : null}
+                      <ReachPicker
+                        units={settings.units}
+                        value={settings.defaultReachMeters}
+                        onChange={(meters) => set('defaultReachMeters', meters)}
+                      />
+                      <View style={{ gap: 6 }} testID="settings-map-style">
+                        <Text style={styles.toggleLabel}>Default map style</Text>
+                        <View style={styles.segment}>
+                          {MAP_STYLE_OPTIONS.map((option) => {
+                            const selected = settings.mapStyle === option.id;
+                            return (
+                              <TouchableOpacity
+                                key={option.id}
+                                style={[styles.segmentItem, selected && styles.segmentSelected]}
+                                onPress={() => set('mapStyle', option.id)}
+                                accessibilityRole="button"
+                                accessibilityState={{ selected }}
+                                testID={`settings-map-style-${option.id}`}
+                              >
+                                <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>{option.label}</Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                        <Text style={styles.note}>
+                          {settings.mapStyle === 'auto'
+                            ? 'The map follows Appearance: light or dark with the rest of the app.'
+                            : `The map stays ${settings.mapStyle}, whatever the app’s Appearance.`}
+                        </Text>
+                      </View>
                       <ToggleRow
                         label="Notifications"
                         hint="RSVPs, invites and changes to Points you’re going to."
@@ -206,7 +262,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                             <TouchableOpacity
                               key={unit}
                               style={[styles.segmentItem, selected && styles.segmentSelected]}
-                              onPress={() => set('units', unit)}
+                              onPress={() =>
+                                // The default reach moves to the nearest choice in the new units.
+                                onChangeSettings({
+                                  ...settings,
+                                  units: unit,
+                                  defaultReachMeters: nearestReach(settings.defaultReachMeters, unit),
+                                })
+                              }
                               accessibilityRole="button"
                               accessibilityState={{ selected }}
                             >
@@ -234,9 +297,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         value={settings.findableByHandle}
                         onChange={(value) => set('findableByHandle', value)}
                       />
-                      <ContactDetails settings={settings} onChange={onChangeSettings} />
                       <PhotoRulesRow />
                       <BlockedPeople />
+                      <AccountActions />
                     </>
                   ) : null}
                   {id === 'plans' ? (
@@ -326,7 +389,200 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   );
 };
 
-/** Settings → Privacy → Contact: what the Contact button on your public profile shares. */
+/** Settings → App settings → Default home area: where Discover opens when it isn't following you. */
+const DefaultHomeArea: React.FC<{
+  homeCity: CityPlace | null;
+  defaultAreaLabel: string;
+  trackLocation: boolean;
+  onChange: (city: CityPlace) => void;
+}> = ({ homeCity, defaultAreaLabel, trackLocation, onChange }) => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const [picking, setPicking] = useState(false);
+  return (
+    <>
+      <TouchableOpacity
+        style={styles.toggleRow}
+        onPress={() => setPicking(true)}
+        accessibilityRole="button"
+        accessibilityLabel={`Default home area: ${homeCity ? cityLabel(homeCity) : defaultAreaLabel}. Change`}
+        testID="settings-home-area"
+      >
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.toggleLabel}>Default home area</Text>
+          <Text style={styles.valueText} numberOfLines={1}>
+            {homeCity ? cityLabel(homeCity) : `${defaultAreaLabel} (default)`}
+          </Text>
+          <Text style={styles.note}>
+            {trackLocation
+              ? 'Discover follows your location; it opens here when Follow my location is off (Profile).'
+              : 'Where Discover and Explore Map open.'}
+          </Text>
+        </View>
+        <Home size={18} color={c.accent} strokeWidth={2.25} />
+      </TouchableOpacity>
+      <CityPickerSheet
+        visible={picking}
+        title="Default home area"
+        onClose={() => setPicking(false)}
+        onPick={(place) => {
+          setPicking(false);
+          onChange(place);
+        }}
+      />
+    </>
+  );
+};
+
+/** Settings → App settings → Default radar reach: Discover's distance when the app opens. */
+const ReachPicker: React.FC<{
+  units: MySettings['units'];
+  value: number | null;
+  onChange: (meters: number | null) => void;
+}> = ({ units, value, onChange }) => {
+  const styles = useThemedStyles(createStyles);
+  const options = searchRanges(units);
+  return (
+    <View style={{ gap: 6 }} testID="settings-reach">
+      <Text style={styles.toggleLabel}>Default radar reach</Text>
+      <View style={styles.choiceWrap}>
+        {options.map((option) => {
+          const selected = option.meters === value;
+          return (
+            <TouchableOpacity
+              key={option.label}
+              style={[styles.choiceChip, selected && styles.segmentSelected]}
+              onPress={() => onChange(option.meters)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              testID={`settings-reach-${option.meters ?? 'any'}`}
+            >
+              <Text style={[styles.segmentText, selected && styles.segmentTextSelected]}>
+                {option.meters == null ? 'Any distance' : formatRangeWords(option.meters, units)}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+      <Text style={styles.note}>How far Discover looks when the app opens. Change it any time from Discover’s distance button.</Text>
+    </View>
+  );
+};
+
+/** Settings → Privacy → Disable account / Delete account. */
+const AccountActions: React.FC = () => {
+  const styles = useThemedStyles(createStyles);
+  const { colors: c } = useTheme();
+  const disableAccount = useAuthStore((s) => s.disableAccount);
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const [deleting, setDeleting] = useState(false);
+  const [password, setPassword] = useState('');
+  const [typed, setTyped] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const failed = (e: unknown) => {
+    setBusy(false);
+    setError(e instanceof AuthError ? authErrorMessage(e.code) : 'Something went wrong. Try again.');
+  };
+  const confirmDisable = () =>
+    Alert.alert(
+      'Disable your account?',
+      'Your profile, Points, posts and comments are hidden and nobody can find or invite you. Sign back in any time to turn it back on.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Disable',
+          style: 'destructive',
+          onPress: () => {
+            setBusy(true);
+            setError('');
+            disableAccount().catch(failed);
+          },
+        },
+      ],
+    );
+  const canDelete = typed.trim().toUpperCase() === 'DELETE' && password.length > 0 && !busy;
+  const runDelete = () => {
+    if (!canDelete) return;
+    setBusy(true);
+    setError('');
+    deleteAccount(password).catch(failed);
+  };
+  return (
+    <View style={styles.accountBlock} testID="settings-account-actions">
+      <Text style={styles.toggleLabel}>Account</Text>
+      <TouchableOpacity style={styles.toggleRow} onPress={confirmDisable} disabled={busy} accessibilityRole="button" testID="settings-disable-account">
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={styles.dangerLabel}>Disable account</Text>
+          <Text style={styles.note}>Hide your profile and everything you’ve posted. Signing back in turns it back on.</Text>
+        </View>
+        <UserX size={18} color={c.amber} strokeWidth={2.25} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={styles.toggleRow}
+        onPress={() => {
+          LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+          setDeleting((open) => !open);
+          setError('');
+        }}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityState={{ expanded: deleting }}
+        testID="settings-delete-account"
+      >
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text style={[styles.dangerLabel, styles.deleteLabel]}>Delete account</Text>
+          <Text style={styles.note}>Permanently remove your account, profile, Points, posts, comments and photos.</Text>
+        </View>
+        <Trash2 size={18} color={c.red} strokeWidth={2.25} />
+      </TouchableOpacity>
+      {deleting ? (
+        <View style={styles.deleteBox} testID="settings-delete-confirm">
+          <Text style={styles.note}>This can’t be undone. Your email and @handle become free for anyone to use.</Text>
+          <Text style={styles.fieldLabel}>Password</Text>
+          <TextInput
+            value={password}
+            onChangeText={(value) => {
+              setPassword(value);
+              setError('');
+            }}
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+            placeholder="Your password"
+            placeholderTextColor={c.textFaint}
+            style={styles.input}
+            testID="settings-delete-password"
+          />
+          <Text style={styles.fieldLabel}>Type DELETE to confirm</Text>
+          <TextInput
+            value={typed}
+            onChangeText={setTyped}
+            autoCapitalize="characters"
+            autoCorrect={false}
+            placeholder="DELETE"
+            placeholderTextColor={c.textFaint}
+            style={styles.input}
+            testID="settings-delete-typed"
+          />
+          <TouchableOpacity
+            style={[styles.deleteBtn, !canDelete && styles.saveBtnOff]}
+            onPress={runDelete}
+            disabled={!canDelete}
+            accessibilityRole="button"
+            accessibilityState={{ disabled: !canDelete }}
+            testID="settings-delete-go"
+          >
+            <Text style={styles.saveText}>{busy ? 'DELETING…' : 'DELETE MY ACCOUNT'}</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
+      {error ? <Text style={styles.error}>{error}</Text> : null}
+    </View>
+  );
+};
+
+/** Settings → Edit profile → Contact details: what the Contact button on your public profile shares. */
 const ContactDetails: React.FC<{ settings: MySettings; onChange: (settings: MySettings) => void }> = ({
   settings,
   onChange,
@@ -695,6 +951,22 @@ const createStyles = (c: ThemeColors) =>
   rowLabel: { flex: 1, color: c.text, fontSize: 16, fontWeight: '500' },
   panel: { paddingBottom: 18, paddingLeft: 37, gap: 10 },
   contactBlock: { gap: 8 },
+  subDivider: { height: 1, backgroundColor: c.border, marginVertical: 6 },
+  valueText: { color: c.accent, fontSize: 13, fontWeight: '700' },
+  choiceWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  choiceChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: c.border,
+    backgroundColor: c.surface,
+  },
+  accountBlock: { gap: 8, marginTop: 6, paddingTop: 12, borderTopWidth: 1, borderTopColor: c.border },
+  dangerLabel: { color: c.amber, fontSize: 14, fontWeight: '700' },
+  deleteLabel: { color: c.red },
+  deleteBox: { gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: c.red },
+  deleteBtn: { marginTop: 4, backgroundColor: c.red, borderRadius: 12, paddingVertical: 12, alignItems: 'center' },
   fieldLabel: { color: c.textMuted, fontSize: 12, fontWeight: '700', marginTop: 4 },
   note: { color: c.textMuted, fontSize: 12, lineHeight: 17 },
   cooldownNote: { color: c.accent, fontSize: 12, lineHeight: 17, fontWeight: '600' },
