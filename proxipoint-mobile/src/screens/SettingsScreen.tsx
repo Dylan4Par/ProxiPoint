@@ -19,12 +19,15 @@ import Constants from 'expo-constants';
 import { appVersionLabel } from '../lib/appVersion';
 import {
   BookOpen,
+  Camera,
   ChevronLeft,
   ChevronRight,
   CreditCard,
+  FileText,
   HelpCircle,
   Home,
   LifeBuoy,
+  Lock,
   LogOut,
   Mail,
   Minus,
@@ -35,6 +38,7 @@ import {
   SlidersHorizontal,
   Trash2,
   UserX,
+  Users,
   type LucideIcon,
 } from 'lucide-react-native';
 import { profileInitial, type MyProfile, type MySettings } from '../lib/myProfile';
@@ -304,7 +308,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         value={settings.findableByHandle}
                         onChange={(value) => set('findableByHandle', value)}
                       />
-                      <PhotoRulesRow />
                       <BlockedPeople />
                       <AccountActions />
                     </>
@@ -347,6 +350,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         body={`Email ${SUPPORT_EMAIL}. We usually reply within a couple of days.`}
                         onPress={() => void contactSupport(accountEmail)}
                         testID="settings-contact-support"
+                      />
+                      <PhotoRulesRow />
+                      <HelpRow
+                        Icon={FileText}
+                        title="Terms of Service"
+                        body="The rules for using ProxiPoint."
+                        onPress={() => setReading('terms')}
+                        testID="settings-terms"
+                      />
+                      <HelpRow
+                        Icon={Lock}
+                        title="Privacy Policy"
+                        body="What we collect, why, and the choices you have."
+                        onPress={() => setReading('privacy')}
+                        testID="settings-privacy-policy"
+                      />
+                      <HelpRow
+                        Icon={Users}
+                        title="Community Guidelines"
+                        body="What’s okay to post, and how reports work."
+                        onPress={() => setReading('guidelines')}
+                        testID="settings-guidelines"
                       />
                       <Text style={styles.versionLine} selectable testID="settings-app-version">
                         {APP_VERSION_LABEL}
@@ -769,21 +794,18 @@ const AppearancePicker: React.FC = () => {
 
 /** Link to the full photo rules, with whether you've agreed to the current version. */
 const PhotoRulesRow: React.FC = () => {
-  const styles = useThemedStyles(createStyles);
-  const { colors: c } = useTheme();
   const [policy, setPolicy] = useState(getPhotoPolicyState());
   React.useEffect(() => subscribePhotoPolicy(() => setPolicy(getPhotoPolicyState())), []);
   const agreed = policy.acceptedVersion === PHOTO_POLICY_VERSION;
+  // Settings → Help, styled like the other Help rows.
   return (
-    <TouchableOpacity style={styles.toggleRow} onPress={openPhotoPolicy} accessibilityRole="button" testID="settings-photo-rules">
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.toggleLabel}>Photo rules</Text>
-        <Text style={styles.note}>
-          {agreed ? 'You’ve agreed to the current rules.' : 'You’ll be asked to agree before your first photo.'}
-        </Text>
-      </View>
-      <ChevronRight size={18} color={c.textMuted} strokeWidth={2.25} />
-    </TouchableOpacity>
+    <HelpRow
+      Icon={Camera}
+      title="Photo rules"
+      body={agreed ? 'You’ve agreed to the current rules.' : 'You’ll be asked to agree before your first photo.'}
+      onPress={openPhotoPolicy}
+      testID="settings-photo-rules"
+    />
   );
 };
 
