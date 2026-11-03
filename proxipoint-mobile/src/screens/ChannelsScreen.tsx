@@ -314,13 +314,13 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   const posts = useVisiblePosts();
   const comments = useVisibleComments();
   const now = useBoosts();
-  const [sort, setSort] = useState<PostSort>('new');
   const commentCounts = useMemo(() => countComments(comments), [comments]);
   const joined = channels.filter((channel) => channel.joined);
   const joinedIds = new Set(joined.map((channel) => channel.id));
+  // The feed is always newest first ("Latest Posts").
   const feed = sortPosts(
     posts.filter((post) => joinedIds.has(post.channelId)),
-    sort,
+    'new',
     { now, center: myLocation, commentCounts },
   );
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
@@ -372,7 +372,9 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
         ))}
       </ScrollView>
 
-      <SortRow sort={sort} onChange={setSort} />
+      <Text style={styles.feedLabel} accessibilityRole="header">
+        Latest Posts:
+      </Text>
 
       {feed.length ? (
         <View style={styles.list}>
@@ -385,7 +387,6 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
               post={post}
               now={now}
               commentCount={commentCounts[post.id] ?? 0}
-              distanceMeters={sort === 'near' ? postDistance(post, myLocation) : null}
               channel={byId.get(post.channelId) ?? null}
               onOpenChannel={() => onOpenChannel(post.channelId)}
               onOpen={() => onOpenPost(post.id)}
@@ -2099,6 +2100,7 @@ const createStyles = (c: ThemeColors) =>
     emptyText: { color: c.textFaint, fontSize: 13, lineHeight: 19 },
 
     chipScroll: { marginHorizontal: -16, marginBottom: 12 },
+    feedLabel: { color: c.textBody, fontSize: 15, fontWeight: '800', marginTop: -2, marginBottom: 8 },
     chipRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
     channelChip: {
       flexDirection: 'row',
