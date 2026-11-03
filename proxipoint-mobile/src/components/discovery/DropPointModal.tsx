@@ -359,7 +359,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [privacyToggle, setPrivacyOn] = useState(false);
   // Private Points have no Location privacy (or invite list): the share link is the way in.
   const privacyOn = privacyToggle && visibility !== 'private';
-  const shareAfterDrop = visibility === 'private';
+  // Private and Public both open the share sheet with the Point's link once it's dropped.
+  const shareAfterDrop = visibility === 'private' || visibility === 'public';
   const [privacyRegions, setPrivacyRegions] = useState<PrivacyRegion[]>([]);
   const [privacyRegionId, setPrivacyRegionId] = useState<string | null>(null);
   const [privacySource, setPrivacySource] = useState<'server' | 'approximate'>('approximate');
@@ -2198,8 +2199,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             )}
           </View>
 
-          {/* Private: no guest list or location privacy here; the link is how people get in. */}
-          {visibility === 'private' ? (
+          {/* Private and Public: the link to share comes right after the drop. */}
+          {visibility === 'private' || visibility === 'public' ? (
             <View style={styles.privateLinkNote} testID="drop-private-link-note">
               <Link2 size={16} color={c.accent} strokeWidth={2.25} />
               <Text style={styles.privateLinkNoteText}>
