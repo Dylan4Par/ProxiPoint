@@ -1041,7 +1041,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const revealWhenCard = () => {
     setTimeout(() => {
       // ScrollView is a native view at runtime; its type just doesn't list measureInWindow.
-      const scroll = scrollRef.current as unknown as Pick<View, 'measureInWindow'> | null;
+      const scroll = scrollRef.current as unknown as (Pick<View, 'measureInWindow'> & Pick<ScrollView, 'scrollTo'>) | null;
       const card = whenCardRef.current;
       if (!scroll || !card) return;
       scroll.measureInWindow((_sx, scrollTop, _sw, scrollHeight) => {
