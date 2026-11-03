@@ -1,8 +1,10 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Plus, X } from 'lucide-react-native';
-import { DROP_TAG_LIMIT, addTag, collectKnownTags, removeTag, selectedTags } from '../../lib/tagInput';
-import { HASHTAG_LIST, bestHashtagFor, canonicalTag, searchHashtags } from '../../lib/hashtags';
+import { DROP_TAG_LIMIT, addCustomTag, addTag, collectKnownTags, removeTag, selectedTags } from '../../lib/tagInput';
+import { canonicalTag } from '../../lib/hashtags';
+import { slugForTag } from '../../lib/tagSlug';
+import { TagAutocomplete, type PickedTag, type TagAutocompleteHandle } from '../common/TagAutocomplete';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 const MAX_SUGGESTIONS = 8;
@@ -11,11 +13,11 @@ const MAX_SUGGESTIONS = 8;
 const STARTER_TAGS = ['#LiveMusic', '#FoodTrucks', '#HappyHour', '#Hiking', '#BoardGames', '#ArtWalk', '#Yoga', '#Volunteer'];
 
 /**
- * Tags as chips, picked from the allowed list (lib/hashtags): nobody can make up their own.
- * "# Find a tag" comes first and picked tags trail to its right as filled pills (tap × to remove).
- * Under them: your usual tags (one tap away), or, while typing, the listed tags that match
- * ("beer" → #CraftBeer, #HappyHour…). Return adds the best match; backspace on an empty field
- * removes the last chip. The value stays in "#A, #B" form for the form.
+ * Tags as chips. "# Find a tag" comes first and picked tags trail to its right as filled pills
+ * (tap × to remove). Before typing: your usual tags, one tap away. While typing: the hyphen-aware
+ * autocomplete (components/common/TagAutocomplete: "music" finds #live-music, with usage counts),
+ * and, with allowCustom, "Use '#…'" for a tag that isn't listed. Return adds the best match;
+ * backspace on an empty field removes the last chip. The value stays in "#A, #B" form.
  */
 export const TagPicker: React.FC<{
   value: string;
@@ -33,6 +35,8 @@ export const TagPicker: React.FC<{
   suggestUpfront?: boolean;
   /** A white input box (forms whose other fields are boxes, e.g. New channel). */
   boxed?: boolean;
+  /** Let people add a tag that isn't listed (Points); otherwise listed tags only. */
+  allowCustom?: boolean;
   testID?: string;
 }> = ({
   value,
@@ -44,12 +48,13 @@ export const TagPicker: React.FC<{
   placeholder = 'Find a tag',
   suggestUpfront = true,
   boxed = false,
+  allowCustom = false,
   testID = 'drop-tags',
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
-  const [draft, setDraft] = useState('');
-  const inputRef = useRef<TextInput>(null);
+  const [query, setQuery] = useState('');
+  const search = useRef<TagAutocompleteHandle>(null);
 
   const picked = selectedTags(value);
   const pickedKeys = new Set(picked.map((t) => t.toLowerCase()));
@@ -68,31 +73,17 @@ export const TagPicker: React.FC<{
       .map((tag) => tag.slice(1));
   }, [mine, known]);
 
-  const query = draft.trim();
-  const matches = full || !query ? [] : searchHashtags(query, { exclude: picked, limit: MAX_SUGGESTIONS });
-  const suggestions = full
-    ? []
-    : query
-      ? matches.map((entry) => entry.tag.slice(1))
-      : suggestUpfront
-        ? usual.filter((t) => !pickedKeys.has(t.toLowerCase())).slice(0, MAX_SUGGESTIONS)
-        : [];
-  const noMatch = !full && Boolean(query) && matches.length === 0;
+  // Before typing: your usual tags (the autocomplete takes over once you type).
+  const suggestions =
+    full || query || !suggestUpfront ? [] : usual.filter((t) => !pickedKeys.has(t.toLowerCase())).slice(0, MAX_SUGGESTIONS);
 
   const pick = (tag: string) => {
     const next = addTag(value, tag, limit);
     if (next !== value) onChange(next);
-    setDraft('');
   };
-
-  // Typing only searches the list (spaces are fine: "craft beer" finds #CraftBeer).
-  const onChangeText = (text: string) => setDraft(text.replace(/^#+/, '').replace(/[^A-Za-z0-9_ ]/g, ''));
-
-  // Return: the exact tag if it's on the list, otherwise the top match. Nothing new is ever made.
-  const submitDraft = () => {
-    if (!query) return;
-    const best = bestHashtagFor(query, picked);
-    if (best) pick(best);
+  const pickFromSearch = (picked: PickedTag) => {
+    const next = canonicalTag(picked.tag) ? addTag(value, picked.tag, limit) : allowCustom ? addCustomTag(value, picked.tag, limit) : value;
+    if (next !== value) onChange(next);
   };
 
   return (
@@ -104,26 +95,18 @@ export const TagPicker: React.FC<{
             <Text style={styles.fullNote}>{limit} tags max</Text>
           ) : (
             // Wide enough for the whole hint ("Find a tag (optional)" needs more than "Find a tag").
-            <View style={[styles.inputWrap, { width: Math.max(110, placeholder.length * 8 + 24) }]}>
-              <Text style={styles.hash}>#</Text>
-              <TextInput
-                ref={inputRef}
-                value={draft}
-                onChangeText={onChangeText}
-                onSubmitEditing={submitDraft}
-                onKeyPress={(e) => {
-                  if (e.nativeEvent.key === 'Backspace' && draft === '' && picked.length > 0) {
-                    onChange(removeTag(value, picked[picked.length - 1]));
-                  }
-                }}
-                blurOnSubmit={false}
-                returnKeyType="done"
+            <View style={[styles.searchWrap, { minWidth: Math.max(140, placeholder.length * 8 + 24) }]}>
+              <TagAutocomplete
+                ref={search}
+                onPick={pickFromSearch}
+                exclude={picked.map((tag) => slugForTag(tag))}
                 placeholder={placeholder}
-                placeholderTextColor={c.textFaint}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={styles.input}
-                testID={`${testID}-input`}
+                allowCreate={allowCustom}
+                onQueryChange={setQuery}
+                onBackspaceEmpty={() => {
+                  if (picked.length > 0) onChange(removeTag(value, picked[picked.length - 1]));
+                }}
+                testID={`${testID}-search`}
               />
             </View>
           )}
@@ -142,11 +125,6 @@ export const TagPicker: React.FC<{
           ))}
         </View>
       </View>
-      {noMatch ? (
-        <Text style={[styles.noMatch, !label && styles.noIndent]} testID={`${testID}-no-match`}>
-          No tag matches “{query}”. Try another word ({HASHTAG_LIST.length} tags to pick from).
-        </Text>
-      ) : null}
       {suggestions.length > 0 ? (
         <View style={[styles.suggestions, !label && styles.noIndent]} testID={`${testID}-suggestions`}>
           {suggestions.map((tag) => (
@@ -197,9 +175,7 @@ const createStyles = (c: ThemeColors) =>
       borderColor: c.accentBorder,
     },
     chipText: { color: c.accent, fontSize: 13, fontWeight: '800' },
-    inputWrap: { flexDirection: 'row', alignItems: 'center', width: 110, height: 30 },
-    hash: { color: c.textMuted, fontSize: 14, fontWeight: '700', marginRight: 2 },
-    input: { flex: 1, color: c.text, fontSize: 14, fontWeight: '600', padding: 0 },
+    searchWrap: { flexGrow: 1, flexBasis: 140 },
     fullNote: { color: c.textFaint, fontSize: 12 },
     // Wraps instead of scrolling sideways, so every suggestion stays in view.
     suggestions: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingTop: 10, paddingLeft: 60 },
@@ -215,6 +191,5 @@ const createStyles = (c: ThemeColors) =>
       backgroundColor: c.base,
     },
     suggestionText: { color: c.accentSoft, fontSize: 12, fontWeight: '700' },
-    noMatch: { color: c.textFaint, fontSize: 12, paddingTop: 8, paddingLeft: 60 },
     noIndent: { paddingLeft: 0 },
   });

@@ -3,7 +3,8 @@ import { LOCALRADAR_HANDLE, type PointSource } from '../lib/aggregated';
 import { venuePageHandle } from '../lib/hostProfiles';
 import { describeBeaconTiming, normalizeVisibility, parseBeaconTags, primaryBeaconTag, createBeaconDraft } from '../lib/beaconDraft';
 import { calculateDistanceMeters } from '../lib/locationFilter';
-import { canonicalTag, canonicalizeTags } from '../lib/hashtags';
+import { canonicalTag } from '../lib/hashtags';
+import { pointTags } from '../lib/tagSlug';
 import { mergeRemoteNodes, timingStatus } from '../lib/remoteEvents';
 // 30 more sample Points around the default area and 10 in Fort Collins.
 import { MORE_SEED_POINTS } from './seedPointsMore';
@@ -708,9 +709,9 @@ function placeLocalBeacon(
     const etaMinutes = Math.max(2, Math.round(distanceMeters / 80));
     const node: DiscoveryNode = {
       id,
-      // Listed tags only (lib/hashtags); the form already limits picks to the list.
-      tag: canonicalizeTags(parseBeaconTags(draft.tags))[0] ?? primaryBeaconTag(draft.tags),
-      tags: canonicalizeTags(parseBeaconTags(draft.tags).map(hashtag)).slice(0, 3),
+      // Listed tags in the list's spelling, plus people's own (lib/tagSlug pointTags).
+      tag: pointTags(parseBeaconTags(draft.tags))[0] ?? primaryBeaconTag(draft.tags),
+      tags: pointTags(parseBeaconTags(draft.tags).map(hashtag)).slice(0, 3),
       title: draft.title,
       description: draft.description,
       url: draft.url ?? null,
@@ -891,7 +892,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     }),
 
   syncMyPoint: (point) => {
-    const tags = canonicalizeTags(point.tags.map(hashtag)).slice(0, 3);
+    const tags = pointTags(point.tags.map(hashtag)).slice(0, 3);
     set((state) => {
       const existing = state.nodes[point.id];
       if (!existing) return {};

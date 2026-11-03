@@ -309,6 +309,7 @@ export const EditPointDetails: React.FC<EditPointDetailsProps> = ({ point, onSav
         mine={point.tags}
         known={knownBeacons}
         label={null}
+        allowCustom
         testID="manage-edit-tags"
       />
 
