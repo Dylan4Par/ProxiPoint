@@ -876,9 +876,11 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     // Sent alongside the existing payload; the backend needs to accept these fields.
     const payload = Object.assign(toBeaconCreatePayload(draft), {
       requiresRsvpApproval: requiresApproval,
-      // Private + approval: the server sends the place (name, address, pin) only to the host,
-      // co-hosts and approved guests; everyone else with the link sees the rest of the Point.
-      hideLocationUntilApproved: visibility === 'private' && requiresApproval,
+      // Approval on (Private or Public): the server sends the exact place (name, address, pin)
+      // only to the host, co-hosts and approved guests. Others see the rest of the Point; a Public
+      // one still shows on the map, but only as its general area (the Location privacy area if
+      // one was picked, otherwise a neighborhood-sized circle around the spot).
+      hideLocationUntilApproved: requiresApproval,
       maxAttendance, // null = no limit
       // Repeating event, or null for a one-time one. `rrule` is RFC 5545 (UNTIL in UTC);
       // the server should expand it in `timezone`, keeping each event's length the same as the first.
@@ -1071,7 +1073,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   };
 
   const guestReveal = requiresApproval
-    ? 'Approved guests see the exact spot.'
+    ? 'Only approved guests see the exact spot.'
     : 'Guests see the exact spot after they RSVP.';
   const privacyHint = !privacyOn
     ? 'Everyone who can see this Point sees the exact pin.'
@@ -1878,12 +1880,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               </TouchableOpacity>
             </View>
             <Text style={styles.broadcastSubtext} testID="drop-approval-hint">
-              {visibility === 'private'
-                ? requiresApproval
-                  ? 'Location will not be shared until RSVP is approved. People request to join, and you approve each one.'
-                  : 'Anyone with the link can RSVP right away and see the location.'
-                : requiresApproval
-                  ? 'People request to join, and you approve each RSVP before they’re in.'
+              {requiresApproval
+                ? 'Location will not be shared until RSVP is approved. People request to join, and you approve each one.'
+                : visibility === 'private'
+                  ? 'Anyone with the link can RSVP right away and see the location.'
                   : 'Anyone who can see this Point can RSVP right away.'}
             </Text>
 
