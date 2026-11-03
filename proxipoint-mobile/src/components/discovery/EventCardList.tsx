@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useExploreTagMode } from '../../lib/exploreTagMode';
 import {
   View,
   Text,
@@ -12,9 +13,9 @@ import {
 import { tourTarget } from '../tour/tourTargets';
 import { useDiscoveryStore, DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { PointCard } from './PointCard';
-import { sortPoints, usePointSort } from '../../lib/pointSort';
+import { DEFAULT_POINT_SORT, sortPoints } from '../../lib/pointSort';
 import { useChannels } from '../../lib/channels';
-import { matchesDiscoverFilters, useFollowedTagsFilter, useMapRange, useMyChannelsOnly } from '../../lib/discoverFilters';
+import { matchesDiscoverFilters, useFollowedTagsFilter, useMyChannelsOnly } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { useModeration } from '../../lib/moderation';
 import { isBoosted, useBoosts } from '../../lib/boost';
@@ -72,10 +73,15 @@ export const EventCardList: React.FC<{
   const boostClock = useBoosts(); // re-render when a boost starts or runs out
   useTimeWindow(); // re-filter when the date window changes (3 days, or Calendar dates)
   const myChannelsOnly = useMyChannelsOnly(); // Filter & sort → Show only → My channels
-  const rangeMeters = useMapRange(); // Filter & sort → Distance
+  // Explore Map has no distance filter (the map shows what's around), only its #tag filters:
+  // the chip row's tags, matched Any / All (Filter menu).
+  const rangeMeters = null;
+  const chipTags = useDiscoveryStore((s) => s.tags);
+  const exploreMode = useExploreTagMode();
+  const tagFilter = useMemo(() => ({ tags: chipTags.filter((t) => t !== 'All'), mode: exploreMode }), [chipTags, exploreMode]);
   const followed = useFollowedTagsFilter(); // Filter & sort → Show only → Include my Followed Tags
   useChannels(); // re-filter when you join or leave a channel
-  const sort = usePointSort(); // Filter & sort sheet: closest, soonest or most going
+  const sort = DEFAULT_POINT_SORT; // Explore Map lists nearest first (no Sort menu)
   const [mode, setMode] = useState<DrawerMode>('half');
   const isExpanded = mode !== 'collapsed';
   const isFull = mode === 'full';
@@ -86,7 +92,7 @@ export const EventCardList: React.FC<{
     ? (Object.values(allNodes || {}) as DiscoveryNode[]).sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0))
     : getVisibleNodes();
   const visibleNodes = sortPoints(
-    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters })),
+    source.filter((node) => matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter })),
     sort,
   )
     .map((node, index) => ({ node, index, boosted: isBoosted(node.id, boostClock) }))

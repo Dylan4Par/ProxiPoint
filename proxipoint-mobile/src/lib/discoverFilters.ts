@@ -26,6 +26,24 @@ export interface DiscoverFilters {
   area?: { latitude: number; longitude: number } | null;
   /** Filter & sort → Distance: only Points this close to the area's middle (null = any). */
   rangeMeters?: number | null;
+  /** #tag filters (Filter menu): Points with any / all of these tags. No tags = everything. */
+  tagFilter?: { tags: string[]; mode: TagMatchMode } | null;
+}
+
+export type TagMatchMode = 'any' | 'all';
+
+/** How many of the tags the Point has. */
+export function tagMatchCount(node: unknown, tags: string[]): number {
+  if (!tags.length) return 0;
+  const has = new Set(nodeTags(node));
+  return tags.filter((tag) => has.has(normalizeTag(tag))).length;
+}
+
+/** No tags: everything. Any: at least one. All: every one. */
+export function matchesTagFilter(node: unknown, tags: string[], mode: TagMatchMode): boolean {
+  if (!tags.length) return true;
+  const n = tagMatchCount(node, tags);
+  return mode === 'all' ? n === tags.length : n > 0;
 }
 
 /** In one of your channels: listed there, or sharing a #tag with a channel you've joined. */
@@ -88,6 +106,7 @@ export function matchesDiscoverFilters(node: unknown, filters: DiscoverFilters):
   const tag = filters.selectedTag ? normalizeTag(filters.selectedTag) : '';
   if (tag && tag !== 'all' && !nodeTags(node).includes(tag)) return false;
   if (filters.liveOnly && !isLiveNode(node)) return false;
+  if (filters.tagFilter && !matchesTagFilter(node, filters.tagFilter.tags, filters.tagFilter.mode)) return false;
   // My channels and Followed Tags each widen what's kept: a Point needs to match one of those on.
   if (filters.myChannelsOnly || filters.followedTags) {
     const followed = filters.followedTags ? new Set(filters.followedTags.map(normalizeTag)) : null;

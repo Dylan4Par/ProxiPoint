@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
+import { useExploreTagMode } from '../../lib/exploreTagMode';
 import {
   View,
   Text,
@@ -11,7 +12,7 @@ import {
   AccessibilityInfo,
 } from 'react-native';
 import { toCanvasCoordinates, useDiscoveryStore, type DiscoveryNode } from '../../stores/useDiscoveryStore';
-import { matchesDiscoverFilters, useFollowedTagsFilter, useMapRange, useMyChannelsOnly } from '../../lib/discoverFilters';
+import { matchesDiscoverFilters, useFollowedTagsFilter, useMyChannelsOnly } from '../../lib/discoverFilters';
 import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
@@ -196,7 +197,12 @@ export const DiscoveryMapCanvas: React.FC<{
   const boostClock = useBoosts(); // re-render when a boost starts or runs out
   useTimeWindow(); // re-filter when the date window changes (3 days, or Calendar dates)
   const myChannelsOnly = useMyChannelsOnly(); // Filter & sort → Show only → My channels
-  const rangeMeters = useMapRange(); // Filter & sort → Distance
+  // Explore Map has no distance filter (the map shows what's around), only its #tag filters:
+  // the chip row's tags, matched Any / All (Filter menu).
+  const rangeMeters = null;
+  const chipTags = useDiscoveryStore((s) => s.tags);
+  const exploreMode = useExploreTagMode();
+  const tagFilter = useMemo(() => ({ tags: chipTags.filter((t) => t !== 'All'), mode: exploreMode }), [chipTags, exploreMode]);
   const followed = useFollowedTagsFilter(); // Filter & sort → Show only → Include my Followed Tags
   useChannels(); // re-filter when you join or leave a channel
   // Boosted pins are drawn last so they sit on top of nearby pins.
@@ -204,7 +210,7 @@ export const DiscoveryMapCanvas: React.FC<{
     .filter(
       (node) =>
         node.id === showAlwaysId ||
-        matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters }),
+        matchesDiscoverFilters(node, { selectedTag, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter }),
     )
     .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
 

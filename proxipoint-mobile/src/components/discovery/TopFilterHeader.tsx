@@ -12,21 +12,18 @@ import {
   Switch,
 } from 'react-native';
 import { tourTarget } from '../tour/tourTargets';
-import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Minus, Plus, SlidersHorizontal, X } from 'lucide-react-native';
-import { DEFAULT_POINT_SORT, POINT_SORTS, setPointSort, usePointSort, type PointSort } from '../../lib/pointSort';
+import { CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Plus, X } from 'lucide-react-native';
 import {
-  setFollowedOnly,
+  matchesDiscoverFilters,
   setMapRange,
-  setMyChannelsOnly,
   useFollowedTagsFilter,
   useMapRange,
   useMyChannelsOnly,
 } from '../../lib/discoverFilters';
+import { setExploreTagMode, useExploreTagMode } from '../../lib/exploreTagMode';
 import { formatRangeWords, searchRanges, useUnits } from '../../lib/units';
-import { bestHashtagFor, searchHashtags } from '../../lib/hashtags';
+import { bestHashtagFor, canonicalTag, searchHashtags } from '../../lib/hashtags';
 
-/** Short labels for the three Sort by buttons. */
-const SORT_SHORT: Record<PointSort, string> = { closest: 'Nearest First', soonest: 'Soonest', popular: 'Most Going' };
 import { MAX_ACTIVE_TAGS, useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import {
   MAX_DISCOVER_TAGS,
@@ -110,36 +107,27 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
     if (topRow && activeTab !== 'Nearby') setActiveTab('Nearby');
   }, [topRow, activeTab, setActiveTab]);
 
-  // Filter & sort sheet (sort order, Live now, and the hashtag chips).
+  // The Filter menu (#tag filters, Any / All, quick-add).
   const [tagModalOpen, setTagModalOpen] = useState(false);
-  const sort = usePointSort();
-  // Badge on the filter button: how many choices differ from the defaults.
   const myChannelsOnly = useMyChannelsOnly();
   const rangeMeters = useMapRange();
   const followed = useFollowedTagsFilter();
-  // Active filter #tags (the chip row, besides All): at most MAX_ACTIVE_TAGS. Added ones are green
-  // with ×; your followed #tags (Profile → Followed Tags) are always listed: gray with + while
-  // off, green with − while active.
+  // Explore Map's #tag filters are the chip row's tags (besides All), at most MAX_ACTIVE_TAGS;
+  // your followed #tags (Profile → Followed Tags) are offered for quick-add.
   const keyOf = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
-  const followedKeys = new Set(followed.tags.map(keyOf));
   const activeTags = tags.filter((tag) => tag !== 'All');
   const activeKeys = new Set(activeTags.map(keyOf));
-  const addedTags = activeTags.filter((tag) => !followedKeys.has(keyOf(tag)));
   const followedList = followed.tags.map((tag) => (tag.startsWith('#') ? tag : `#${tag}`));
-  const full = activeTags.length >= MAX_ACTIVE_TAGS;
   const [limitNote, setLimitNote] = useState(false);
   const activeTagFor = (tag: string) => tags.find((t) => keyOf(t) === keyOf(tag)) ?? tag;
   const units = useUnits();
   const ranges = searchRanges(units);
-  // Discover (embedded) has Distance in the bar; Explore Map keeps it in the Filter & sort sheet.
-  // The badge counts only what's set inside the sheet.
+  // Discover (embedded) has a Distance button in the bar; Explore Map has no distance filter.
   const distanceInBar = embedded;
   const tagFilter = useDiscoverTagFilter();
   // Sort only orders Explore Map's card list, so it lives (and counts) only in Explore's sheet.
-  const activeCount =
-    (!distanceInBar && sort !== DEFAULT_POINT_SORT ? 1 : 0) +
-    (!distanceInBar && rangeMeters != null ? 1 : 0) +
-    (distanceInBar ? tagFilter.tags.length : 0); // Discover: each #tag filter counts
+  // The Filter badge: how many #tag filters are on (Discover's own, or Explore's chip tags).
+  const activeCount = distanceInBar ? tagFilter.tags.length : tags.filter((tag) => tag !== 'All').length;
   // Discover's distance button and menu, in words: "15 miles", "Within 1 mile", "Any distance".
   const rangeLabel = formatRangeWords(rangeMeters, units);
   // Distance dropdown, opened under its button.
@@ -150,30 +138,46 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   };
   const [newTagInput, setNewTagInput] = useState('');
 
-  // Only tags on the allowed list (lib/hashtags): typing shows the matches; + Add takes the exact
-  // one typed, or the best match.
-  const tagMatches = newTagInput.trim() ? searchHashtags(newTagInput, { exclude: activeTags, limit: 6 }) : [];
-  const addListedTag = (tag: string) => {
-    if (full && !activeKeys.has(keyOf(tag))) {
-      setLimitNote(true);
-      return;
-    }
-    addTag(tag);
-    setNewTagInput('');
-    setLimitNote(false);
-  };
-  const handleAddNewTag = () => {
-    if (!newTagInput.trim()) return;
-    const best = bestHashtagFor(newTagInput, activeTags);
-    if (best) addListedTag(best);
-  };
-  // ---- Discover's Filter & sort: its own #tag filters (Any / All) and a live count ----------
-  const dKeys = new Set(tagFilter.tags.map(keyOf));
-  const dFull = tagFilter.tags.length >= MAX_DISCOVER_TAGS;
+  // ---- Filter menu: the page's #tag filters (Any / All) and a live count --------------------
+  // Discover: its own up-to-5 tags (lib/discoverTagFilter). Explore Map: the chip row's tags
+  // (up to MAX_ACTIVE_TAGS), matched Any / All (lib/exploreTagMode). No distance or sort there.
+  const exploreMode = useExploreTagMode();
+  const shelf = distanceInBar
+    ? {
+        tags: tagFilter.tags,
+        max: MAX_DISCOVER_TAGS,
+        mode: tagFilter.mode,
+        setMode: setTagMatchMode,
+        add: (tag: string) => addDiscoverTag(tag),
+        remove: (tag: string) => removeDiscoverTag(tag),
+        clear: () => clearDiscoverTags(),
+      }
+    : {
+        tags: activeTags,
+        max: MAX_ACTIVE_TAGS,
+        mode: exploreMode,
+        setMode: setExploreTagMode,
+        add: (tag: string) => {
+          const clean = canonicalTag(tag);
+          if (!clean) return false;
+          if (activeKeys.has(keyOf(clean))) return true;
+          if (activeTags.length >= MAX_ACTIVE_TAGS) return false;
+          addTag(clean);
+          return true;
+        },
+        remove: (tag: string) => removeTag(activeTagFor(tag)),
+        clear: () => {
+          activeTags.forEach((tag) => removeTag(tag));
+          setSelectedTag('All');
+          setExploreTagMode('any');
+        },
+      };
+  const dKeys = new Set(shelf.tags.map(keyOf));
+  const dFull = shelf.tags.length >= shelf.max;
   const quickAdd = followedList.filter((tag) => !dKeys.has(keyOf(tag)));
-  const dMatches = distanceInBar && newTagInput.trim() ? searchHashtags(newTagInput, { exclude: tagFilter.tags, limit: 6 }) : [];
+  const dMatches = newTagInput.trim() ? searchHashtags(newTagInput, { exclude: shelf.tags, limit: 6 }) : [];
   const addToShelf = (tag: string) => {
-    if (!addDiscoverTag(tag)) {
+    if (!shelf.add(tag)) {
       if (dFull) setLimitNote(true);
       return;
     }
@@ -182,9 +186,11 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   };
   const nodes = useDiscoveryStore((st) => st.nodes);
   const viewPlace = useDiscoveryStore((st) => st.viewPlace);
-  // Live count for the button: the same filters as the Discover feed (only worked out while open).
-  const eventCount =
-    distanceInBar && tagModalOpen
+  // Live count for the button, with the same filters as the page (only worked out while open):
+  // Discover's feed, or what Explore Map's pins and list show.
+  const eventCount = !tagModalOpen
+    ? 0
+    : distanceInBar
       ? countFeed(
           nodes as never,
           Date.now(),
@@ -199,10 +205,21 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             mode: tagFilter.mode,
           }),
         )
-      : 0;
-  const canClearAll = tagFilter.tags.length > 0 || tagFilter.mode !== 'any';
+      : countFeed(nodes as never, Date.now(), (node) =>
+          matchesDiscoverFilters(node, {
+            selectedTag,
+            liveOnly,
+            activeTab,
+            myChannelsOnly,
+            followedTags: followed.filter,
+            area: viewPlace,
+            rangeMeters: null,
+            tagFilter: { tags: activeTags, mode: exploreMode },
+          }),
+        );
+  const canClearAll = shelf.tags.length > 0 || shelf.mode !== 'any';
   const clearAll = () => {
-    clearDiscoverTags();
+    shelf.clear();
     setNewTagInput('');
     setLimitNote(false);
   };
@@ -210,17 +227,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
     { id: 'any', label: 'Any of these', logic: 'OR' },
     { id: 'all', label: 'All of these', logic: 'AND' },
   ];
-
-  const toggleFollowed = (tag: string) => {
-    if (activeKeys.has(keyOf(tag))) {
-      removeTag(activeTagFor(tag));
-      setLimitNote(false);
-    } else if (full) {
-      setLimitNote(true);
-    } else {
-      addTag(tag);
-    }
-  };
 
   return (
     <View style={[styles.headerContainer, embedded && styles.headerEmbedded]}>
@@ -290,22 +296,18 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
 
       {/* Horizontal Tag Carousel with Trailing Inline ✎ Pill */}
       <View style={styles.chipArea} ref={tourTarget('map-filter-rail')} collapsable={false}>
-      {/* Locked at the start of the row (they don't scroll away): Filter & sort, and on Discover, Distance. */}
+      {/* Locked at the start of the row (they don't scroll away): Filter, and on Discover, Distance. */}
       <View style={styles.lockedChips}>
-          {/* Filter & sort, first in the row. The badge counts choices that aren't the defaults. */}
+          {/* Filter, first in the row. The badge counts the #tag filters that are on. */}
           <TouchableOpacity
-            style={[styles.addTagPill, distanceInBar && styles.filterWordPill, activeCount > 0 && styles.filterBtnActive]}
+            style={[styles.addTagPill, styles.filterWordPill, activeCount > 0 && styles.filterBtnActive]}
             activeOpacity={0.8}
             onPress={() => setTagModalOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={activeCount ? `Filter and sort, ${activeCount} on` : 'Filter and sort'}
+            accessibilityLabel={activeCount ? `Filter, ${activeCount} #tag ${activeCount === 1 ? 'filter' : 'filters'} on` : 'Filter'}
             testID="filter-manage-tags"
           >
-            {distanceInBar ? (
-              <Text style={[styles.filterWord, activeCount > 0 && styles.filterWordActive]}>Filter</Text>
-            ) : (
-              <SlidersHorizontal size={16} color={activeCount ? c.onAccent : c.accent} strokeWidth={2.5} />
-            )}
+            <Text style={[styles.filterWord, activeCount > 0 && styles.filterWordActive]}>Filter</Text>
             {activeCount > 0 ? (
               <View style={styles.filterBadge}>
                 <Text style={styles.filterBadgeText}>{activeCount}</Text>
@@ -465,7 +467,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         ) : null}
       </Modal>
 
-      {/* Filter & sort sheet */}
+      {/* Filter menu */}
       <Modal
         visible={tagModalOpen}
         animationType="slide"
@@ -479,41 +481,38 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           <View style={styles.sheet} testID="filter-sheet">
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{distanceInBar ? 'Filter' : 'Filter & sort'}</Text>
+              <Text style={styles.modalTitle}>Filter</Text>
               <View style={styles.modalHeaderActions}>
-                {distanceInBar ? (
-                  <TouchableOpacity
-                    onPress={clearAll}
-                    disabled={!canClearAll}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityState={{ disabled: !canClearAll }}
-                    testID="filter-clear-all"
-                  >
-                    <Text style={[styles.clearAllText, !canClearAll && styles.clearAllOff]}>Clear All</Text>
-                  </TouchableOpacity>
-                ) : null}
+                <TouchableOpacity
+                  onPress={clearAll}
+                  disabled={!canClearAll}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityState={{ disabled: !canClearAll }}
+                  testID="filter-clear-all"
+                >
+                  <Text style={[styles.clearAllText, !canClearAll && styles.clearAllOff]}>Clear All</Text>
+                </TouchableOpacity>
                 <TouchableOpacity onPress={() => setTagModalOpen(false)} hitSlop={10} accessibilityRole="button" accessibilityLabel="Close">
                   <X size={20} color={c.textMuted} strokeWidth={2.5} />
                 </TouchableOpacity>
               </View>
             </View>
 
-            {distanceInBar ? (
             <>
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
               {/* Zone 1: active #tag filters, each with × to drop it. */}
               <Text style={[styles.sectionSubtitle, dFull && styles.activeCountFull]} testID="filter-active-count">
-                Active tag filters ({tagFilter.tags.length}/{MAX_DISCOVER_TAGS})
+                Active tag filters ({shelf.tags.length}/{shelf.max})
               </Text>
               <View style={styles.activeShelf} testID="filter-active-shelf">
-                {tagFilter.tags.length ? (
-                  tagFilter.tags.map((tag) => (
+                {shelf.tags.length ? (
+                  shelf.tags.map((tag) => (
                     <TouchableOpacity
                       key={tag}
                       style={[styles.editorChip, styles.activeChip]}
                       onPress={() => {
-                        removeDiscoverTag(tag);
+                        shelf.remove(tag);
                         setLimitNote(false);
                       }}
                       accessibilityRole="button"
@@ -530,17 +529,17 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               </View>
 
               {/* Any (OR, default) or All (AND): only matters with two or more tags. */}
-              {tagFilter.tags.length >= 2 ? (
+              {shelf.tags.length >= 2 ? (
                 <>
                   <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Match mode</Text>
                   <View style={styles.sortSegment} accessibilityRole="radiogroup" testID="filter-match-mode">
                     {MATCH_MODES.map((option) => {
-                      const on = tagFilter.mode === option.id;
+                      const on = shelf.mode === option.id;
                       return (
                         <TouchableOpacity
                           key={option.id}
                           style={[styles.sortSegmentBtn, on && styles.sortSegmentBtnOn]}
-                          onPress={() => setTagMatchMode(option.id)}
+                          onPress={() => shelf.setMode(option.id)}
                           accessibilityRole="radio"
                           accessibilityState={{ selected: on }}
                           accessibilityLabel={`${option.label} (${option.logic})`}
@@ -554,7 +553,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                     })}
                   </View>
                   <Text style={styles.sortNote}>
-                    {tagFilter.mode === 'any'
+                    {shelf.mode === 'any'
                       ? 'Events with at least one of these tags. More matches rank higher.'
                       : 'Only events with every one of these tags.'}
                   </Text>
@@ -567,7 +566,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               {dFull ? (
                 <View style={styles.maxBadge} testID="filter-max-badge" accessibilityRole="text">
                   <Text style={styles.maxBadgeText}>
-                    {MAX_DISCOVER_TAGS} of {MAX_DISCOVER_TAGS} Selected (Max)
+                    {shelf.max} of {shelf.max} Selected (Max)
                   </Text>
                 </View>
               ) : (
@@ -582,7 +581,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                       setLimitNote(false);
                     }}
                     onSubmitEditing={() => {
-                      const best = bestHashtagFor(newTagInput, tagFilter.tags);
+                      const best = bestHashtagFor(newTagInput, shelf.tags);
                       if (best) addToShelf(best);
                     }}
                     returnKeyType="done"
@@ -591,7 +590,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
                   <TouchableOpacity
                     style={styles.addTagBtn}
                     onPress={() => {
-                      const best = bestHashtagFor(newTagInput, tagFilter.tags);
+                      const best = bestHashtagFor(newTagInput, shelf.tags);
                       if (best) addToShelf(best);
                     }}
                   >
@@ -622,7 +621,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               ) : null}
               {limitNote ? (
                 <Text style={styles.limitNote} testID="filter-limit-note">
-                  {MAX_DISCOVER_TAGS} tag filters at most. Remove one to add another.
+                  {shelf.max} tag filters at most. Remove one to add another.
                 </Text>
               ) : null}
 
@@ -664,195 +663,6 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               </TouchableOpacity>
             </View>
             </>
-            ) : (
-            <>
-
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
-              {/* Hashtag chips: up to MAX_ACTIVE_TAGS active at once. */}
-              <View style={styles.sectionHeadRow}>
-                <Text style={[styles.sectionSubtitle, styles.sectionSubtitleInline]}>Your hashtags</Text>
-                <Text style={[styles.activeCount, full && styles.activeCountFull]} testID="filter-active-count">
-                  {activeTags.length} / {MAX_ACTIVE_TAGS} active
-                </Text>
-              </View>
-              {full ? (
-                // At the limit: a badge where the input was, until a chip is taken off.
-                <View style={styles.maxBadge} testID="filter-max-badge" accessibilityRole="text">
-                  <Text style={styles.maxBadgeText}>
-                    {MAX_ACTIVE_TAGS} of {MAX_ACTIVE_TAGS} Selected (Max)
-                  </Text>
-                </View>
-              ) : (
-                <View style={styles.addTagRow}>
-                  <TextInput
-                    style={styles.addTagInput}
-                    placeholder="Find a hashtag, e.g. Pickleball"
-                    placeholderTextColor={c.iconFaint}
-                    value={newTagInput}
-                    onChangeText={(text) => {
-                      setNewTagInput(text);
-                      setLimitNote(false);
-                    }}
-                    onSubmitEditing={handleAddNewTag}
-                    returnKeyType="done"
-                  />
-                  <TouchableOpacity style={styles.addTagBtn} onPress={handleAddNewTag}>
-                    <Text style={styles.addTagBtnText}>+ Add</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
-              {!full && newTagInput.trim() ? (
-                tagMatches.length ? (
-                  <View style={styles.chipWrap} testID="filter-tag-matches">
-                    {tagMatches.map((entry) => (
-                      <TouchableOpacity
-                        key={entry.tag}
-                        style={[styles.editorChip, styles.matchChip]}
-                        onPress={() => addListedTag(entry.tag)}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Add ${entry.tag}`}
-                      >
-                        <Text style={[styles.editorChipText, styles.matchChipText]}>+ {entry.tag}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                ) : (
-                  <Text style={styles.limitNote} testID="filter-no-match">
-                    No hashtag matches “{newTagInput.trim()}”. Try another word.
-                  </Text>
-                )
-              ) : null}
-              {limitNote ? (
-                <Text style={styles.limitNote} testID="filter-limit-note">
-                  {MAX_ACTIVE_TAGS} active filters at most. Remove one to add another.
-                </Text>
-              ) : null}
-              <View style={styles.chipWrap}>
-                {/* Added (typed or searched): green, × removes it. */}
-                {addedTags.map((tag) => (
-                  <View key={tag} style={[styles.editorChip, styles.activeChip]}>
-                    <Text style={[styles.editorChipText, styles.activeChipText]}>{tag}</Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        removeTag(tag);
-                        setLimitNote(false);
-                      }}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${tag}`}
-                    >
-                      <X size={14} color={c.green} strokeWidth={3} />
-                    </TouchableOpacity>
-                  </View>
-                ))}
-                {addedTags.length === 0 ? (
-                  <Text style={styles.followedNote}>No added hashtags yet.</Text>
-                ) : null}
-              </View>
-
-              {/* Followed on your Profile: always listed. Gray + adds it, green − takes it off. */}
-              {followedList.length ? (
-              <>
-              <View style={styles.tagDivider} />
-              <Text style={styles.sectionSubtitle}>Followed tags</Text>
-              <View style={styles.chipWrap}>
-                {followedList.map((tag) => {
-                  const on = activeKeys.has(keyOf(tag));
-                  return (
-                    <TouchableOpacity
-                      key={`followed-${tag}`}
-                      style={[styles.editorChip, on ? styles.activeChip : styles.followedOffChip, !on && full && styles.chipDisabled]}
-                      onPress={() => toggleFollowed(tag)}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: on }}
-                      accessibilityLabel={on ? `Take ${tag} off the filters` : `Add ${tag} to the filters`}
-                      testID={`filter-followed-${keyOf(tag)}`}
-                    >
-                      <Text style={[styles.editorChipText, on && styles.activeChipText]}>{tag}</Text>
-                      {on ? (
-                        <Minus size={14} color={c.green} strokeWidth={3} />
-                      ) : (
-                        <Plus size={14} color={c.textMuted} strokeWidth={3} />
-                      )}
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={styles.followedNote}>From your Profile. Tap + to use one as a filter, − to take it off.</Text>
-              </>
-              ) : null}
-
-              {/* Distance from the middle of the area being explored (Discover has it in the bar). */}
-              {!distanceInBar ? (
-              <>
-              <Text style={[styles.sectionSubtitle, styles.sectionGap]}>Distance</Text>
-              <View style={styles.rangeRow} accessibilityRole="radiogroup">
-                {ranges.map((option) => {
-                  const on = rangeMeters === option.meters;
-                  return (
-                    <TouchableOpacity
-                      key={option.label}
-                      style={[styles.rangeChip, on && styles.rangeChipOn]}
-                      onPress={() => setMapRange(option.meters)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: on }}
-                      accessibilityLabel={option.meters == null ? 'Any distance' : `Within ${option.label}`}
-                      testID={`filter-range-${option.meters ?? 'any'}`}
-                    >
-                      <Text style={[styles.rangeText, on && styles.rangeTextOn]}>{option.label}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={styles.sortNote}>From the middle of the area you're exploring.</Text>
-              </>
-              ) : null}
-
-              {/* Sort: three side-by-side buttons. */}
-              <Text style={styles.sectionSubtitle}>Sort by</Text>
-              <View style={styles.sortSegment} accessibilityRole="radiogroup">
-                {POINT_SORTS.map((option) => {
-                  const on = sort === option.id;
-                  return (
-                    <TouchableOpacity
-                      key={option.id}
-                      style={[styles.sortSegmentBtn, on && styles.sortSegmentBtnOn]}
-                      onPress={() => setPointSort(option.id)}
-                      accessibilityRole="radio"
-                      accessibilityState={{ selected: on }}
-                      accessibilityLabel={`${option.label}: ${option.hint}`}
-                      testID={`sort-${option.id}`}
-                    >
-                      <Text style={[styles.sortSegmentText, on && styles.sortSegmentTextOn]} numberOfLines={1}>
-                        {SORT_SHORT[option.id]}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-              <Text style={styles.sortNote}>Boosted Points stay at the top, labeled.</Text>
-            </ScrollView>
-
-            <View style={styles.sheetButtons}>
-              <TouchableOpacity
-                style={[styles.resetBtn, activeCount === 0 && styles.resetBtnOff]}
-                disabled={activeCount === 0}
-                onPress={() => {
-                  setPointSort(DEFAULT_POINT_SORT);
-                  setMyChannelsOnly(false);
-                  setMapRange(null);
-                  setFollowedOnly(false);
-                }}
-                accessibilityRole="button"
-              >
-                <Text style={styles.resetText}>Reset</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.saveBtn, styles.doneBtn]} onPress={() => setTagModalOpen(false)} accessibilityRole="button">
-                <Text style={styles.saveBtnText}>Done</Text>
-              </TouchableOpacity>
-            </View>
-            </>
-            )}
           </View>
         </View>
       </Modal>

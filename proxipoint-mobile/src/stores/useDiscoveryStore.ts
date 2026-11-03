@@ -262,7 +262,7 @@ const enrichNodeMetadata = (rawId: string, distanceMeters: number) => {
 const DEFAULT_SELF = { latitude: 40.061708, longitude: -105.038292 };
 
 /** Most #tags active as filter chips at once (Filter & sort → Your hashtags). */
-export const MAX_ACTIVE_TAGS = 5;
+export const MAX_ACTIVE_TAGS = 10;
 
 interface SeedPoint {
   id: string;
@@ -749,7 +749,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   activeTab: 'Nearby',
   selectedTag: 'All',
   // The filter chips: 'All' plus up to MAX_ACTIVE_TAGS active #tags.
-  tags: ['All', '#LiveMusic', '#FoodTrucks', '#FarmersMarket', '#TechMeetup', '#Pickleball'],
+  // No #tag filters at first, so Explore Map shows everything until some are added (Filter).
+  tags: ['All'],
   previewGeofence: null,
   remoteEvents: { status: 'off', count: 0, loadedAt: null, error: null },
 
