@@ -161,7 +161,7 @@ const VISIBILITY_OPTIONS: Array<{
     label: 'Private',
     accent: '#f59e0b',
     Icon: Lock,
-    hint: 'Only people you invite can see this Point.',
+    hint: 'Only people you share its link with can see this Point.',
   },
   {
     id: 'channel',
@@ -346,7 +346,6 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [inviteOpen, setInviteOpen] = useState(false);
   const [inviteKind, setInviteKind] = useState<InviteKind>('proxipoint');
   // "Link" tab: open the share sheet with the Point's link as soon as it's dropped.
-  const [shareAfterDrop, setShareAfterDrop] = useState(false);
   const [handleInput, setHandleInput] = useState('');
   const [phoneInput, setPhoneInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
@@ -365,7 +364,10 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const [requiresApproval, setRequiresApproval] = useState(false);
   const [maxAttendance, setMaxAttendance] = useState<number | null>(null);
   const [coverPhoto, setCoverPhoto] = useState<CoverPhoto | null>(null);
-  const [privacyOn, setPrivacyOn] = useState(false);
+  const [privacyToggle, setPrivacyOn] = useState(false);
+  // Private Points have no Location privacy (or invite list): the share link is the way in.
+  const privacyOn = privacyToggle && visibility !== 'private';
+  const shareAfterDrop = visibility === 'private';
   const [privacyRegions, setPrivacyRegions] = useState<PrivacyRegion[]>([]);
   const [privacyRegionId, setPrivacyRegionId] = useState<string | null>(null);
   const [privacySource, setPrivacySource] = useState<'server' | 'approximate'>('approximate');
@@ -507,7 +509,6 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     setInvites([]);
     setInviteOpen(false);
     setInviteKind('proxipoint');
-    setShareAfterDrop(false);
     setHandleInput('');
     setPhoneInput('');
     setEmailInput('');
@@ -802,13 +803,6 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
 
-    // A share link counts as the invite for a Private Point.
-    if (visibility === 'private' && invites.length === 0 && !shareAfterDrop) {
-      setInviteOpen(true);
-      setFormError('Private Points need at least one invite. Add someone, share a link, or switch to Channel or Public.');
-      return;
-    }
-
     const placeText = needsName ? spotNameRef.current : locationSearch;
     if (needsName && placeText.trim().length < MIN_SPOT_NAME) {
       setFormError(`Name the spot you picked on the map (at least ${MIN_SPOT_NAME} characters).`);
@@ -938,7 +932,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       locationPrivacy:
         privacyOn && selectedRegion ? { level: selectedRegion.level, regionName: selectedRegion.name } : null,
       beaconRadius: visibility !== 'private' && perimeterOn ? activeTier.displayRadius : null,
-      invites,
+      invites: visibility === 'private' ? [] : invites,
       synced,
       createdAt: new Date().toISOString(),
     });
@@ -986,7 +980,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const spotNameOffensive = needsName && containsOffensive(locationSearch);
   const spotNameOk = locationSearch.trim().length >= MIN_SPOT_NAME && !spotNameOffensive;
   const locationComplete = Boolean(coords) && (!needsName || spotNameOk);
-  const titleAndTagsComplete = title.trim().length > 0 && parseBeaconTags(tags).length > 0;
+  // Tags are optional on Private Points (nobody finds them by #tag).
+  const titleAndTagsComplete = title.trim().length > 0 && (visibility === 'private' || parseBeaconTags(tags).length > 0);
   // Shown next to the title so it's clear switching tabs won't lose anything.
   const hasDraftContent =
     !revealing &&
@@ -1397,7 +1392,13 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             </View>
             <View style={styles.hairline} />
             <View ref={tourTarget('drop-tags')} collapsable={false}>
-              <TagPicker value={tags} onChange={setTags} mine={myTags} known={knownBeacons} />
+              <TagPicker
+                value={tags}
+                onChange={setTags}
+                mine={myTags}
+                known={knownBeacons}
+                placeholder={visibility === 'private' ? 'Find a tag (optional)' : undefined}
+              />
             </View>
             <View style={styles.hairline} />
             <View style={styles.photoRow}>
@@ -1668,6 +1669,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             ) : null}
           </View>
 
+          {/* Private Points skip Location privacy: only people with the link see them. */}
+          {visibility !== 'private' ? (
           <View style={[styles.scaleRailContainer, privacyOn && styles.privacyGlow]} testID="drop-privacy">
             <View style={styles.scaleRailHeaderRow}>
               <View style={styles.privacyHeading}>
@@ -1796,6 +1799,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               {privacyHint}
             </Text>
           </View>
+          ) : null}
 
           {visibility !== 'private' ? (
           <View style={[styles.scaleRailContainer, perimeterOn && styles.fieldGlow]} testID="drop-perimeter">
@@ -2189,212 +2193,14 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
             )}
           </View>
 
-          {/* Private Points need their guest list up front. Everything else invites from the Manage sheet. */}
+          {/* Private: no guest list or location privacy here; the link is how people get in. */}
           {visibility === 'private' ? (
-          <View style={styles.inviteBlock}>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityState={{ expanded: inviteOpen }}
-              testID="invite-button"
-              style={styles.inviteBtn}
-              onPress={() => {
-                setInviteOpen((openPanel) => !openPanel);
-                setInviteError('');
-              }}
-            >
-              <UserPlus size={16} color={c.accent} strokeWidth={2.25} />
-              <Text style={styles.inviteBtnText}>
-                {invites.length > 0 ? `Invite · ${invites.length}` : 'Invite'}
+            <View style={styles.privateLinkNote} testID="drop-private-link-note">
+              <Link2 size={16} color={c.accent} strokeWidth={2.25} />
+              <Text style={styles.privateLinkNoteText}>
+                A link will be provided for sharing after you create the drop. Anyone you send it to can open this Point and RSVP.
               </Text>
-            </TouchableOpacity>
-
-            {invites.length > 0 ? (
-              <View style={styles.inviteChips}>
-                {invites.map((invite) => (
-                  <View key={`${invite.kind}-${invite.id}`} style={styles.inviteChip}>
-                    <Text style={styles.inviteChipText}>{invite.label}</Text>
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      accessibilityLabel={`Remove ${invite.label}`}
-                      onPress={() => setInvites((current) => removeInvite(current, invite.id))}
-                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    >
-                      <Text style={styles.inviteChipRemove}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
-                ))}
-              </View>
-            ) : null}
-
-            {inviteOpen ? (
-              <View style={styles.invitePanel} testID="invite-panel">
-                <Text style={styles.inviteHeading}>INVITE BY</Text>
-                <View style={styles.inviteKinds}>
-                  {(
-                    [
-                      ['proxipoint', 'Users'],
-                      ['phone', 'Phone'],
-                      ['email', 'Email'],
-                    ] as const
-                  ).map(([kind, label]) => {
-                    const selected = inviteKind === kind;
-                    return (
-                      <TouchableOpacity
-                        key={kind}
-                        testID={`invite-kind-${kind}`}
-                        accessibilityRole="button"
-                        accessibilityState={{ selected }}
-                        style={[styles.inviteKind, selected && styles.inviteKindSelected]}
-                        onPress={() => {
-                            setInviteKind(kind);
-                            setInviteError('');
-                        }}
-                      >
-                        <Text style={[styles.inviteKindText, selected && styles.inviteKindTextSelected]}>{label}</Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-
-                {inviteKind === 'proxipoint' ? (
-                  <Text style={styles.inviteHint}>Invite people already on ProxiPoint by their @handle.</Text>
-                ) : null}
-                {inviteKind === 'phone' ? (
-                  <Text style={styles.inviteHint}>
-                    They’ll get a text with a link to this Point, even if they don’t have the app yet.
-                  </Text>
-                ) : null}
-
-                {inviteKind === 'email' ? (
-                  <Text style={styles.inviteHint}>
-                    They’ll get an email with a link to this Point, even if they don’t have the app yet.
-                  </Text>
-                ) : null}
-
-
-                {inviteKind === 'proxipoint' ? (
-                  <View style={styles.inviteEntry}>
-                    <TextInput
-                      testID="invite-handle-input"
-                      value={handleInput}
-                      onChangeText={(text) => setHandleInput(formatHandleInput(text))}
-                      onFocus={() => setHandleInput((current) => current || '@')}
-                      onBlur={() => setHandleInput((current) => (current === '@' ? '' : current))}
-                      onSubmitEditing={() => {
-                        const next = addProxiPointInvite(invites, handleInput);
-                        setInvites(next.invites);
-                        setInviteError(next.error);
-                        if (!next.error) setHandleInput('');
-                      }}
-                      placeholder="@ranger-7"
-                      placeholderTextColor={c.textFaint}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      style={styles.inviteInput}
-                    />
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      style={styles.inviteAddBtn}
-                      onPress={() => {
-                        const next = addProxiPointInvite(invites, handleInput);
-                        setInvites(next.invites);
-                        setInviteError(next.error);
-                        if (!next.error) setHandleInput('');
-                      }}
-                    >
-                      <Text style={styles.inviteAddText}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-
-                {inviteKind === 'phone' ? (
-                  <View style={styles.inviteEntry}>
-                    <TextInput
-                      testID="invite-phone-input"
-                      value={phoneInput}
-                      onChangeText={setPhoneInput}
-                      onSubmitEditing={() => {
-                        const next = addPhoneInvite(invites, phoneInput);
-                        setInvites(next.invites);
-                        setInviteError(next.error);
-                        if (!next.error) setPhoneInput('');
-                      }}
-                      placeholder="(303) 555-0148"
-                      placeholderTextColor={c.textFaint}
-                      keyboardType="phone-pad"
-                      style={styles.inviteInput}
-                    />
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      style={styles.inviteAddBtn}
-                      onPress={() => {
-                        const next = addPhoneInvite(invites, phoneInput);
-                        setInvites(next.invites);
-                        setInviteError(next.error);
-                        if (!next.error) setPhoneInput('');
-                      }}
-                    >
-                      <Text style={styles.inviteAddText}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-
-                {inviteKind === 'email' ? (
-                  <View style={styles.inviteEntry}>
-                    <TextInput
-                      testID="invite-email-input"
-                      value={emailInput}
-                      onChangeText={setEmailInput}
-                      onSubmitEditing={() => {
-                        const next = addEmailInvite(invites, emailInput);
-                        setInvites(next.invites);
-                        setInviteError(next.error);
-                        if (!next.error) setEmailInput('');
-                      }}
-                      placeholder="sam@example.com"
-                      placeholderTextColor={c.textFaint}
-                      keyboardType="email-address"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      autoComplete="email"
-                      style={styles.inviteInput}
-                    />
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      style={styles.inviteAddBtn}
-                      onPress={() => {
-                        const next = addEmailInvite(invites, emailInput);
-                        setInvites(next.invites);
-                        setInviteError(next.error);
-                        if (!next.error) setEmailInput('');
-                      }}
-                    >
-                      <Text style={styles.inviteAddText}>Add</Text>
-                    </TouchableOpacity>
-                  </View>
-                ) : null}
-
-                {inviteError ? <Text style={styles.inviteError} testID="invite-error">{inviteError}</Text> : null}
-
-                {/* Share the Point's link from any app once it's dropped (not a tab of its own). */}
-                <View style={styles.linkRow} testID="invite-link">
-                  <Link2 size={16} color={c.accent} strokeWidth={2.25} />
-                  <Text style={styles.linkRowText}>Share the link after I drop it</Text>
-                  <Switch
-                    value={shareAfterDrop}
-                    onValueChange={setShareAfterDrop}
-                    trackColor={{ false: c.borderStrong, true: c.accentTrack }}
-                    thumbColor={shareAfterDrop ? c.accent : c.textMuted}
-                    accessibilityLabel="Share the link after dropping"
-                    testID="invite-link-toggle"
-                  />
-                </View>
-                {shareAfterDrop && visibility === 'private' ? (
-                  <Text style={styles.linkNote}>Anyone you send the link to can open this Point and RSVP, even though it’s Private.</Text>
-                ) : null}
-              </View>
-            ) : null}
-          </View>
+            </View>
           ) : null}
         </KeyboardAwareScrollView>
 
@@ -3625,6 +3431,18 @@ const createStyles = (c: ThemeColors) =>
   },
   linkRowText: { flex: 1, color: c.text, fontSize: 13, fontWeight: '700' },
   linkNote: { color: c.textFaint, fontSize: 11.5, lineHeight: 16 },
+  privateLinkNote: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: c.accentBorder,
+    backgroundColor: c.accentWash,
+  },
+  privateLinkNoteText: { flex: 1, color: c.textSecondary, fontSize: 13, lineHeight: 18, fontWeight: '600' },
   inviteError: {
     color: c.amber,
     fontSize: 11,
