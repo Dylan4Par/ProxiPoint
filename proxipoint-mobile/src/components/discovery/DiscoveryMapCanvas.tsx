@@ -19,7 +19,7 @@ import { useModeration } from '../../lib/moderation';
 import { MapTiles, wideLayersFor } from './MapTiles';
 import { fitView } from '../../lib/mapFit';
 import { MapPinGlyph } from './MapPinGlyph';
-import { MapRecenterButton, MapZoomStack, mapControlPositions } from './MapControls';
+import { MapRecenterButton, mapControlPositions } from './MapControls';
 import { CARD_SHEET_RADIUS } from './EventCardList';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, mainTagOf, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
@@ -930,19 +930,6 @@ export const DiscoveryMapCanvas: React.FC<{
     handleRecenter();
   }, [viewPlace.latitude, viewPlace.longitude]);
 
-  /** + / − buttons: zoom around the middle of the map. */
-  const zoomBy = (factor: number) => {
-    const z = currentZoom.current;
-    const next = clampZoom(z * factor);
-    if (next === z) return;
-    userMoved.current = true;
-    const cx = viewSize.current.width / 2;
-    const cy = viewSize.current.height / 2;
-    const worldX = (cx + WORLD_OFFSET - currentPan.current.x) / z;
-    const worldY = (cy + WORLD_OFFSET - currentPan.current.y) / z;
-    animateTo({ x: cx + WORLD_OFFSET - next * worldX, y: cy + WORLD_OFFSET - next * worldY }, next);
-  };
-
   // One finger drags; two fingers pinch to zoom (and drag) around the point between them.
   const gesture = useRef({
     mode: 'none' as 'none' | 'drag' | 'pinch',
@@ -1237,12 +1224,6 @@ export const DiscoveryMapCanvas: React.FC<{
         </TouchableOpacity>
       ) : null}
 
-      {/* Zoom buttons (also handy on the emulator, where pinching needs Ctrl + drag) */}
-      <MapZoomStack
-        style={mapControlPositions().zoom}
-        onZoomIn={() => zoomBy(ZOOM_STEP)}
-        onZoomOut={() => zoomBy(1 / ZOOM_STEP)}
-      />
     </View>
   );
 };
