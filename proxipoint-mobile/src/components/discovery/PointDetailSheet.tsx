@@ -5,6 +5,7 @@ import {
   Easing,
   Image,
   Linking,
+  PanResponder,
   Platform,
   ScrollView,
   Share,
@@ -57,6 +58,8 @@ import { isGhostVenue } from '../../lib/hostProfiles';
 const NAV_BAR_HEIGHT = 72;
 /** The sheet starts this far down the screen, so the map (and the beacon pulse) stays in view. */
 const SHEET_TOP_RATIO = 0.36;
+/** Dragged down this far (px) by the top edge, the details close. */
+const SHEET_CLOSE_DRAG = 90;
 const MAX_TAGS = 3;
 
 /** Up to 3 hashtags, main (first) one first, from `tags` (array or text) or the single `tag`. */
@@ -225,12 +228,36 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
 }) => {
   // Follows rotation (Dimensions.get would keep the size from when it was first read).
   const { height: screenHeight } = useWindowDimensions();
+  const screenHeightRef = useRef(screenHeight);
+  screenHeightRef.current = screenHeight;
   useUnits(); // re-render when Settings switches km / miles
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const navBarHeight = useNavBarHeight();
   const toggleHere = useDiscoveryStore((state) => state.toggleHere);
   const slide = useRef(new Animated.Value(0)).current;
+  // Dragging the top edge (handle row) down: the sheet follows the finger; let go far or fast
+  // enough and it slides away and closes, otherwise it springs back.
+  const drag = useRef(new Animated.Value(0)).current;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+  const dragResponder = useRef(
+    PanResponder.create({
+      // Only a downward drag takes over, so taps still reach the close / report buttons.
+      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_e, g) => drag.setValue(Math.max(0, g.dy)),
+      onPanResponderRelease: (_e, g) => {
+        if (g.dy > SHEET_CLOSE_DRAG || g.vy > 1) {
+          Animated.timing(drag, { toValue: screenHeightRef.current, duration: 180, useNativeDriver: true }).start(() => {
+            onCloseRef.current();
+          });
+        } else {
+          Animated.spring(drag, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+        }
+      },
+      onPanResponderTerminate: () => Animated.spring(drag, { toValue: 0, useNativeDriver: true }).start(),
+    }),
+  ).current;
   const sheetRef = useRef<View | null>(null);
   const reportTop = () => {
     sheetRef.current?.measureInWindow((_x, y) => {
@@ -247,6 +274,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
     setNotice('');
     if (!node) return;
     slide.setValue(0);
+    drag.setValue(0);
     Animated.timing(slide, {
       toValue: 1,
       duration: 260,
@@ -342,13 +370,21 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
         { top: screenHeight * SHEET_TOP_RATIO },
         {
           opacity: slide,
-          transform: [{ translateY: slide.interpolate({ inputRange: [0, 1], outputRange: [60, 0] }) }],
+          transform: [
+            { translateY: Animated.add(slide.interpolate({ inputRange: [0, 1], outputRange: [60, 0] }), drag) },
+          ],
         },
       ]}
       testID="point-detail-sheet"
     >
-      <View style={styles.handleRow}>
-        <TouchableOpacity onPress={onClose} style={styles.handleHit} accessibilityLabel="Close details">
+      <View style={styles.handleRow} {...dragResponder.panHandlers}>
+        <TouchableOpacity
+          onPress={onClose}
+          style={styles.handleHit}
+          accessibilityRole="button"
+          accessibilityLabel="Close details"
+          accessibilityHint="Or drag down to close"
+        >
           <View style={styles.handle} />
         </TouchableOpacity>
         <TouchableOpacity
@@ -693,7 +729,8 @@ const createStyles = (c: ThemeColors) =>
   // Tall enough to hold the close and report buttons, and above the scrolling content
   // (the cover photo used to slide over them).
   handleRow: { alignItems: 'center', paddingTop: 8, paddingBottom: 4, minHeight: 44, zIndex: 2, elevation: 2 },
-  handleHit: { paddingVertical: 6, paddingHorizontal: 30 },
+  // A big target: the whole top edge drags, and the bar itself also closes on a tap.
+  handleHit: { paddingVertical: 10, paddingHorizontal: 60 },
   handle: { width: 44, height: 4, borderRadius: 2, backgroundColor: c.borderStrong },
   closeBtn: { position: 'absolute', right: 14, top: 10, padding: 4 },
   reportBtn: { position: 'absolute', left: 16, top: 12, padding: 4 },
