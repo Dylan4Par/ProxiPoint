@@ -27,8 +27,10 @@ export const TagPicker: React.FC<{
   limit?: number;
   /** Left-hand label ("Tags"); null when the screen has its own label above. */
   label?: string | null;
+  /** Search box hint; "Find a tag" by default. */
+  placeholder?: string;
   testID?: string;
-}> = ({ value, onChange, mine, known, limit = DROP_TAG_LIMIT, label = 'Tags', testID = 'drop-tags' }) => {
+}> = ({ value, onChange, mine, known, limit = DROP_TAG_LIMIT, label = 'Tags', placeholder = 'Find a tag', testID = 'drop-tags' }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [draft, setDraft] = useState('');
@@ -98,7 +100,7 @@ export const TagPicker: React.FC<{
                 }}
                 blurOnSubmit={false}
                 returnKeyType="done"
-                placeholder="Find a tag"
+                placeholder={placeholder}
                 placeholderTextColor={c.textFaint}
                 autoCapitalize="none"
                 autoCorrect={false}
