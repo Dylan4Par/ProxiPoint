@@ -31,7 +31,6 @@ import {
   Landmark,
   Lock,
   MapPin,
-  Users,
   Link2,
   Rocket,
   UserPlus,
@@ -162,13 +161,6 @@ const VISIBILITY_OPTIONS: Array<{
     accent: '#f59e0b',
     Icon: Lock,
     hint: 'Only people you share its link with can see this Point.',
-  },
-  {
-    id: 'channel',
-    label: 'Channel',
-    accent: '#a78bfa',
-    Icon: Users,
-    hint: 'Only members of the channel you pick can see this Point.',
   },
   {
     id: 'public',
@@ -536,7 +528,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
 
     // ---- "Drop again": copy the earlier Point into the sheet ----
     // Old 'tag_network' Points come back as Public.
-    setVisibility(normalizeVisibility(source.visibility));
+    // Old Channel-only Points come back as Private, still listed in their channel (members see it).
+    const sourceVisibility = normalizeVisibility(source.visibility);
+    setVisibility(sourceVisibility === 'channel' ? 'private' : sourceVisibility);
     setChannelId(source.channelId ?? null);
     setTitle(source.title);
     setDescription(source.description);
@@ -820,8 +814,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
       return;
     }
 
-    // The channel picker only shows for Channel visibility, so only that sends one.
-    const listedChannelId = visibility === 'channel' ? channelId : null;
+    // Optional on both Private and Public: Private + channel = its members can see it too;
+    // Public + channel = also listed there, with a post.
+    const listedChannelId = channelId;
     if (visibility === 'channel' && !channelId) {
       setFormError('Channel Points need a channel. Pick one in the Channel row, or switch to Public.');
       return;
@@ -1095,8 +1090,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   // ones need approval). The picked one always stays listed.
   const tagKeys = new Set(parseBeaconTags(tags).map((tag) => tag.replace(/^#+/, '').toLowerCase()));
   const joinedChannels = allChannels.filter((channel) => channel.joined && canPostIn(channel));
+  // Private Points only go to channels you're in (its members get to see it).
   const tagMatches =
-    visibility === 'channel'
+    visibility !== 'public'
       ? []
       : allChannels.filter(
           // Listing a Point (no post) is open to channels you'd be allowed to post in once joined.
@@ -1106,12 +1102,12 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const channelOptions: Channel[] = [...joinedChannels, ...tagMatches].slice(0, 8);
   if (pickedChannel && !channelOptions.some((channel) => channel.id === pickedChannel.id)) channelOptions.unshift(pickedChannel);
   const channelHint =
-    visibility === 'channel'
+    visibility === 'private'
       ? pickedChannel
-        ? `Only ${pickedChannel.name} members can see it.`
+        ? `${pickedChannel.name} members can see it too, along with anyone you share the link with.`
         : joinedChannels.length
-          ? 'Pick which channel can see it.'
-          : 'Join a channel first to drop a channel-only Point.'
+          ? 'Optional: let one of your channels see it too.'
+          : 'Join a channel to share Private Points with its members.'
       : pickedChannel
         ? pickedChannel.joined
           ? `Also listed in ${pickedChannel.name}, with a post there.`
@@ -1121,8 +1117,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
   const selectVisibility = (next: BeaconVisibility) => {
     setVisibility(next);
     setFormError(null);
-    // Channel visibility needs a channel you're in: drop a picked channel you haven't joined.
-    if (next === 'channel' && pickedChannel && !pickedChannel.joined) setChannelId(null);
+    // Private shares with a channel's members, so it needs a channel you're in.
+    if (next !== 'public' && pickedChannel && !pickedChannel.joined) setChannelId(null);
     // A private beacon only reaches invitees, so open the invite panel right away.
     if (next === 'private') {
       setInviteOpen(true);
@@ -1443,9 +1439,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 </TouchableOpacity>
               ) : null}
             </View>
-            {/* Channel: only for Channel visibility (who can see it). Listing a Public/Private Point
-                in a channel too is hidden for now. */}
-            {visibility === 'channel' ? (
+            {/* Channel (optional) on Private and Public: Private lets its members see the Point;
+                Public lists it there too, with a post. */}
+            {visibility !== 'channel' ? (
             <>
             <View style={styles.hairline} />
             <View style={styles.channelField} testID="drop-channel">
