@@ -18,8 +18,9 @@ import {
 import { formatRange } from '../lib/calendarRange';
 import { canSeePoint, toggleMembership, useChannels, useVisiblePosts, type Channel } from '../lib/channels';
 import { MEMBERSHIP_LABEL, accessOf, membershipAction } from '../lib/channelAccess';
-import { PLACE_ICON, placeMeta, usePlaceIndex } from '../components/channels/PlacePicker';
-import { searchLocalPlaces, type LocalPlace } from '../lib/localPlaces';
+import { usePlaceIndex } from '../components/channels/PlacePicker';
+import { pointsAtPlace, searchLocalPlaces, type LocalPlace } from '../lib/localPlaces';
+import { splitVenueEvents } from '../lib/venues';
 import { kindInfo, searchPosts } from '../lib/postKinds';
 import { countInterested, interestLine, useInterestMembers } from '../lib/nearbyInterest';
 import { timeAgo } from '../lib/activity';
@@ -125,7 +126,13 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const now = useBoosts(); // ticks every 30s, so "live" and "starts in" stay current
   const moderation = useModeration();
 
-  const [query, setQuery] = useState('');
+  const [query, setQueryText] = useState('');
+  // A venue picked from the search: its events, like a #tag's (cleared when the search changes).
+  const [venueFocus, setVenueFocus] = useState<LocalPlace | null>(null);
+  const setQuery = (text: string) => {
+    setQueryText(text);
+    setVenueFocus((focus) => (focus && text === focus.name ? focus : null));
+  };
   const searchInput = useRef<TextInput | null>(null);
   // Opened from another tab's search button: fill in any starting text and focus the box.
   useEffect(() => {
@@ -209,11 +216,22 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   // ---- Search ----
   const results = useMemo(
     () =>
-      searching
-        ? searchPoints(nodes, query, center, rangeMeters, now, (node) => visible(node) && inTimeWindow(node, timeWindow))
-        : [],
+      !searching
+        ? []
+        : venueFocus
+          ? // Every upcoming event at the venue (any distance: you picked the place).
+            splitVenueEvents(
+              pointsAtPlace(
+                (Object.values(nodes || {}) as DiscoveryNode[]).filter(
+                  (node) => node.origin !== 'local' && !node.locationPrivacy && visible(node) && inTimeWindow(node, timeWindow),
+                ),
+                venueFocus,
+              ),
+              now,
+            ).upcoming
+          : searchPoints(nodes, query, center, rangeMeters, now, (node) => visible(node) && inTimeWindow(node, timeWindow)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searching, nodes, query, viewPlace.latitude, viewPlace.longitude, rangeMeters, now, moderation, timeWindow.start, timeWindow.end],
+    [searching, venueFocus, nodes, query, viewPlace.latitude, viewPlace.longitude, rangeMeters, now, moderation, timeWindow.start, timeWindow.end],
   );
   const suggestions = useMemo(
     () => (searching ? suggestTags(nodes, query, headerTags) : []),
@@ -224,11 +242,11 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const places = usePlaceIndex();
   const placeResults = useMemo(
     () =>
-      searching
+      searching && !venueFocus
         ? searchLocalPlaces(places, query, center, 12).filter((place) => inRange(center, place, rangeMeters)).slice(0, 4)
         : [],
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [searching, places, query, viewPlace.latitude, viewPlace.longitude, rangeMeters],
+    [searching, venueFocus, places, query, viewPlace.latitude, viewPlace.longitude, rangeMeters],
   );
   const postResults = useMemo(
     () => (searching ? searchPosts(posts, query, { center, rangeMeters, limit: 10 }) : []),
@@ -382,6 +400,30 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             </View>
           ) : null}
 
+          {/* Venues and places that match: tap one to see its events here, like a #tag. */}
+          {placeResults.length ? (
+            <View style={styles.suggestRow} testID="discover-venue-chips">
+              {placeResults.map((place) => (
+                <TouchableOpacity
+                  key={place.id}
+                  style={[styles.suggestChip, styles.venueChip]}
+                  onPress={() => {
+                    setQueryText(place.name);
+                    setVenueFocus(place);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Events at ${place.name}`}
+                  testID={`discover-venue-chip-${place.id}`}
+                >
+                  <MapPin size={12} color={c.violet} strokeWidth={2.5} />
+                  <Text style={[styles.suggestText, styles.venueChipText]} numberOfLines={1}>
+                    {place.name}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
+
           {nearbyInterest ? (
             <View style={styles.interestRow} testID="discover-nearby-interest">
               <Users size={14} color={c.violet} strokeWidth={2.25} />
@@ -407,26 +449,18 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             <Text style={styles.emptyText}>No channels match “{query.trim()}”. Try a #tag or a word.</Text>
           ) : null}
 
-          {/* Places: parks, venues, trails, intersections. */}
-          {!channelSearch && placeResults.length ? (
-            <>
-              <SectionHeader label={placeResults.length === 1 ? 'PLACE' : 'PLACES'} />
-              <View style={styles.list}>
-                {placeResults.map((place) => (
-                  <PlaceResultRow key={place.id} place={place} from={center} onOpen={() => onOpenPlace(place.id)} />
-                ))}
-              </View>
-            </>
-          ) : null}
-
           {channelSearch ? null : (
             <>
             <SectionHeader
-              label={`${results.length} ${results.length === 1 ? 'POINT' : 'POINTS'}${
-                rangeMeters == null ? '' : ` WITHIN ${rangeLabel.toUpperCase()}`
-              }`}
-              action={exactTag ? 'Show on map' : undefined}
-              onAction={exactTag ? () => onShowTagOnMap(exactTag) : undefined}
+              label={
+                venueFocus
+                  ? `${results.length} ${results.length === 1 ? 'POINT' : 'POINTS'} AT ${venueFocus.name.toUpperCase()}`
+                  : `${results.length} ${results.length === 1 ? 'POINT' : 'POINTS'}${
+                      rangeMeters == null ? '' : ` WITHIN ${rangeLabel.toUpperCase()}`
+                    }`
+              }
+              action={venueFocus ? 'Venue page' : exactTag ? 'Show on map' : undefined}
+              onAction={venueFocus ? () => onOpenPlace(venueFocus.id) : exactTag ? () => onShowTagOnMap(exactTag) : undefined}
             />
             {results.length ? (
               <View style={styles.list}>
@@ -443,10 +477,11 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
             ) : (
               <View style={styles.noResults}>
                 <Text style={styles.emptyText}>
-                  No Points match “{query.trim()}”
-                  {rangeMeters == null ? '' : ` within ${rangeLabel} of ${placeLabel || 'here'}`}.
+                  {venueFocus
+                    ? `Nothing coming up at ${venueFocus.name} right now. Its venue page has the last 30 days.`
+                    : `No Points match “${query.trim()}”${rangeMeters == null ? '' : ` within ${rangeLabel} of ${placeLabel || 'here'}`}.`}
                 </Text>
-                {rangeMeters != null ? (
+                {rangeMeters != null && !venueFocus ? (
                   <TouchableOpacity onPress={() => setRangeMeters(null)} accessibilityRole="button" style={styles.widenBtn}>
                     <Text style={styles.widenText}>Search any distance</Text>
                   </TouchableOpacity>
@@ -680,37 +715,6 @@ const ChannelResultRow: React.FC<{ channel: Channel; onOpen: () => void }> = ({ 
           {MEMBERSHIP_LABEL[membershipAction(channel)]}
         </Text>
       </TouchableOpacity>
-    </TouchableOpacity>
-  );
-};
-
-const PlaceResultRow: React.FC<{ place: LocalPlace; from: { latitude: number; longitude: number }; onOpen: () => void }> = ({
-  place,
-  from,
-  onOpen,
-}) => {
-  const styles = useThemedStyles(createStyles);
-  const { colors: c } = useTheme();
-  return (
-    <TouchableOpacity
-      style={styles.resultRow}
-      onPress={onOpen}
-      accessibilityRole="button"
-      accessibilityLabel={`${place.name}, ${placeMeta(place, from)}. Open place`}
-      testID={`search-place-${place.id}`}
-    >
-      <View style={styles.placeResultIcon}>
-        {React.createElement(PLACE_ICON[place.kind], { size: 17, color: c.violet, strokeWidth: 2.25 })}
-      </View>
-      <View style={styles.resultCopy}>
-        <Text style={styles.resultTitle} numberOfLines={1}>
-          {place.name}
-        </Text>
-        <Text style={styles.resultMeta} numberOfLines={1}>
-          {placeMeta(place, from)}
-        </Text>
-      </View>
-      <ChevronRight size={16} color={c.iconFaint} strokeWidth={2.25} />
     </TouchableOpacity>
   );
 };
@@ -1127,6 +1131,8 @@ const createStyles = (c: ThemeColors) =>
     },
     suggestText: { color: c.accent, fontSize: 13, fontWeight: '700' },
     suggestCount: { color: c.textFaint, fontSize: 11, fontWeight: '700', marginLeft: 3 },
+    venueChip: { borderColor: c.violet, maxWidth: 220, gap: 4 },
+    venueChipText: { color: c.violetText, flexShrink: 1 },
     noResults: { gap: 10, alignItems: 'flex-start' },
     widenBtn: {
       paddingHorizontal: 14,

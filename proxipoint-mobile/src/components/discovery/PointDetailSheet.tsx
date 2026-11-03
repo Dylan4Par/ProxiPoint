@@ -54,6 +54,8 @@ import { formatDistance } from '../../lib/discoverFeed';
 import { useUnits } from '../../lib/units';
 import { LOCALRADAR_HANDLE } from '../../lib/aggregated';
 import { isGhostVenue } from '../../lib/hostProfiles';
+import { venueInfo } from '../../lib/venues';
+import type { VenueTarget } from '../../screens/VenueHubScreen';
 
 const NAV_BAR_HEIGHT = 72;
 /** The sheet starts this far down the screen, so the map (and the beacon pulse) stays in view. */
@@ -101,6 +103,9 @@ interface NodeView {
   aggregated: boolean;
   /** The venue's page handle, when known. */
   venueHandle: string | null;
+  /** The venue's id on the server (its hub), and 'ghost' / 'pending' / 'claimed'. */
+  venueId: string | null;
+  venueClaimStatus: string | null;
   photoUri: string | null;
   /** Stock photo credit (Pexels): shown under the photo, as Pexels requires. */
   photoCredit: { provider: string; photographer: string; photographerUrl: string | null; pageUrl: string | null } | null;
@@ -169,6 +174,8 @@ function readNode(node: unknown): NodeView {
     host: hostValue || null,
     aggregated: n.source === 'external',
     venueHandle: str(n.venueHandle) || null,
+    venueId: str(n.venueId) || null,
+    venueClaimStatus: str(n.venueClaimStatus) || null,
     photoUri: str(n.coverPhotoLargeUri) || str(n.coverPhotoUri) || str(n.photoUri) || str(n.imageUrl) || null,
     photoCredit: readPhotoCredit(n.photoCredit),
     facts: readFacts(n.facts),
@@ -217,6 +224,8 @@ interface PointDetailSheetProps {
   onTopChange?: (y: number) => void;
   /** Tap on "Hosted by @x" → that host's public profile. */
   onOpenHost?: (handle: string) => void;
+  /** Tap on the venue → its hub (venue page with its events). */
+  onOpenVenue?: (target: VenueTarget) => void;
 }
 
 export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
@@ -225,6 +234,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   onToggleRsvp,
   onTopChange,
   onOpenHost,
+  onOpenVenue,
 }) => {
   // Follows rotation (Dimensions.get would keep the size from when it was first read).
   const { height: screenHeight } = useWindowDimensions();
@@ -268,7 +278,38 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const reportedRef = useRef(false);
   const view = node ? readNode(node) : null;
-  const venueGhost = Boolean(view?.venueHandle && isGhostVenue(view.venueHandle));
+  const venueGhost = view?.venueClaimStatus
+    ? view.venueClaimStatus === 'ghost'
+    : Boolean(view?.venueHandle && isGhostVenue(view.venueHandle));
+  const venueMeta = view?.venue ? venueInfo({ name: view.venue, kind: 'venue' }) : null;
+  // The venue line: a place (pin, its kind, claimed or not), never styled like an @handle.
+  const venueLine =
+    view?.venue && !view.privacyRegion && view.latitude != null && view.longitude != null ? (
+      <TouchableOpacity
+        style={styles.venueRow}
+        onPress={() =>
+          onOpenVenue?.({ name: view.venue, latitude: view.latitude as number, longitude: view.longitude as number, venueId: view.venueId })
+        }
+        disabled={!onOpenVenue}
+        hitSlop={{ top: 6, bottom: 6, left: 4, right: 8 }}
+        accessibilityRole="link"
+        accessibilityLabel={`At ${view.venue}${venueMeta ? `, ${venueMeta.label}` : ''}${venueGhost ? ', unclaimed' : ''}. Open venue page`}
+        testID="point-detail-venue-page"
+      >
+        <MapPin size={13} color={c.violet} strokeWidth={2.5} />
+        <Text style={styles.venueName} numberOfLines={1}>
+          {view.venue}
+        </Text>
+        <Text style={styles.venueMetaText} numberOfLines={1}>
+          {[venueMeta?.publicSpace ? 'Public space' : venueMeta?.kind !== 'venue' ? venueMeta?.label : null,
+            view.venueClaimStatus === 'pending' ? 'Claim in review' : venueGhost ? 'Unclaimed' : null]
+            .filter(Boolean)
+            .map((part) => ` · ${part}`)
+            .join('')}
+        </Text>
+        {onOpenVenue ? <ChevronRight size={14} color={c.violet} strokeWidth={2.5} /> : null}
+      </TouchableOpacity>
+    ) : null;
 
   useEffect(() => {
     setNotice('');
@@ -496,21 +537,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
                   <Text style={styles.host}> Listed by </Text>
                   <Text style={styles.hostLink}>{LOCALRADAR_HANDLE}</Text>
                 </TouchableOpacity>
-                {view.venue ? (
-                  <TouchableOpacity
-                    style={styles.hostRow}
-                    onPress={() => view.venueHandle && onOpenHost?.(view.venueHandle)}
-                    disabled={!onOpenHost || !view.venueHandle}
-                    accessibilityRole="link"
-                    accessibilityLabel={`${view.venue}${venueGhost ? ', unclaimed venue page' : ''}. View venue`}
-                    testID="point-detail-venue-page"
-                  >
-                    <Text style={styles.host}>at </Text>
-                    <Text style={styles.hostLink}>{view.venue}</Text>
-                    {venueGhost ? <Text style={styles.unclaimed}> · Unclaimed</Text> : null}
-                    {view.venueHandle && onOpenHost ? <ChevronRight size={14} color={c.accent} strokeWidth={2.5} /> : null}
-                  </TouchableOpacity>
-                ) : null}
+                {venueLine}
               </View>
             ) : view.host ? (
               onOpenHost ? (
@@ -530,6 +557,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
                 <Text style={styles.host}>Hosted by {view.host}</Text>
               )
             ) : null}
+            {/* People's own Points: the venue below the host (gathered events show it above). */}
+            {!view.aggregated ? venueLine : null}
           </View>
         </View>
 
@@ -765,6 +794,9 @@ const createStyles = (c: ThemeColors) =>
   listedBlock: { gap: 1 },
   unclaimed: { color: c.textFaint, fontSize: 12, fontStyle: 'italic' },
   hostLink: { color: c.accent, fontSize: 12, fontWeight: '800' },
+  venueRow: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-start', gap: 4, marginTop: 4, maxWidth: '100%' },
+  venueName: { flexShrink: 1, color: c.violetText, fontSize: 13, fontWeight: '800' },
+  venueMetaText: { flexShrink: 2, color: c.textMuted, fontSize: 12 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 8 },
   soonChip: { backgroundColor: 'rgba(16, 185, 129, 0.15)', borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3 },
   soonText: { color: c.greenDeep, fontSize: 11, fontWeight: '800' },

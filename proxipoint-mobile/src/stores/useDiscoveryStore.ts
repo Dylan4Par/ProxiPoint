@@ -84,6 +84,11 @@ export interface DiscoveryNode {
   source?: PointSource;
   /** The venue's page (a ghost page until the venue claims it), e.g. '@rustyanchor'. */
   venueHandle?: string;
+  /** The venue's id on the server (venue hub: GET /api/v1/venues/{tenant}/{id}). */
+  venueId?: string;
+  venueAddress?: string;
+  /** 'ghost' (unclaimed), 'pending' (a claim is in review) or 'claimed'. */
+  venueClaimStatus?: string;
   startsAt?: string;
   endsAt?: string;
   maxAttendance?: number | null;

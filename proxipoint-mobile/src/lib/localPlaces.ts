@@ -31,6 +31,10 @@ export interface LocalPlace {
   longitude: number;
   /** e.g. "Erie, CO" */
   area?: string;
+  /** Venue hub details, when known from events at the place (server venues). */
+  venueId?: string;
+  address?: string;
+  claimStatus?: string;
 }
 
 /** Two places closer than this with the same name are one place. */
@@ -72,6 +76,9 @@ const distance = (a: { latitude: number; longitude: number }, b: { latitude: num
 export interface VenueNode {
   id: string;
   venue?: string;
+  venueId?: string;
+  venueAddress?: string;
+  venueClaimStatus?: string;
   latitude?: number;
   longitude?: number;
   /** Set when the host hid the exact spot: never becomes a place. */
@@ -87,14 +94,24 @@ export function buildPlaceIndex(
   nodes: VenueNode[] | Record<string, VenueNode> | null | undefined,
   posts: Array<Pick<ChannelPost, 'place'>> = [],
 ): LocalPlace[] {
-  const index = [...places];
+  const index = places.map((place) => ({ ...place }));
   const known = (name: string, spot: { latitude: number; longitude: number }) =>
-    index.some((place) => norm(place.name) === norm(name) && distance(place, spot) <= SAME_PLACE_METERS);
+    index.find((place) => norm(place.name) === norm(name) && distance(place, spot) <= SAME_PLACE_METERS);
   for (const node of Array.isArray(nodes) ? nodes : Object.values(nodes ?? {})) {
     if (!node?.venue || node.locationPrivacy || typeof node.latitude !== 'number' || typeof node.longitude !== 'number') continue;
     const spot = { latitude: node.latitude, longitude: node.longitude };
-    if (known(node.venue, spot)) continue;
-    index.push({ id: `venue-${node.id}`, name: node.venue, kind: 'venue', ...spot });
+    const details = {
+      ...(node.venueId ? { venueId: node.venueId } : {}),
+      ...(node.venueAddress ? { address: node.venueAddress } : {}),
+      ...(node.venueClaimStatus ? { claimStatus: node.venueClaimStatus } : {}),
+    };
+    const existing = known(node.venue, spot);
+    if (existing) {
+      // The server's venue details fill in a place we already know.
+      if (!existing.venueId) Object.assign(existing, details);
+      continue;
+    }
+    index.push({ id: `venue-${node.id}`, name: node.venue, kind: 'venue', ...spot, ...details });
   }
   for (const post of posts) {
     const place = post.place;
