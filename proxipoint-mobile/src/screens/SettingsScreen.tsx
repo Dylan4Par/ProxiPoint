@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Constants from 'expo-constants';
+import { appVersionLabel } from '../lib/appVersion';
 import {
   BookOpen,
   ChevronLeft,
@@ -77,6 +78,12 @@ const ROWS: Array<{ id: SectionId; label: string; Icon: LucideIcon }> = [
   { id: 'faqs', label: 'FAQs', Icon: HelpCircle },
   { id: 'help', label: 'Help', Icon: LifeBuoy },
 ];
+
+/** "ProxiPoint v1.0.0 (Build 1)", from app.json (ios.buildNumber / android.versionCode). */
+const APP_VERSION_LABEL = appVersionLabel(
+  Constants.expoConfig?.version,
+  Platform.OS === 'ios' ? Constants.expoConfig?.ios?.buildNumber : Constants.expoConfig?.android?.versionCode,
+);
 
 const FAQS: Array<{ q: string; a: string }> = [
   {
@@ -278,6 +285,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         onPress={() => void contactSupport(accountEmail)}
                         testID="settings-contact-support"
                       />
+                      <Text style={styles.versionLine} selectable testID="settings-app-version">
+                        {APP_VERSION_LABEL}
+                      </Text>
                     </>
                   ) : null}
                   {id === 'faqs'
@@ -591,7 +601,7 @@ const InfoRow: React.FC<{ title: string; body: string; status: 'Ready' | 'Coming
  * Without a mail app, shows the address so it can be copied.
  */
 async function contactSupport(accountEmail: string | null): Promise<void> {
-  const version = Constants.expoConfig?.version ?? 'unknown';
+  const version = APP_VERSION_LABEL;
   const body = [
     '',
     '',
@@ -697,6 +707,7 @@ const createStyles = (c: ThemeColors) =>
   contactBlock: { gap: 8 },
   fieldLabel: { color: c.textMuted, fontSize: 12, fontWeight: '700', marginTop: 4 },
   note: { color: c.textMuted, fontSize: 12, lineHeight: 17 },
+  versionLine: { color: c.textFaint, fontSize: 12, fontWeight: '600', textAlign: 'center', marginTop: 8, marginLeft: -37 },
   cooldownNote: { color: c.accent, fontSize: 12, lineHeight: 17, fontWeight: '600' },
   inputLocked: { opacity: 0.55 },
   saveBtnOff: { opacity: 0.45 },
