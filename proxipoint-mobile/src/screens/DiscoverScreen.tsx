@@ -111,6 +111,8 @@ export const DiscoverScreen: React.FC = () => {
   // Public detail sheet for a Discover card (the card stays selected after it closes).
   const [detailId, setDetailId] = useState<string | null>(null);
   const [detailTopY, setDetailTopY] = useState<number | null>(null);
+  // Bumped each time the detail sheet settles, so the map centers the Point above it again.
+  const [detailTopKey, setDetailTopKey] = useState(0);
   // Height of the map + cards area (for the full-screen card list).
   const [cardsArea, setCardsArea] = useState<number | null>(null);
   // Tapping Discover in the nav bar sends the card list back to its default size.
@@ -665,6 +667,7 @@ export const DiscoverScreen: React.FC = () => {
               // Touching the map closes the detail sheet (the Point stays selected).
               onMapTouch={() => setDetailId(null)}
               coveredFromY={detailId ? detailTopY : null}
+              coveredKey={detailTopKey}
               // Picked from a cluster's list (several Points at one spot): show its details.
               onOpenPoint={setDetailId}
               // Speech-bubble pins for channel posts: open the post and its comments.
@@ -703,7 +706,10 @@ export const DiscoverScreen: React.FC = () => {
             node={detailNode}
             onClose={() => setDetailId(null)}
             onToggleRsvp={(id) => toggleRsvp(id)}
-            onTopChange={setDetailTopY}
+            onTopChange={(y) => {
+              setDetailTopY(y);
+              setDetailTopKey((k) => k + 1);
+            }}
             onOpenHost={setHostHandle}
           />
         </>

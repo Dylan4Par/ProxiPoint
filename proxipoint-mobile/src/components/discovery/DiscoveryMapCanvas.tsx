@@ -120,6 +120,8 @@ export const DiscoveryMapCanvas: React.FC<{
    * The selected Point is centered in the part of the map still showing.
    */
   coveredFromY?: number | null;
+  /** Bumped each time the detail sheet settles in place: the selected Point is centered again. */
+  coveredKey?: number;
   /**
    * How much of the map's bottom the card list covers. The map fills the whole area and never
    * resizes when the list slides; this only moves the "middle" used for centering, the card
@@ -157,6 +159,7 @@ export const DiscoveryMapCanvas: React.FC<{
   liveOnly = false,
   onMapTouch,
   coveredFromY = null,
+  coveredKey = 0,
   coveredBottom = 0,
   showAlwaysId = null,
   onOpenPoint,
@@ -696,10 +699,11 @@ export const DiscoveryMapCanvas: React.FC<{
 
   /** Height of the map not hidden by the detail sheet. */
   const visibleMapHeight = () => {
-    const aboveCards = Math.max(80, viewSize.current.height - coveredBottomRef.current);
-    return coveredRef.current != null
-      ? Math.max(80, Math.min(aboveCards, coveredRef.current - frameOrigin.current.top))
-      : aboveCards;
+    // With the detail sheet up, it covers the card list too, so only the sheet counts. (The card
+    // list may still be sliding from full to half when a card is tapped; counting it then
+    // centered the Point in the wrong strip, low and behind the sheet.)
+    if (coveredRef.current != null) return Math.max(80, coveredRef.current - frameOrigin.current.top);
+    return Math.max(80, viewSize.current.height - coveredBottomRef.current);
   };
 
   /** Slides the selected Point to the middle of what's visible (at the current zoom). */
@@ -839,17 +843,20 @@ export const DiscoveryMapCanvas: React.FC<{
   const selectedY = selectedNode?.y;
   // Only move when the selection or the sheet changes (not on first load or re-layout),
   // so the map still opens centered on you and doesn't fight the user's own panning.
-  const lastFocus = useRef<{ id: unknown; covered: number | null } | null>(null);
+  // The sheet settling (coveredKey) counts too, even at the same spot as last time: by then the
+  // card list and the sheet have stopped moving, so this is the final, right centering.
+  const lastFocus = useRef<{ id: unknown; covered: number | null; key: number } | null>(null);
   useEffect(() => {
     const previous = lastFocus.current;
-    lastFocus.current = { id: selectedNodeId, covered: coveredFromY };
+    lastFocus.current = { id: selectedNodeId, covered: coveredFromY, key: coveredKey };
     if (!previous) return; // first render
-    if (previous.id === selectedNodeId && previous.covered === coveredFromY) return;
+    if (previous.id === selectedNodeId && previous.covered === coveredFromY && previous.key === coveredKey) return;
     if (selectedX == null || selectedY == null) return;
+    if (previous.key !== coveredKey && coveredFromY == null) return; // a sheet that's closing
     userMoved.current = true;
     focusSelected();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedNodeId, coveredFromY]);
+  }, [selectedNodeId, coveredFromY, coveredKey]);
 
   // Recenter: back on you, at the default zoom.
   // (openCluster is defined below; keep the ref pointing at the latest one.)
