@@ -5,6 +5,7 @@ import {
   canPostIn,
   canViewChannel,
   membershipAction,
+  mustJoinToPost,
   uniqueHandle,
   validateNewChannel,
 } from './channelAccess';
@@ -21,10 +22,18 @@ const channel = (extra: Partial<Channel> = {}): Channel => ({
   ...extra,
 });
 
-test('public: anyone can view, post and comment (joined or not)', () => {
+test('public: anyone can view and comment; posting takes joining', () => {
   const c = channel();
-  assert.deepEqual([canViewChannel(c), canPostIn(c), canCommentIn(c)], [true, true, true]);
+  assert.deepEqual([canViewChannel(c), canPostIn(c), canCommentIn(c)], [true, false, true]);
+  assert.equal(mustJoinToPost(c), true);
+  assert.equal(canPostIn({ ...c, joined: true }), true);
   assert.equal(membershipAction(c), 'join');
+});
+
+test('restricted: an approved poster still has to join to post', () => {
+  const c = channel({ access: 'restricted', approved: true });
+  assert.equal(canPostIn(c), false);
+  assert.equal(canPostIn({ ...c, joined: true }), true);
 });
 
 test('restricted: anyone views and comments; posting needs approval', () => {

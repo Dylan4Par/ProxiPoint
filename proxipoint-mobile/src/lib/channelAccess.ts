@@ -3,7 +3,7 @@ import type { Channel } from './channels';
 /**
  * Who can see and post in a channel. Pure (no React), so it's testable and the server can apply
  * the same rules:
- * - Public: anyone can view, post and comment.
+ * - Public: anyone can view and comment; members (joined) can post.
  * - Restricted: anyone can view and comment; only approved members can post.
  * - Private: only approved members can view, post and comment. Others see its name and
  *   description, and can ask to join.
@@ -13,7 +13,7 @@ import type { Channel } from './channels';
 export type ChannelAccess = 'public' | 'restricted' | 'private';
 
 export const CHANNEL_ACCESS: Array<{ id: ChannelAccess; label: string; summary: string }> = [
-  { id: 'public', label: 'Public', summary: 'Anyone can view, post and comment.' },
+  { id: 'public', label: 'Public', summary: 'Anyone can view and comment; members can post.' },
   { id: 'restricted', label: 'Restricted', summary: 'Anyone can view and comment, but only approved members can post.' },
   { id: 'private', label: 'Private', summary: 'Only approved members can view, post and comment.' },
 ];
@@ -40,7 +40,13 @@ export function canViewChannel(channel: AccessFields | null | undefined): boolea
   return accessOf(channel) !== 'private' || isApproved(channel);
 }
 
+/** Posting always takes joining first (the moderator counts as joined). */
+export function mustJoinToPost(channel: AccessFields): boolean {
+  return !channel.joined && !channel.moderator;
+}
+
 export function canPostIn(channel: AccessFields): boolean {
+  if (mustJoinToPost(channel)) return false;
   return accessOf(channel) === 'public' || isApproved(channel);
 }
 
