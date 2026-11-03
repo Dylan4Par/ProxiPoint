@@ -52,3 +52,11 @@ test('Done button label', () => {
   assert.equal(showEventsLabel(1), 'Show 1 Event');
   assert.equal(showEventsLabel(0), 'No Events Found');
 });
+
+test('the map and list filters take #tag filters too (Explore Map)', async () => {
+  const { matchesDiscoverFilters } = await import('./discoverFilters');
+  const node = { id: 'n', tags: ['#ArtWalk', '#Gaming'] };
+  assert.ok(matchesDiscoverFilters(node, { tagFilter: { tags: ['#Yoga', '#ArtWalk'], mode: 'any' } }));
+  assert.ok(!matchesDiscoverFilters(node, { tagFilter: { tags: ['#Yoga', '#ArtWalk'], mode: 'all' } }));
+  assert.ok(matchesDiscoverFilters(node, { tagFilter: { tags: [], mode: 'all' } }), 'no tags: everything');
+});

@@ -5,29 +5,16 @@
  */
 import { useEffect, useState } from 'react';
 import { canonicalTag } from './hashtags';
-import { matchesDiscoverFilters, nodeTags, type DiscoverFilters } from './discoverFilters';
+import { matchesDiscoverFilters, matchesTagFilter, tagMatchCount, type DiscoverFilters, type TagMatchMode } from './discoverFilters';
+
+export { matchesTagFilter, tagMatchCount, type TagMatchMode };
 import { inRange, type FeedNode } from './discoverFeed';
 
 export const MAX_DISCOVER_TAGS = 5;
-export type TagMatchMode = 'any' | 'all';
 
 const keyOf = (tag: string) => tag.replace(/^#+/, '').trim().toLowerCase();
 
 // ---- Pure matching --------------------------------------------------------------------------
-
-/** How many of the tags the Point has. */
-export function tagMatchCount(node: unknown, tags: string[]): number {
-  if (!tags.length) return 0;
-  const has = new Set(nodeTags(node));
-  return tags.filter((tag) => has.has(keyOf(tag))).length;
-}
-
-/** No tags: everything. Any: at least one. All: every one. */
-export function matchesTagFilter(node: unknown, tags: string[], mode: TagMatchMode): boolean {
-  if (!tags.length) return true;
-  const n = tagMatchCount(node, tags);
-  return mode === 'all' ? n === tags.length : n > 0;
-}
 
 /** Points matching more of the tags first (stable otherwise). Only matters for "Any". */
 export function rankByTagMatches<T>(list: T[], tags: string[], mode: TagMatchMode): T[] {
