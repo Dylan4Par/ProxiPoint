@@ -1401,6 +1401,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                 mine={myTags}
                 known={knownBeacons}
                 placeholder={visibility === 'private' ? 'Find a tag (optional)' : undefined}
+                // Private: no pre-loaded tags; type to find one if you want.
+                suggestUpfront={visibility !== 'private'}
               />
             </View>
             <View style={styles.hairline} />

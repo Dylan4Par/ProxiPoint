@@ -29,8 +29,20 @@ export const TagPicker: React.FC<{
   label?: string | null;
   /** Search box hint; "Find a tag" by default. */
   placeholder?: string;
+  /** false: no starter / usual tags before typing (matches still show while you type). */
+  suggestUpfront?: boolean;
   testID?: string;
-}> = ({ value, onChange, mine, known, limit = DROP_TAG_LIMIT, label = 'Tags', placeholder = 'Find a tag', testID = 'drop-tags' }) => {
+}> = ({
+  value,
+  onChange,
+  mine,
+  known,
+  limit = DROP_TAG_LIMIT,
+  label = 'Tags',
+  placeholder = 'Find a tag',
+  suggestUpfront = true,
+  testID = 'drop-tags',
+}) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [draft, setDraft] = useState('');
@@ -59,7 +71,9 @@ export const TagPicker: React.FC<{
     ? []
     : query
       ? matches.map((entry) => entry.tag.slice(1))
-      : usual.filter((t) => !pickedKeys.has(t.toLowerCase())).slice(0, MAX_SUGGESTIONS);
+      : suggestUpfront
+        ? usual.filter((t) => !pickedKeys.has(t.toLowerCase())).slice(0, MAX_SUGGESTIONS)
+        : [];
   const noMatch = !full && Boolean(query) && matches.length === 0;
 
   const pick = (tag: string) => {
@@ -86,7 +100,8 @@ export const TagPicker: React.FC<{
           {full ? (
             <Text style={styles.fullNote}>{limit} tags max</Text>
           ) : (
-            <View style={styles.inputWrap}>
+            // Wide enough for the whole hint ("Find a tag (optional)" needs more than "Find a tag").
+            <View style={[styles.inputWrap, { width: Math.max(110, placeholder.length * 8 + 24) }]}>
               <Text style={styles.hash}>#</Text>
               <TextInput
                 ref={inputRef}
