@@ -62,6 +62,7 @@ import {
   accessOf,
   canCommentIn,
   canPostIn,
+  mustJoinToPost,
   canViewChannel,
   membershipAction,
 } from '../lib/channelAccess';
@@ -325,6 +326,19 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   );
   const byId = new Map(channels.map((channel) => [channel.id, channel]));
 
+  // Channel chip row: arrows on whichever side has more chips hidden (tap to scroll that way).
+  const chipScroll = useRef<ScrollView | null>(null);
+  const [chipView, setChipView] = useState({ x: 0, width: 0, content: 0 });
+  const moreLeft = chipView.x > 8;
+  const moreRight = chipView.content - chipView.width - chipView.x > 8;
+  const nudgeChips = (direction: 1 | -1) => {
+    const max = Math.max(0, chipView.content - chipView.width);
+    const x = Math.min(max, Math.max(0, chipView.x + direction * chipView.width * 0.7));
+    chipScroll.current?.scrollTo({ x, animated: true });
+    setChipView((v) => ({ ...v, x }));
+  };
+  const trackChipX = (x: number) => setChipView((v) => (Math.abs(v.x - x) < 1 ? v : { ...v, x }));
+
   if (!joined.length) {
     return (
       <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
@@ -344,9 +358,9 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.content} testID="channels-feed">
-      {/* Your channels, for jumping straight to one. */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chipScroll} contentContainerStyle={styles.chipRow}>
-        {/* "+" first in the row: find more channels to join. */}
+      {/* Your channels, for jumping straight to one. "+" (find more channels) stays put at the
+          start; the channels scroll beside it, with arrows when more are hidden either way. */}
+      <View style={styles.chipBar}>
         <TouchableOpacity
           style={styles.channelChipAdd}
           onPress={() => onChangeSegment('manage')}
@@ -356,21 +370,61 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
         >
           <Plus size={18} color={c.accent} strokeWidth={2.5} />
         </TouchableOpacity>
-        {joined.map((channel) => (
-          <TouchableOpacity
-            key={channel.id}
-            style={styles.channelChip}
-            onPress={() => onOpenChannel(channel.id)}
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${channel.name}`}
+        <View style={styles.chipScrollArea}>
+          <ScrollView
+            ref={chipScroll}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.chipRow}
+            scrollEventThrottle={32}
+            onScroll={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
+            onScrollEndDrag={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
+            onMomentumScrollEnd={(e) => trackChipX(e.nativeEvent.contentOffset.x)}
+            onLayout={(e) => {
+              const width = e.nativeEvent.layout.width;
+              setChipView((v) => (v.width === width ? v : { ...v, width }));
+            }}
+            onContentSizeChange={(content) => setChipView((v) => (v.content === content ? v : { ...v, content }))}
           >
-            <CategoryBadge tag={channel.tags[0]} title={channel.name} size={22} />
-            <Text style={styles.channelChipText} numberOfLines={1}>
-              {channel.name}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </ScrollView>
+            {joined.map((channel) => (
+              <TouchableOpacity
+                key={channel.id}
+                style={styles.channelChip}
+                onPress={() => onOpenChannel(channel.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${channel.name}`}
+              >
+                <CategoryBadge tag={channel.tags[0]} title={channel.name} size={22} />
+                <Text style={styles.channelChipText} numberOfLines={1}>
+                  {channel.name}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          {moreLeft ? (
+            <TouchableOpacity
+              style={[styles.chipArrow, styles.chipArrowLeft]}
+              onPress={() => nudgeChips(-1)}
+              accessibilityRole="button"
+              accessibilityLabel="Scroll channels back"
+              testID="channel-chips-left"
+            >
+              <ChevronLeft size={16} color={c.accent} strokeWidth={2.75} />
+            </TouchableOpacity>
+          ) : null}
+          {moreRight ? (
+            <TouchableOpacity
+              style={[styles.chipArrow, styles.chipArrowRight]}
+              onPress={() => nudgeChips(1)}
+              accessibilityRole="button"
+              accessibilityLabel="More channels"
+              testID="channel-chips-right"
+            >
+              <ChevronRight size={16} color={c.accent} strokeWidth={2.75} />
+            </TouchableOpacity>
+          ) : null}
+        </View>
+      </View>
 
       <Text style={styles.feedLabel} accessibilityRole="header">
         Latest Posts:
@@ -858,7 +912,23 @@ const ChannelPage: React.FC<ChannelsScreenProps & { channel: Channel }> = ({
       )}
 
       <Text style={[styles.sectionLabel, styles.sectionSpaced]}>POSTS</Text>
-      {canPost ? (
+      {mustJoinToPost(channel) ? (
+        // Not a member: read and comment, join to post.
+        <View style={styles.gateBox} testID="channel-join-gate">
+          <View style={styles.claimHeader}>
+            <Users size={15} color={c.violet} strokeWidth={2.25} />
+            <Text style={styles.claimTitle}>Join to post</Text>
+          </View>
+          <Text style={styles.claimBody}>
+            {membershipAction(channel) === 'join'
+              ? `Join ${channel.name} to post here. You can still read and comment on posts.`
+              : `Ask to join ${channel.name} to post here.`}
+          </Text>
+          <View style={styles.joinGateBtnRow}>
+            <JoinButton channel={channel} large />
+          </View>
+        </View>
+      ) : canPost ? (
         <View style={styles.composer}>
           <View style={styles.kindRow} accessibilityRole="radiogroup">
             {POST_KINDS.map((info) => {
@@ -2099,9 +2169,21 @@ const createStyles = (c: ThemeColors) =>
     list: { gap: 10 },
     emptyText: { color: c.textFaint, fontSize: 13, lineHeight: 19 },
 
-    chipScroll: { marginHorizontal: -16, marginBottom: 12 },
+    chipBar: { flexDirection: 'row', alignItems: 'center', gap: 8, marginRight: -16, marginBottom: 12 },
+    chipScrollArea: { flex: 1, position: 'relative' },
+    chipArrow: {
+      position: 'absolute',
+      top: 0,
+      bottom: 0,
+      width: 30,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.base,
+    },
+    chipArrowLeft: { left: 0, borderTopRightRadius: 16, borderBottomRightRadius: 16 },
+    chipArrowRight: { right: 0, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 },
     feedLabel: { color: c.textBody, fontSize: 15, fontWeight: '800', marginTop: -2, marginBottom: 8 },
-    chipRow: { paddingHorizontal: 16, gap: 8, alignItems: 'center' },
+    chipRow: { paddingRight: 16, gap: 8, alignItems: 'center' },
     channelChip: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -2422,6 +2504,7 @@ const createStyles = (c: ThemeColors) =>
       backgroundColor: c.violetTint,
     },
     accessPillText: { color: c.violetText, fontSize: 11, fontWeight: '800' },
+    joinGateBtnRow: { flexDirection: 'row', marginTop: 2 },
     gateBox: {
       marginTop: 12,
       padding: 14,

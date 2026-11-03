@@ -1101,7 +1101,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     visibility === 'channel'
       ? []
       : allChannels.filter(
-          (channel) => !channel.joined && canPostIn(channel) && channel.tags.some((tag) => tagKeys.has(tag.replace(/^#+/, '').toLowerCase())),
+          // Listing a Point (no post) is open to channels you'd be allowed to post in once joined.
+          (channel) => !channel.joined && canPostIn({ ...channel, joined: true }) && channel.tags.some((tag) => tagKeys.has(tag.replace(/^#+/, '').toLowerCase())),
         );
   const pickedChannel = channelId ? allChannels.find((channel) => channel.id === channelId) ?? null : null;
   const channelOptions: Channel[] = [...joinedChannels, ...tagMatches].slice(0, 8);
