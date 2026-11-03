@@ -38,6 +38,7 @@ import {
 } from '../../lib/discoverTagFilter';
 import { countFeed } from '../../lib/discoverFeed';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
+import { useKeyboardHeight } from '../common/KeyboardAwareScrollView';
 
 interface TopFilterHeaderProps {
   /** Tap on the avatar opens the Profile page. */
@@ -112,6 +113,10 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
 
   // The Filter menu (#tag filters, Any / All, quick-add).
   const [tagModalOpen, setTagModalOpen] = useState(false);
+  // The Filter sheet sits on top of the keyboard while you type a hashtag (the modal's window
+  // doesn't shrink for it on Android edge-to-edge or iOS), so the search, + Add and Show N Events
+  // stay visible.
+  const keyboardHeight = useKeyboardHeight();
   const myChannelsOnly = useMyChannelsOnly();
   const rangeMeters = useMapRange();
   const followed = useFollowedTagsFilter();
@@ -484,11 +489,11 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         transparent={true}
         onRequestClose={() => setTagModalOpen(false)}
       >
-        <View style={styles.sheetBackdrop}>
+        <View style={[styles.sheetBackdrop, { paddingBottom: keyboardHeight }]}>
           <TouchableWithoutFeedback onPress={() => setTagModalOpen(false)}>
             <View style={styles.sheetDismiss} />
           </TouchableWithoutFeedback>
-          <View style={styles.sheet} testID="filter-sheet">
+          <View style={[styles.sheet, keyboardHeight > 0 && styles.sheetOverKeyboard]} testID="filter-sheet">
             <View style={styles.sheetHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Filter</Text>
@@ -1043,6 +1048,8 @@ const createStyles = (c: ThemeColors) =>
     justifyContent: 'flex-end',
   },
   sheetDismiss: { flex: 1 },
+  // Above the keyboard: no extra bottom padding (the keyboard is right below).
+  sheetOverKeyboard: { paddingBottom: 12, maxHeight: '92%' },
   sheet: {
     maxHeight: '85%',
     backgroundColor: c.surface,
