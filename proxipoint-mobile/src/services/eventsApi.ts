@@ -24,12 +24,21 @@ export interface FetchEventsOptions {
   signal?: AbortSignal;
 }
 
+/**
+ * Requests are made the same for everyone nearby so a cache (CDN, or the server's) can answer
+ * them: the spot is rounded to about 1 km (2 decimals) and the window starts on the 10 minutes.
+ * The radius is 100 km, so 1 km of rounding changes nothing you'd notice.
+ */
+export const EVENTS_NEAR_DECIMALS = 2;
+export const EVENTS_WINDOW_STEP_MS = 10 * 60 * 1000;
+
 export function eventsRequestUrl({ tenantId, near, now = new Date() }: FetchEventsOptions): string {
-  const to = new Date(now.getTime() + EVENTS_DAYS_AHEAD * 24 * 3600 * 1000);
+  const from = new Date(Math.floor(now.getTime() / EVENTS_WINDOW_STEP_MS) * EVENTS_WINDOW_STEP_MS);
+  const to = new Date(from.getTime() + EVENTS_DAYS_AHEAD * 24 * 3600 * 1000);
   const params = [
-    `from=${encodeURIComponent(now.toISOString())}`,
+    `from=${encodeURIComponent(from.toISOString())}`,
     `to=${encodeURIComponent(to.toISOString())}`,
-    `near=${near.latitude.toFixed(5)},${near.longitude.toFixed(5)}`,
+    `near=${near.latitude.toFixed(EVENTS_NEAR_DECIMALS)},${near.longitude.toFixed(EVENTS_NEAR_DECIMALS)}`,
     `radius_m=${EVENTS_RADIUS_M}`,
     'limit=500',
   ];
