@@ -89,6 +89,8 @@ const LOCAL_ACCOUNTS_KEY = 'pp.auth.localAccounts.v1';
 interface LocalAccount extends AuthAccount {
   /** Not a real password hash: the stand-in only has to tell passwords apart on one phone. */
   check: string;
+  /** Settings → Privacy → Disable account. Signing back in turns it back on. */
+  disabledAt?: string | null;
 }
 
 function weakDigest(text: string): string {
@@ -164,6 +166,12 @@ export async function signIn(emailRaw: string, password: string): Promise<AuthSe
   await pause();
   const account = (await loadLocal())[email];
   if (!account || account.check !== weakDigest(`${email}:${password}`)) throw new AuthError('invalid_credentials');
+  // A disabled account comes back on when you sign in.
+  if (account.disabledAt) {
+    const restored = { ...account, disabledAt: null };
+    await saveLocal({ ...(await loadLocal()), [email]: restored });
+    return localSession(restored);
+  }
   return localSession(account);
 }
 
@@ -208,6 +216,41 @@ export async function completeOnboarding(session: AuthSession, profile: Onboardi
   await saveLocal({ ...accounts, [account.email]: next });
   const { check: _check, ...pub } = next;
   return pub;
+}
+
+/**
+ * Settings → Privacy → Disable account: your profile, Points, posts and comments are hidden and
+ * nobody can find or invite you, until you sign back in (which turns the account back on).
+ * Server: POST /v1/me/disable (also ends every session).
+ */
+export async function disableAccount(session: AuthSession): Promise<void> {
+  if (!usingLocalAuth) {
+    await call('/v1/me/disable', {}, session.accessToken);
+    return;
+  }
+  await pause();
+  const accounts = await loadLocal();
+  const account = accounts[session.account.email];
+  if (!account) throw new AuthError('unknown');
+  await saveLocal({ ...accounts, [account.email]: { ...account, disabledAt: new Date().toISOString() } });
+}
+
+/**
+ * Settings → Privacy → Delete account: permanent. Needs your password. Server: DELETE /v1/me
+ * { password } removes the account, profile, Points, posts, comments and photos, and frees the
+ * email and @handle.
+ */
+export async function deleteAccount(session: AuthSession, password: string): Promise<void> {
+  if (!usingLocalAuth) {
+    await call('/v1/me', { password }, session.accessToken, 'DELETE');
+    return;
+  }
+  await pause();
+  const accounts = await loadLocal();
+  const account = accounts[session.account.email];
+  if (!account || account.check !== weakDigest(`${account.email}:${password}`)) throw new AuthError('invalid_credentials');
+  const { [account.email]: _gone, ...rest } = accounts;
+  await saveLocal(rest);
 }
 
 /** Ends this session on the server (the app forgets it either way). */

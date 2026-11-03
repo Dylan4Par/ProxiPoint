@@ -1,4 +1,5 @@
 import { defaultUnits } from './units';
+import type { MapStyle } from './mapStyle';
 
 /**
  * The signed-in user's profile, as the Profile and Settings screens need it.
@@ -92,6 +93,10 @@ export interface MySettings {
   contactPhone: string;
   /** True: anyone can see them. False: people send a request and you choose who gets them. */
   contactPublic: boolean;
+  /** How far Discover looks when the app opens (meters; null = any distance). */
+  defaultReachMeters: number | null;
+  /** The map's look: follow the app's Appearance, or always Light / Dark. */
+  mapStyle: MapStyle;
 }
 
 export const DEFAULT_SETTINGS: MySettings = {
@@ -102,4 +107,6 @@ export const DEFAULT_SETTINGS: MySettings = {
   contactEmail: '',
   contactPhone: '',
   contactPublic: false,
+  defaultReachMeters: null,
+  mapStyle: 'auto',
 };

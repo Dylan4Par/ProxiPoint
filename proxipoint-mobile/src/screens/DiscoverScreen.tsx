@@ -53,14 +53,18 @@ import { planAutoChannels } from '../lib/autoChannels';
 import { useBoosts } from '../lib/boost';
 import { useModeration } from '../lib/moderation';
 import { myTagSuggestions } from '../lib/tagInput';
-import { setFollowedTags } from '../lib/discoverFilters';
+import { setFollowedTags, setMapRange } from '../lib/discoverFilters';
 import { DEFAULT_PROFILE, DEFAULT_SETTINGS, type MyProfile, type MySettings } from '../lib/myProfile';
 import type { PointRecap } from '../lib/pointRecap';
 import type { DroppedPoint } from '../lib/droppedPoint';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
+import { isMapStyle, setMapStyle } from '../lib/mapStyle';
 
 /** Where the Distance units setting is saved on the phone. */
 const UNITS_KEY = 'pp.settings.units.v1';
+/** Settings → App settings: Default radar reach and Default map style, saved on the phone. */
+const REACH_KEY = 'pp.settings.reach.v1';
+const MAP_STYLE_KEY = 'pp.settings.mapStyle.v1';
 
 type ScreenTab = NavTab;
 
@@ -301,6 +305,41 @@ export const DiscoverScreen: React.FC = () => {
     setUnits(settings.units);
     AsyncStorage.setItem(UNITS_KEY, settings.units).catch(() => undefined);
   }, [settings.units]);
+  // Default radar reach and map style: read once, then saved (and applied) whenever they change.
+  const [defaultsLoaded, setDefaultsLoaded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    AsyncStorage.multiGet([REACH_KEY, MAP_STYLE_KEY])
+      .then(([[, reach], [, style]]) => {
+        if (cancelled) return;
+        const meters = reach == null ? undefined : reach === 'any' ? null : Number(reach);
+        setSettings((current) => ({
+          ...current,
+          ...(meters === null || (typeof meters === 'number' && Number.isFinite(meters) && meters > 0) ? { defaultReachMeters: meters } : {}),
+          ...(isMapStyle(style) ? { mapStyle: style } : {}),
+        }));
+      })
+      .catch(() => undefined)
+      .finally(() => !cancelled && setDefaultsLoaded(true));
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  useEffect(() => {
+    if (!defaultsLoaded) return;
+    // Discover's distance starts at the default reach (and moves to it when the default changes).
+    setMapRange(settings.defaultReachMeters);
+    AsyncStorage.setItem(REACH_KEY, settings.defaultReachMeters == null ? 'any' : String(settings.defaultReachMeters)).catch(() => undefined);
+  }, [defaultsLoaded, settings.defaultReachMeters]);
+  useEffect(() => {
+    setMapStyle(settings.mapStyle);
+    if (defaultsLoaded) AsyncStorage.setItem(MAP_STYLE_KEY, settings.mapStyle).catch(() => undefined);
+  }, [defaultsLoaded, settings.mapStyle]);
+  const changeHomeCity = (city: CityPlace) => {
+    // Server side: PATCH /me { homeCity }
+    setProfile((current) => ({ ...current, homeCity: city }));
+    if (!profile.trackLocation) setViewPlace({ ...city, kind: 'home' });
+  };
   // First-run tour of Explore Map: the step showing, or null. Seen once per phone (Settings can replay it).
   const [tourStep, setTourStep] = useState<number | null>(null);
   useEffect(() => {
@@ -811,11 +850,7 @@ export const DiscoverScreen: React.FC = () => {
           onChangeAvatar={(uri) => setProfile((current) => ({ ...current, avatarUri: uri }))}
           onChangeBio={(bio) => setProfile((current) => ({ ...current, bio }))}
           defaultAreaLabel={cityLabel(defaultArea)}
-          onChangeHomeCity={(city) => {
-            // Server side: PATCH /me { homeCity }
-            setProfile((current) => ({ ...current, homeCity: city }));
-            if (!profile.trackLocation) setViewPlace({ ...city, kind: 'home' });
-          }}
+          onChangeHomeCity={changeHomeCity}
           onChangeTracking={(on) => setProfile((current) => ({ ...current, trackLocation: on }))}
           // Server side: PATCH /me { channelsPublic }
           onChangeChannelsPublic={(channelsPublic) => setProfile((current) => ({ ...current, channelsPublic }))}
@@ -1039,6 +1074,8 @@ export const DiscoverScreen: React.FC = () => {
           }}
           onSaveProfile={setProfile}
           onChangeSettings={setSettings}
+          defaultAreaLabel={cityLabel(defaultArea)}
+          onChangeHomeCity={changeHomeCity}
           onReplayTour={() => {
             setOverlay(null);
             startTour();

@@ -4,6 +4,8 @@ import type { MyProfile } from '../lib/myProfile';
 import { sessionState, signedOutMessage, touchSession, type SessionClock } from '../lib/sessionPolicy';
 import {
   completeOnboarding,
+  deleteAccount as serverDeleteAccount,
+  disableAccount as serverDisableAccount,
   signOut as serverSignOut,
   type AuthSession,
   type OnboardingProfile,
@@ -52,6 +54,10 @@ interface AuthState {
    */
   finishOnboarding: (profile: OnboardingProfile, avatarUri?: string | null) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Hide the account until the next sign-in, then sign out. Throws AuthError. */
+  disableAccount: () => Promise<void>;
+  /** Delete the account for good (needs the password), then sign out. Throws AuthError. */
+  deleteAccount: (password: string) => Promise<void>;
 }
 
 const statusFor = (session: AuthSession | null): AuthStatus =>
@@ -141,5 +147,21 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     await clearSaved();
     set({ session: null, seed: null, clock: null, notice: null, status: 'signedOut' });
     await serverSignOut(session);
+  },
+
+  disableAccount: async () => {
+    const session = get().session;
+    if (!session) return;
+    await serverDisableAccount(session);
+    await clearSaved();
+    set({ session: null, seed: null, clock: null, notice: 'Your account is disabled. Sign in any time to turn it back on.', status: 'signedOut' });
+  },
+
+  deleteAccount: async (password) => {
+    const session = get().session;
+    if (!session) return;
+    await serverDeleteAccount(session, password);
+    await clearSaved();
+    set({ session: null, seed: null, clock: null, notice: 'Your account was deleted.', status: 'signedOut' });
   },
 }));
