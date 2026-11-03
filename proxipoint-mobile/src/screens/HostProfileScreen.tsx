@@ -166,7 +166,7 @@ export const HostProfileScreen: React.FC<HostProfileScreenProps> = ({ handle, on
   const nodes = useDiscoveryStore((state) => state.nodes);
   const points = useMemo(
     () =>
-      (Object.values(nodes || {}) as Array<Record<string, unknown> & { id: string }>)
+      (Object.values(nodes || {}) as unknown as Array<Record<string, unknown> & { id: string }>)
         // Hosted by them, or (venue pages) listed at their venue by @LocalRadar.
         .filter((node) =>
           [node.host, node.venueHandle].some(

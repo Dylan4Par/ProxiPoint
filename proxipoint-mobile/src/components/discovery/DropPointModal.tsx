@@ -1040,7 +1040,8 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
    */
   const revealWhenCard = () => {
     setTimeout(() => {
-      const scroll = scrollRef.current;
+      // ScrollView is a native view at runtime; its type just doesn't list measureInWindow.
+      const scroll = scrollRef.current as unknown as (Pick<View, 'measureInWindow'> & Pick<ScrollView, 'scrollTo'>) | null;
       const card = whenCardRef.current;
       if (!scroll || !card) return;
       scroll.measureInWindow((_sx, scrollTop, _sw, scrollHeight) => {
@@ -1453,20 +1454,19 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               <View style={styles.inputRow}>
                 <Text style={styles.inputLabel}>Channel</Text>
                 <Text
-                  style={[styles.channelHint, visibility === 'channel' && !pickedChannel && styles.channelHintNeeded]}
+                  style={styles.channelHint}
                   numberOfLines={2}
                 >
                   {channelHint}
                 </Text>
               </View>
-              {channelOptions.length || visibility !== 'channel' ? (
+              {/* Always shown: None plus your channels (optional on Private and Public). */}
                 <ScrollView
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   keyboardShouldPersistTaps="always"
                   contentContainerStyle={styles.channelChips}
                 >
-                  {visibility !== 'channel' ? (
                     <TouchableOpacity
                       style={[styles.channelChip, !channelId && styles.channelChipActive]}
                       onPress={() => setChannelId(null)}
@@ -1476,7 +1476,6 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     >
                       <Text style={[styles.channelChipText, !channelId && styles.channelChipTextActive]}>None</Text>
                     </TouchableOpacity>
-                  ) : null}
                   {channelOptions.map((channel) => {
                     const active = channel.id === channelId;
                     return (
@@ -1484,7 +1483,7 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                         key={channel.id}
                         style={[styles.channelChip, active && styles.channelChipActive]}
                         onPress={() => {
-                          setChannelId(active && visibility !== 'channel' ? null : channel.id);
+                          setChannelId(active ? null : channel.id);
                           setFormError(null);
                         }}
                         accessibilityRole="button"
@@ -1499,7 +1498,6 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
                     );
                   })}
                 </ScrollView>
-              ) : null}
             </View>
             </>
             ) : null}

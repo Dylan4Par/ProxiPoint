@@ -26,8 +26,8 @@ test('dropping a beacon stores visibility, duration, and survives a feed sync', 
   assert.equal(dropped?.status, 'Starts 18:00');
   assert.equal(dropped?.tag, '#TechMeetup');
   assert.equal(dropped?.isRsvpd, true);
-  assert.ok(useDiscoveryStore.getState().tags.includes('#TechMeetup'));
-  assert.ok(useDiscoveryStore.getState().tags.includes('#PostGIS'));
+  // Dropping doesn't add Explore Map chips any more (they start empty and are the #tag filters).
+  assert.ok(dropped?.tags?.includes('#TechMeetup'));
   assert.equal(dropped?.tierLevel, 'micro');
   assert.equal(dropped?.radiusMeters, 300);
   assert.deepEqual(dropped?.radii, [300]);
