@@ -115,6 +115,8 @@ export interface MyPointUpdate {
   id: string;
   title: string;
   description: string;
+  /** Tickets or event page. */
+  url?: string | null;
   tags: string[];
   venue: string;
   latitude: number;

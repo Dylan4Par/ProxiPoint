@@ -245,7 +245,7 @@ export const RecommendationDeck: React.FC<{
                 onPress={() => {
                   const { message, url } = pointShareContent({
                     id: node.id,
-                    title: node.title,
+                    title: node.title ?? '',
                     startsAt: node.startsAt,
                     endsAt: node.endsAt,
                     live: pick.live,
