@@ -68,14 +68,14 @@ interface SettingsScreenProps {
   onReplayTour?: () => void;
 }
 
-const ROWS: Array<{ id: SectionId; label: string; Icon: LucideIcon; kind: 'page' | 'expand' }> = [
-  { id: 'edit', label: 'Edit profile', Icon: Pencil, kind: 'page' },
-  { id: 'app', label: 'App settings', Icon: SlidersHorizontal, kind: 'expand' },
-  { id: 'privacy', label: 'Privacy', Icon: Shield, kind: 'expand' },
-  { id: 'plans', label: 'Plans & Purchases', Icon: CreditCard, kind: 'expand' },
-  { id: 'integrations', label: 'Integrations', Icon: Plug, kind: 'expand' },
-  { id: 'faqs', label: 'FAQs', Icon: HelpCircle, kind: 'page' },
-  { id: 'help', label: 'Help', Icon: LifeBuoy, kind: 'expand' },
+const ROWS: Array<{ id: SectionId; label: string; Icon: LucideIcon }> = [
+  { id: 'edit', label: 'Edit profile', Icon: Pencil },
+  { id: 'app', label: 'App settings', Icon: SlidersHorizontal },
+  { id: 'privacy', label: 'Privacy', Icon: Shield },
+  { id: 'plans', label: 'Plans & Purchases', Icon: CreditCard },
+  { id: 'integrations', label: 'Integrations', Icon: Plug },
+  { id: 'faqs', label: 'FAQs', Icon: HelpCircle },
+  { id: 'help', label: 'Help', Icon: LifeBuoy },
 ];
 
 const FAQS: Array<{ q: string; a: string }> = [
@@ -157,7 +157,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </TouchableOpacity>
         </View>
 
-        {ROWS.map(({ id, label, Icon, kind }) => {
+        {ROWS.map(({ id, label, Icon }) => {
           const isOpen = open === id;
           return (
             <View key={id} style={styles.section}>
@@ -170,11 +170,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               >
                 <Icon size={21} color={c.textSecondary} strokeWidth={2} />
                 <Text style={styles.rowLabel}>{label}</Text>
-                {kind === 'page' ? (
-                  <View style={isOpen ? styles.chevronOpen : null}>
-                    <ChevronRight size={18} color={c.textMuted} strokeWidth={2.25} />
-                  </View>
-                ) : isOpen ? (
+                {/* Every row opens in place: + to open, − to close. */}
+                {isOpen ? (
                   <Minus size={18} color={c.textMuted} strokeWidth={2.25} />
                 ) : (
                   <Plus size={18} color={c.textMuted} strokeWidth={2.25} />
@@ -696,7 +693,6 @@ const createStyles = (c: ThemeColors) =>
   legalLink: { color: c.textMuted, fontSize: 13, fontWeight: '600', textDecorationLine: 'underline' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 16, paddingVertical: 18 },
   rowLabel: { flex: 1, color: c.text, fontSize: 16, fontWeight: '500' },
-  chevronOpen: { transform: [{ rotate: '90deg' }] },
   panel: { paddingBottom: 18, paddingLeft: 37, gap: 10 },
   contactBlock: { gap: 8 },
   fieldLabel: { color: c.textMuted, fontSize: 12, fontWeight: '700', marginTop: 4 },
