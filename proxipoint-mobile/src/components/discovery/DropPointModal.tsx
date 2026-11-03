@@ -881,6 +881,9 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
     // Sent alongside the existing payload; the backend needs to accept these fields.
     const payload = Object.assign(toBeaconCreatePayload(draft), {
       requiresRsvpApproval: requiresApproval,
+      // Private + approval: the server sends the place (name, address, pin) only to the host,
+      // co-hosts and approved guests; everyone else with the link sees the rest of the Point.
+      hideLocationUntilApproved: visibility === 'private' && requiresApproval,
       maxAttendance, // null = no limit
       // Repeating event, or null for a one-time one. `rrule` is RFC 5545 (UNTIL in UTC);
       // the server should expand it in `timezone`, keeping each event's length the same as the first.
@@ -1877,9 +1880,13 @@ export const DropPointModal: React.FC<DropPointModalProps> = ({ visible, onClose
               </TouchableOpacity>
             </View>
             <Text style={styles.broadcastSubtext} testID="drop-approval-hint">
-              {requiresApproval
-                ? 'People request to join, and you approve each RSVP before they’re in.'
-                : 'Anyone who can see this Point can RSVP right away.'}
+              {visibility === 'private'
+                ? requiresApproval
+                  ? 'Location will not be shared until RSVP is approved. People request to join, and you approve each one.'
+                  : 'Anyone with the link can RSVP right away and see the location.'
+                : requiresApproval
+                  ? 'People request to join, and you approve each RSVP before they’re in.'
+                  : 'Anyone who can see this Point can RSVP right away.'}
             </Text>
 
             <View style={styles.hairline} />
