@@ -8,6 +8,7 @@ import { pointTags } from '../lib/tagSlug';
 import { mergeRemoteNodes, timingStatus } from '../lib/remoteEvents';
 // 30 more sample Points around the default area and 10 in Fort Collins.
 import { MORE_SEED_POINTS } from './seedPointsMore';
+import { DSM_SEED_POINTS } from '../lib/demoDesMoines';
 import type {
   BeaconDraft,
   BeaconDuration,
@@ -310,6 +311,10 @@ interface SeedPoint {
   locationPrivacy?: { level: 'street' | 'neighborhood' | 'city'; regionName: string };
   /** Sample link (example.com, a reserved demo domain). */
   url?: string;
+  /** Posted by `host` itself (demo organizers) instead of listed by @LocalRadar. */
+  hostedBy?: boolean;
+  /** Cover photo instead of the seeded stock stand-in. */
+  coverPhotoUri?: string;
 }
 
 const SEED_POINTS: SeedPoint[] = [
@@ -604,7 +609,7 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
   const metersPerDegLat = 111320;
   const metersPerDegLon = 111320 * Math.cos((self.latitude * Math.PI) / 180);
   const nodes: Record<string, DiscoveryNode> = {};
-  const all: Array<SeedPoint & { near?: { latitude: number; longitude: number } }> = [...SEED_POINTS, ...MORE_SEED_POINTS];
+  const all: Array<SeedPoint & { near?: { latitude: number; longitude: number } }> = [...SEED_POINTS, ...MORE_SEED_POINTS, ...DSM_SEED_POINTS];
   all.forEach((point) => {
     // Placed around the default location, or around another city (`near`, e.g. Fort Collins).
     const anchor = point.near ?? self;
@@ -627,9 +632,10 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
       url: point.url ?? null,
       venue: point.venue,
       // Development samples are aggregated events: listed by @LocalRadar, linked to the venue's
-      // page (unclaimed until the venue claims it), never shown as posted by the venue.
-      host: LOCALRADAR_HANDLE,
-      source: 'external',
+      // page (unclaimed until the venue claims it), never shown as posted by the venue. The
+      // Des Moines demo's organizers post their own (hostedBy).
+      host: point.hostedBy ? point.host : LOCALRADAR_HANDLE,
+      source: point.hostedBy ? 'user' : 'external',
       venueHandle: venuePageHandle(point.venue),
       latitude,
       longitude,
@@ -648,7 +654,7 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
       locationPrivacy: point.locationPrivacy ?? null,
       // Stand-in cover photo (seeded picsum.photos stock image, the same every launch; random,
       // not on-topic). Real Points use the photo the host picked in the Drop Point sheet.
-      coverPhotoUri: `https://picsum.photos/seed/${point.id}/600/600`,
+      coverPhotoUri: point.coverPhotoUri ?? `https://picsum.photos/seed/${point.id}/600/600`,
       startsAt: start.toISOString(),
       endsAt: end.toISOString(),
       x,

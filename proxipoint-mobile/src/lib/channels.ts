@@ -12,6 +12,7 @@ import {
 import { SAMPLE_PLACES, placeRef, type PlaceKind } from './localPlaces';
 import { answerStillHappening, type PostKind } from './postKinds';
 import { reactTo, sampleReactions, type ChannelReplies, type ReactionCounts } from './postReactions';
+import { DSM_CHANNELS, DSM_COMMENTS, DSM_POSTS } from './demoDesMoines';
 
 /**
  * Channels: groups people join, like subreddits for a local scene. Each channel has its own
@@ -263,7 +264,8 @@ let channels: Channel[] = [
     joined: false,
     access: 'private',
     owner: '@sam.plays.bass',
-  },
+  },  // Des Moines demo (demoDesMoines.ts).
+  ...DSM_CHANNELS,
 ];
 
 let posts: ChannelPost[] = [
@@ -440,6 +442,8 @@ let posts: ChannelPost[] = [
     upvotes: 6,
     voted: false,
   },
+  // Des Moines demo (demoDesMoines.ts).
+  ...DSM_POSTS,
 ];
 
 let comments: PostComment[] = [
@@ -454,7 +458,7 @@ let comments: PostComment[] = [
   { id: 'c9', postId: 'p5', parentId: null, author: '@earlybird', body: 'What time exactly? Want to carpool from Lafayette.', createdAt: minutesAgo(250), upvotes: 5, voted: false },
   { id: 'c10', postId: 'p2', parentId: null, author: '@paddlepete', body: 'Finally! Nets are new too.', createdAt: minutesAgo(40), upvotes: 4, voted: false },
   { id: 'c11', postId: 'p14', parentId: null, author: '@dinkcrew', body: 'Yes, courts 1–4 have lights until 10pm. The switch is on the pole by the gate.', createdAt: daysAgo(29), upvotes: 21, voted: false },
-  { id: 'c12', postId: 'p12', parentId: null, author: '@flowwithmaya', body: 'Can confirm, the church lot is fine on Saturdays too.', createdAt: daysAgo(18), upvotes: 6, voted: false },
+  { id: 'c12', postId: 'p12', parentId: null, author: '@flowwithmaya', body: 'Can confirm, the church lot is fine on Saturdays too.', createdAt: daysAgo(18), upvotes: 6, voted: false },  ...DSM_COMMENTS,
 ];
 
 // Sample likes: the counts above become a spread of reactions, and the authors' own starting
