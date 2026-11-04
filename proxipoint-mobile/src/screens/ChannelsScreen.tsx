@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, BackHandler, Image, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, BackHandler, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CampaignsView } from '../components/campaigns/CampaignsView';
 import type { CampaignBuilderProps } from '../components/campaigns/CampaignBuilder';
@@ -29,6 +29,7 @@ import {
   setRequested,
   toggleMembership,
   reactToPost,
+  refreshFeed,
   setChannelReplies,
   toggleCommentLike,
   useChannels,
@@ -339,9 +340,23 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   };
   const trackChipX = (x: number) => setChipView((v) => (Math.abs(v.x - x) < 1 ? v : { ...v, x }));
 
+  // Pull down to refresh the feed.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshFeed();
+    } finally {
+      setRefreshing(false);
+    }
+  };
+  const refreshControl = (
+    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} progressBackgroundColor={c.surface} />
+  );
+
   if (!joined.length) {
     return (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} refreshControl={refreshControl}>
       <View style={styles.empty} testID="channels-feed-empty">
         <View style={styles.emptyIcon}>
           <Users size={26} color={c.accent} strokeWidth={2} />
@@ -357,7 +372,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} testID="channels-feed">
+    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} refreshControl={refreshControl} testID="channels-feed">
       {/* Your channels, for jumping straight to one. "+" (find more channels) stays put at the
           start; the channels scroll beside it, with arrows when more are hidden either way. */}
       <View style={styles.chipBar}>
