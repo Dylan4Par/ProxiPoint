@@ -376,7 +376,7 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
   );
 
   return (
-    <View style={styles.container} testID="channels-screen">
+    <View style={[styles.container, styles.clipTop]} testID="channels-screen">
       {collapsible ? null : headerBlock}
 
       {segment === 'feed' ? <FeedView {...props} channels={channels} collapse={collapse} /> : null}
@@ -2231,6 +2231,9 @@ const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: c.base },
     // Over the list (which starts below it) on Feed and My Channels, sliding up as the list scrolls.
+    // The header slides up past the screen's top as the list scrolls; clip it there so it doesn't
+    // show through under the status bar.
+    clipTop: { overflow: 'hidden' },
     collapsingHeader: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: c.base },
     // The compact bar once the header is gone (same look as Discover's mini bar).
     miniBar: {
