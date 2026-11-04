@@ -161,7 +161,7 @@ const NIGHTS: Night[] = [
 ];
 
 const TAGS: Record<DsmGame, Record<'league' | 'tournament', string[]>> = {
-  trivia: { league: ['#TriviaNight', '#BarTrivia'], tournament: ['#TriviaTournament', '#BarTrivia'] },
+  trivia: { league: ['#TriviaNight', '#Trivia', '#BarTrivia'], tournament: ['#TriviaTournament', '#Trivia', '#BarTrivia'] },
   pool: { league: ['#Billiards', '#PoolHall'], tournament: ['#PoolTournament', '#Billiards'] },
   darts: { league: ['#Darts'], tournament: ['#DartsTournament', '#Darts'] },
   cornhole: { league: ['#Cornhole'], tournament: ['#Cornhole', '#BarGames'] },
@@ -262,7 +262,7 @@ export const DSM_CHANNELS: Channel[] = [
     name: 'Des Moines Trivia Nights',
     handle: 'c/dsmtrivia',
     description: 'Every pub quiz in the metro, weekly standings, and teams looking for players. Run by DSM Trivia Co.',
-    tags: ['#TriviaNight', '#BarTrivia', '#TriviaTournament', '#PubQuiz'],
+    tags: ['#TriviaNight', '#Trivia', '#BarTrivia', '#TriviaTournament', '#PubQuiz'],
     memberCount: 1312,
     joined: true,
     followed: true,
