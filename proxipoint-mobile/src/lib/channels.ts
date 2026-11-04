@@ -770,6 +770,15 @@ export function toggleCommentLike(commentId: string) {
 }
 
 /** All channels; re-renders on join/leave. */
+/**
+ * Pull to refresh on the Channels feed. Sample data for now, so it re-reads what's here (new
+ * posts, reactions, "8m ago" times); with a backend it fetches GET /me/channels/feed first.
+ */
+export async function refreshFeed(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 600));
+  changed();
+}
+
 export function useChannels(): Channel[] {
   return useStore(() => channels);
 }

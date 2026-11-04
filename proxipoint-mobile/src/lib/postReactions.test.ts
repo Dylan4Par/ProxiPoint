@@ -64,3 +64,11 @@ test('every quick pick is allowed, the set has four moods and no repeats', () =>
   assert.equal(new Set(all).size, all.length);
   assert.ok(sampleReactions('p4', 50) && Object.keys(sampleReactions('p4', 50)).every(isAllowedReaction));
 });
+
+test('sample reactions: always real emojis, whatever the post id', () => {
+  for (const id of ['p1', 'dsm-p4', 'dsm-p10', 'a-much-longer-sample-post-id-that-overflows-the-hash', 'x'.repeat(40)]) {
+    const counts = sampleReactions(id, 26);
+    assert.ok(Object.keys(counts).every((emoji) => isAllowedReaction(emoji)), `${id}: ${Object.keys(counts).join(' ')}`);
+    assert.equal(Object.values(counts).reduce((a, b) => a + b, 0), 26);
+  }
+});

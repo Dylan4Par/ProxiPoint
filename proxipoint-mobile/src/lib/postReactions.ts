@@ -84,10 +84,11 @@ export function topEmojis(reactions: ReactionCounts | undefined, limit = 3): str
 export function sampleReactions(seed: string, total: number): ReactionCounts {
   if (total <= 0) return {};
   let hash = 0;
+  // Unsigned shifts below: hash can use the top bit, and a signed shift would make a negative index.
   for (const ch of seed) hash = (hash * 31 + ch.charCodeAt(0)) >>> 0;
   const first = REACTION_EMOJIS[hash % REACTION_EMOJIS.length];
-  const second = REACTION_EMOJIS[(hash >> 3) % REACTION_EMOJIS.length];
-  const third = REACTION_EMOJIS[(hash >> 6) % REACTION_EMOJIS.length];
+  const second = REACTION_EMOJIS[(hash >>> 3) % REACTION_EMOJIS.length];
+  const third = REACTION_EMOJIS[(hash >>> 6) % REACTION_EMOJIS.length];
   const a = Math.ceil(total * 0.6);
   const b = Math.floor((total - a) * 0.7);
   const counts: ReactionCounts = {};
