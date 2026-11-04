@@ -31,14 +31,14 @@ export function fromCanvasCoordinates(
 }
 
 /**
- * Moved at least this far before offering, whatever the zoom. Generous, so moving around among the
- * Points already loaded doesn't keep bringing the button up.
+ * Moved at least this far before offering, whatever the zoom: about 10 minutes' walk, so a nudge
+ * at street level doesn't bring the button up but moving to the next neighborhood does.
  */
-export const MIN_AREA_SHIFT_METERS = 2000;
-/** ...or this share of the screen's width, if that's more (zoomed out, a nudge isn't a move). */
-export const AREA_SHIFT_SCREEN_SHARE = 0.6;
-/** ...or this share of the last search's radius, so a search's results aren't offered again for a nudge. */
-export const AREA_SHIFT_RANGE_SHARE = 0.75;
+export const MIN_AREA_SHIFT_METERS = 800;
+/** ...or half the screen's width, if that's more (zoomed out, a nudge isn't a move). */
+export const AREA_SHIFT_SCREEN_SHARE = 0.5;
+/** ...or half the last search's radius, so a search's results aren't offered again for a nudge. */
+export const AREA_SHIFT_RANGE_SHARE = 0.5;
 /** Zoomed out so far that the screen is this many times wider than the area's range. */
 export const ZOOM_OUT_FACTOR = 3;
 
