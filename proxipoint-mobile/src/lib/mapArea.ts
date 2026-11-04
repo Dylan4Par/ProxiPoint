@@ -31,16 +31,23 @@ export function fromCanvasCoordinates(
 }
 
 /**
- * Moved at least this far (or half the screen's width, if more) before offering. Generous, so
- * moving around among the Points already loaded doesn't keep bringing the button up.
+ * Moved at least this far before offering, whatever the zoom. Generous, so moving around among the
+ * Points already loaded doesn't keep bringing the button up.
  */
-export const MIN_AREA_SHIFT_METERS = 1200;
+export const MIN_AREA_SHIFT_METERS = 2000;
+/** ...or this share of the screen's width, if that's more (zoomed out, a nudge isn't a move). */
+export const AREA_SHIFT_SCREEN_SHARE = 0.6;
+/** ...or this share of the last search's radius, so a search's results aren't offered again for a nudge. */
+export const AREA_SHIFT_RANGE_SHARE = 0.75;
 /** Zoomed out so far that the screen is this many times wider than the area's range. */
 export const ZOOM_OUT_FACTOR = 3;
 
 /**
  * Should the map offer "Search this area"? When the middle of the screen is far from the area's
- * center (relative to how much is on screen), or you've zoomed out well past the area's range.
+ * center, or you've zoomed out well past the area's range. areaRangeMeters is the radius the area
+ * was loaded with: the default for a place picked from the list, or the last search's (half the
+ * screen's diagonal then), so after a city-wide search the button stays away until you really
+ * move or zoom out further.
  */
 export function shouldOfferAreaSearch(
   center: { x: number; y: number },
@@ -49,7 +56,8 @@ export function shouldOfferAreaSearch(
 ): boolean {
   const shiftMeters = Math.hypot(center.x - CENTER_WORLD, center.y - CENTER_WORLD) / WORLD_SCALE;
   const widthMeters = visibleWidthWorld / WORLD_SCALE;
-  if (shiftMeters > Math.max(MIN_AREA_SHIFT_METERS, widthMeters / 2)) return true;
+  const minShift = Math.max(MIN_AREA_SHIFT_METERS, widthMeters * AREA_SHIFT_SCREEN_SHARE, areaRangeMeters * AREA_SHIFT_RANGE_SHARE);
+  if (shiftMeters > minShift) return true;
   return widthMeters > areaRangeMeters * 2 * ZOOM_OUT_FACTOR;
 }
 

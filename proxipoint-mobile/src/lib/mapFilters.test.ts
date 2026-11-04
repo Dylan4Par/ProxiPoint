@@ -62,13 +62,28 @@ test('map area: world point back to lat/lon', () => {
 test('map area: offer a search once you have moved or zoomed out far enough', () => {
   const screen = 400; // world units across (about 890 m at zoom 1)
   assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 50, y: CENTER_WORLD }, screen, 1500), false); // ~110 m
-  // Moving among the Points already loaded (~440 m) doesn't bring it up; ~1.5 km does.
+  // Moving among the Points already loaded (~440 m, ~1.6 km) doesn't bring it up; ~2.2 km does.
   assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 200, y: CENTER_WORLD }, screen, 1500), false);
-  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 700, y: CENTER_WORLD }, screen, 1500), true);
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 700, y: CENTER_WORLD }, screen, 1500), false);
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 1000, y: CENTER_WORLD }, screen, 1500), true);
   // Zoomed out: ~6.7 km across isn't enough any more; ~11 km is.
   assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD, y: CENTER_WORLD }, 3000, 1500), false);
   assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD, y: CENTER_WORLD }, 5000, 1500), true);
   assert.equal(visibleRadiusMeters(450, 0), 500);
+});
+
+test('map area: after a city-wide search, a nudge or a little zoom does not offer it again', () => {
+  const screen = 4500; // world units across: 10 km, the whole city
+  const searched = visibleRadiusMeters(screen, screen * 1.4); // ~8.6 km, as the search sends it
+  // Right after the search, and nudged ~1 km or ~3 km: not offered (the old rules offered it at once).
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD, y: CENTER_WORLD }, screen, searched), false);
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 450, y: CENTER_WORLD }, screen, searched), false);
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 1350, y: CENTER_WORLD }, screen, searched), false);
+  // Panned ~7 km (most of a screen) to the next town: offered.
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD + 3150, y: CENTER_WORLD }, screen, searched), true);
+  // Zoomed out to ~25 km: not yet; ~60 km: offered.
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD, y: CENTER_WORLD }, 11250, searched), false);
+  assert.equal(shouldOfferAreaSearch({ x: CENTER_WORLD, y: CENTER_WORLD }, 27000, searched), true);
 });
 
 test('map area name: closest city within 15 km', () => {
