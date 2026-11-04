@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, BackHandler, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
+import { Alert, Animated, BackHandler, Image, Modal, RefreshControl, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CampaignsView } from '../components/campaigns/CampaignsView';
 import type { CampaignBuilderProps } from '../components/campaigns/CampaignBuilder';
@@ -155,6 +155,15 @@ const kindBadgeStyle = (kind: PostKind, c: ThemeColors) =>
 const snippet = (text: string) => (text.length > 60 ? `${text.slice(0, 57).trimEnd()}…` : text);
 const sameHandle = (a: string, b: string) => a.replace(/^@+/, '').toLowerCase() === b.replace(/^@+/, '').toLowerCase();
 
+/** The compact bar that stays at the top once the Channels header has scrolled away. */
+const MINI_BAR_HEIGHT = 50;
+
+/** Hands a list the collapsing header's room and scroll tracking (Feed, My Channels). */
+interface CollapseProps {
+  paddingTop: number;
+  onScroll: (...args: unknown[]) => void;
+}
+
 const SEGMENTS: Array<{ id: ChannelsSegment; label: string }> = [
   // Alerts and Series live on the Profile tab (View alerts, Manage My Series).
   { id: 'feed', label: 'Feed' },
@@ -196,6 +205,48 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
     if (postId && !openPost) onOpenPost(null);
   }, [postId, openPost, onOpenPost]);
 
+  // ---- Collapsing header: on Feed and My Channels the title, Search, bell and Feed | My Channels
+  // scroll away with the list, and a compact bar (Search · Feed | My Channels · bell) stays at the
+  // top instead (like Discover's mini bar). The header sits over the list, which starts below it.
+  const collapsible = segment === 'feed' || segment === 'manage';
+  const scrollY = useRef(new Animated.Value(0)).current;
+  const [headerHeight, setHeaderHeight] = useState(0);
+  const [miniBar, setMiniBar] = useState(false);
+  useEffect(() => {
+    // Each view has its own list, starting at the top (also after coming back from a channel,
+    // place or post page).
+    scrollY.setValue(0);
+    setMiniBar(false);
+  }, [segment, channelId, placeId, postId, scrollY]);
+  const onListScroll = useMemo(
+    () => Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true }),
+    [scrollY],
+  );
+  useEffect(() => {
+    if (!headerHeight) return;
+    const id = scrollY.addListener(({ value }) => {
+      const show = value > headerHeight - MINI_BAR_HEIGHT;
+      setMiniBar((prev) => (prev === show ? prev : show));
+    });
+    return () => scrollY.removeListener(id);
+  }, [headerHeight, scrollY]);
+  const collapse: CollapseProps | undefined = collapsible
+    ? {
+        paddingTop: headerHeight,
+        onScroll: onListScroll,
+      }
+    : undefined;
+  const headerShift = scrollY.interpolate({
+    inputRange: [0, Math.max(1, headerHeight)],
+    outputRange: [0, -Math.max(1, headerHeight)],
+    extrapolate: 'clamp',
+  });
+  const miniOpacity = scrollY.interpolate({
+    inputRange: [Math.max(0, headerHeight - MINI_BAR_HEIGHT - 30), Math.max(1, headerHeight - MINI_BAR_HEIGHT)],
+    outputRange: [0, 1],
+    extrapolate: 'clamp',
+  });
+
   if (openPost) {
     return (
       <PostPage
@@ -208,66 +259,127 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
   if (placeId) return <PlacePage {...props} placeId={placeId} />;
   if (open) return <ChannelPage {...props} channel={open} />;
 
-  return (
-    <View style={styles.container} testID="channels-screen">
-      <View style={styles.header}>
-        <Text style={styles.title}>Channels</Text>
-        <View style={styles.headerActions}>
-          {/* Same search as Discover (#tags, c/channels, events). */}
-          <TouchableOpacity
-            style={styles.searchBtn}
-            onPress={props.onOpenSearch}
-            accessibilityRole="button"
-            accessibilityLabel="Search channels, #tags and events"
-            testID="channels-search"
-          >
-            <Search size={18} color={c.accent} strokeWidth={2.5} />
-            <Text style={styles.searchBtnText}>Search</Text>
-          </TouchableOpacity>
-          {/* Bell: Notifications & Proximity Alerts (on Profile); the dot means unread alerts. */}
-          {props.onOpenAlerts ? (
+  const headerBlock = (
+    <>
+        <View style={styles.header}>
+          <Text style={styles.title}>Channels</Text>
+          <View style={styles.headerActions}>
+            {/* Same search as Discover (#tags, c/channels, events). */}
             <TouchableOpacity
-              style={styles.bellBtn}
-              onPress={props.onOpenAlerts}
+              style={styles.searchBtn}
+              onPress={props.onOpenSearch}
               accessibilityRole="button"
-              accessibilityLabel={unreadAlerts > 0 ? `Notifications, ${unreadAlerts} unread` : 'Notifications'}
-              testID="channels-alerts"
+              accessibilityLabel="Search channels, #tags and events"
+              testID="channels-search"
             >
-              <Bell size={18} color={c.text} strokeWidth={2.25} />
-              {unreadAlerts > 0 ? <View style={styles.bellDot} /> : null}
+              <Search size={18} color={c.accent} strokeWidth={2.5} />
+              <Text style={styles.searchBtnText}>Search</Text>
             </TouchableOpacity>
-          ) : null}
+            {/* Bell: Notifications & Proximity Alerts (on Profile); the dot means unread alerts. */}
+            {props.onOpenAlerts ? (
+              <TouchableOpacity
+                style={styles.bellBtn}
+                onPress={props.onOpenAlerts}
+                accessibilityRole="button"
+                accessibilityLabel={unreadAlerts > 0 ? `Notifications, ${unreadAlerts} unread` : 'Notifications'}
+                testID="channels-alerts"
+              >
+                <Bell size={18} color={c.text} strokeWidth={2.25} />
+                {unreadAlerts > 0 ? <View style={styles.bellDot} /> : null}
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
-      </View>
-      {/* Feed | My Channels: one bar split in two, the open one filled in. */}
-      <View style={styles.segmentBar} accessibilityRole="tablist">
+        {/* Feed | My Channels: one bar split in two, the open one filled in. */}
+        <View style={styles.segmentBar} accessibilityRole="tablist">
+          {SEGMENTS.map(({ id, label }) => {
+            const active = segment === id;
+            const Icon = id === 'feed' ? Newspaper : Users;
+            const count = id === 'manage' ? joinedCount : 0;
+            return (
+              <TouchableOpacity
+                key={id}
+                style={[styles.segmentHalf, active && styles.segmentHalfActive]}
+                onPress={() => onChangeSegment(id)}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: active }}
+                accessibilityLabel={count ? `${label}, ${count} joined` : label}
+                testID={`channels-segment-${id}`}
+              >
+                <Icon size={15} color={active ? c.onAccent : c.textMuted} strokeWidth={2.25} />
+                <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
+                {count ? (
+                  <View style={[styles.segmentCount, active && styles.segmentCountActive]}>
+                    <Text style={[styles.segmentCountText, active && styles.segmentCountTextActive]}>{count}</Text>
+                  </View>
+                ) : null}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+    </>
+  );
+
+  const miniBarView = (
+    <Animated.View
+      pointerEvents={miniBar ? 'box-none' : 'none'}
+      style={[styles.miniBar, { opacity: miniOpacity }]}
+      accessibilityElementsHidden={!miniBar}
+      importantForAccessibility={miniBar ? 'auto' : 'no-hide-descendants'}
+      testID="channels-mini-bar"
+    >
+      <TouchableOpacity
+        style={styles.miniSearch}
+        onPress={props.onOpenSearch}
+        accessibilityRole="button"
+        accessibilityLabel="Search channels, #tags and events"
+        testID="channels-mini-search"
+      >
+        <Search size={15} color={c.accent} strokeWidth={2.5} />
+        <Text style={styles.miniSearchText}>Search</Text>
+      </TouchableOpacity>
+      <View style={styles.miniSegments} accessibilityRole="tablist">
         {SEGMENTS.map(({ id, label }) => {
           const active = segment === id;
-          const Icon = id === 'feed' ? Newspaper : Users;
           const count = id === 'manage' ? joinedCount : 0;
           return (
             <TouchableOpacity
               key={id}
-              style={[styles.segmentHalf, active && styles.segmentHalfActive]}
+              style={[styles.miniSegment, active && styles.miniSegmentActive]}
               onPress={() => onChangeSegment(id)}
               accessibilityRole="tab"
               accessibilityState={{ selected: active }}
               accessibilityLabel={count ? `${label}, ${count} joined` : label}
-              testID={`channels-segment-${id}`}
+              testID={`channels-mini-segment-${id}`}
             >
-              <Icon size={15} color={active ? c.onAccent : c.textMuted} strokeWidth={2.25} />
-              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{label}</Text>
-              {count ? (
-                <View style={[styles.segmentCount, active && styles.segmentCountActive]}>
-                  <Text style={[styles.segmentCountText, active && styles.segmentCountTextActive]}>{count}</Text>
-                </View>
-              ) : null}
+              <Text style={[styles.miniSegmentText, active && styles.miniSegmentTextActive]} numberOfLines={1}>
+                {label}
+                {count ? ` ${count}` : ''}
+              </Text>
             </TouchableOpacity>
           );
         })}
       </View>
+      {props.onOpenAlerts ? (
+        <TouchableOpacity
+          style={styles.miniBell}
+          onPress={props.onOpenAlerts}
+          accessibilityRole="button"
+          accessibilityLabel={unreadAlerts > 0 ? `Notifications, ${unreadAlerts} unread` : 'Notifications'}
+          testID="channels-mini-alerts"
+        >
+          <Bell size={16} color={c.text} strokeWidth={2.25} />
+          {unreadAlerts > 0 ? <View style={styles.bellDot} /> : null}
+        </TouchableOpacity>
+      ) : null}
+    </Animated.View>
+  );
 
-      {segment === 'feed' ? <FeedView {...props} channels={channels} /> : null}
+  return (
+    <View style={styles.container} testID="channels-screen">
+      {collapsible ? null : headerBlock}
+
+      {segment === 'feed' ? <FeedView {...props} channels={channels} collapse={collapse} /> : null}
       {segment === 'alerts' ? (
         <ActivityScreen
           embedded
@@ -279,7 +391,7 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
         />
       ) : null}
       {segment === 'manage' ? (
-        <ManageView channels={channels} onOpenChannel={onOpenChannel} myHandle={props.myHandle} myTags={props.interestTags} />
+        <ManageView channels={channels} onOpenChannel={onOpenChannel} myHandle={props.myHandle} myTags={props.interestTags} collapse={collapse} />
       ) : null}
       {segment === 'campaigns' ? (
         <CampaignsView
@@ -291,13 +403,26 @@ export const ChannelsScreen: React.FC<ChannelsScreenProps> = (props) => {
           onNewHandled={props.onNewSeriesHandled}
         />
       ) : null}
+      {collapsible ? (
+        <Animated.View
+          style={[styles.collapsingHeader, { transform: [{ translateY: headerShift }] }]}
+          onLayout={(event) => {
+            const h = Math.round(event.nativeEvent.layout.height);
+            if (h && h !== headerHeight) setHeaderHeight(h);
+          }}
+          pointerEvents="box-none"
+        >
+          {headerBlock}
+        </Animated.View>
+      ) : null}
+      {collapsible ? miniBarView : null}
     </View>
   );
 };
 
 // ---- Feed ------------------------------------------------------------------------------------
 
-const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
+const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[]; collapse?: CollapseProps }> = ({
   channels,
   onOpenChannel,
   onChangeSegment,
@@ -310,6 +435,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
   interestTags,
   onOpenPoint,
   onToggleRsvp,
+  collapse,
 }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
@@ -351,12 +477,25 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
     }
   };
   const refreshControl = (
-    <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={c.accent} colors={[c.accent]} progressBackgroundColor={c.surface} />
+    <RefreshControl
+      refreshing={refreshing}
+      onRefresh={onRefresh}
+      tintColor={c.accent}
+      colors={[c.accent]}
+      progressBackgroundColor={c.surface}
+      progressViewOffset={collapse?.paddingTop ?? 0}
+    />
   );
 
   if (!joined.length) {
     return (
-      <ScrollView style={styles.scroll} contentContainerStyle={styles.content} refreshControl={refreshControl}>
+      <Animated.ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[styles.content, collapse && { paddingTop: collapse.paddingTop }]}
+        refreshControl={refreshControl}
+        onScroll={collapse?.onScroll}
+        scrollEventThrottle={16}
+      >
       <View style={styles.empty} testID="channels-feed-empty">
         <View style={styles.emptyIcon}>
           <Users size={26} color={c.accent} strokeWidth={2} />
@@ -367,12 +506,19 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
           <Text style={styles.emptyBtnText}>FIND CHANNELS</Text>
         </TouchableOpacity>
       </View>
-      </ScrollView>
+      </Animated.ScrollView>
     );
   }
 
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} refreshControl={refreshControl} testID="channels-feed">
+    <Animated.ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.content, collapse && { paddingTop: collapse.paddingTop }]}
+      refreshControl={refreshControl}
+      onScroll={collapse?.onScroll}
+      scrollEventThrottle={16}
+      testID="channels-feed"
+    >
       {/* Your channels, for jumping straight to one. "+" (find more channels) stays put at the
           start; the channels scroll beside it, with arrows when more are hidden either way. */}
       <View style={styles.chipBar}>
@@ -466,7 +612,7 @@ const FeedView: React.FC<ChannelsScreenProps & { channels: Channel[] }> = ({
       ) : (
         <Text style={styles.emptyText}>No posts yet in your channels.</Text>
       )}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 };
 
@@ -478,7 +624,8 @@ const ManageView: React.FC<{
   myHandle: string;
   /** Your followed #tags: For you matches channels to them. */
   myTags: string[];
-}> = ({ channels, onOpenChannel, myHandle, myTags }) => {
+  collapse?: CollapseProps;
+}> = ({ channels, onOpenChannel, myHandle, myTags, collapse }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const [creating, setCreating] = useState(false);
@@ -498,7 +645,13 @@ const ManageView: React.FC<{
   );
   const categoryLabel = CHANNEL_CATEGORIES.find((entry) => entry.id === category)?.label ?? '';
   return (
-    <ScrollView style={styles.scroll} contentContainerStyle={styles.content} testID="channels-manage">
+    <Animated.ScrollView
+      style={styles.scroll}
+      contentContainerStyle={[styles.content, collapse && { paddingTop: collapse.paddingTop }]}
+      onScroll={collapse?.onScroll}
+      scrollEventThrottle={16}
+      testID="channels-manage"
+    >
       <TouchableOpacity
         style={styles.createChannelBtn}
         onPress={() => setCreating(true)}
@@ -583,7 +736,7 @@ const ManageView: React.FC<{
           {category === 'all' ? 'You’re in every channel around here.' : `No ${categoryLabel} channels to join yet.`}
         </Text>
       )}
-    </ScrollView>
+    </Animated.ScrollView>
   );
 };
 
@@ -2077,6 +2230,65 @@ const CommentRow: React.FC<{
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
     container: { flex: 1, backgroundColor: c.base },
+    // Over the list (which starts below it) on Feed and My Channels, sliding up as the list scrolls.
+    collapsingHeader: { position: 'absolute', top: 0, left: 0, right: 0, backgroundColor: c.base },
+    // The compact bar once the header is gone (same look as Discover's mini bar).
+    miniBar: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+      height: MINI_BAR_HEIGHT,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      paddingHorizontal: 12,
+      backgroundColor: c.base,
+      borderBottomWidth: 1,
+      borderBottomColor: c.border,
+      shadowColor: '#000',
+      shadowOpacity: 0.12,
+      shadowRadius: 8,
+      shadowOffset: { width: 0, height: 3 },
+      elevation: 4,
+    },
+    miniSearch: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      height: 34,
+      paddingHorizontal: 12,
+      borderRadius: 17,
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
+    miniSearchText: { color: c.accent, fontSize: 12, fontWeight: '800' },
+    miniSegments: {
+      flex: 1,
+      flexDirection: 'row',
+      height: 34,
+      padding: 3,
+      gap: 3,
+      borderRadius: 17,
+      borderWidth: 1,
+      borderColor: c.border,
+      backgroundColor: c.surface,
+    },
+    miniSegment: { flex: 1, alignItems: 'center', justifyContent: 'center', borderRadius: 14, paddingHorizontal: 6 },
+    miniSegmentActive: { backgroundColor: c.accent },
+    miniSegmentText: { color: c.textMuted, fontSize: 12, fontWeight: '700' },
+    miniSegmentTextActive: { color: c.onAccent, fontWeight: '800' },
+    miniBell: {
+      width: 34,
+      height: 34,
+      borderRadius: 17,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: c.surface,
+      borderWidth: 1,
+      borderColor: c.border,
+    },
     scroll: { flex: 1 },
     content: { paddingHorizontal: 16, paddingBottom: 28 },
     header: {
