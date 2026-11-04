@@ -509,7 +509,7 @@ export const DiscoveryMapCanvas: React.FC<{
     pendingBounds.current = { minX, maxX, minY, maxY };
     if (gesture.current.mode === 'none') flushBounds();
     // Far from the area's center (or zoomed well out)? Offer "Search this area".
-    const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, AREA_RANGE_METERS);
+    const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, areaRangeRef.current);
     if (offer !== offerAreaRef.current) {
       offerAreaRef.current = offer;
       setOfferArea(offer);
@@ -524,6 +524,9 @@ export const DiscoveryMapCanvas: React.FC<{
 
   const [offerArea, setOfferArea] = useState(false);
   const offerAreaRef = useRef(false);
+  // The radius the current area was loaded with: the default, or the last search's (see
+  // shouldOfferAreaSearch), so a city-wide search doesn't bring the button straight back.
+  const areaRangeRef = useRef(AREA_RANGE_METERS);
   // "Search this area" fades in when offered and out when tapped (or no longer offered).
   const searchFade = useRef(new Animated.Value(0)).current;
   const [searchShown, setSearchShown] = useState(false);
@@ -552,6 +555,7 @@ export const DiscoveryMapCanvas: React.FC<{
     Animated.timing(searchFade, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setSearchShown(false));
     setOfferArea(false);
     const radiusMeters = visibleRadiusMeters(viewSize.current.width / z, visibleMapHeight() / z);
+    areaRangeRef.current = Math.max(AREA_RANGE_METERS, radiusMeters);
     setTimeout(() => onSearchArea({ ...spot, radiusMeters }), 32);
   };
 
@@ -945,6 +949,8 @@ export const DiscoveryMapCanvas: React.FC<{
       calculateBounds(target.x, target.y);
       return;
     }
+    // A place picked from the list (not a search): back to the default range.
+    areaRangeRef.current = AREA_RANGE_METERS;
     userMoved.current = false;
     handleRecenter();
   }, [viewPlace.latitude, viewPlace.longitude]);
