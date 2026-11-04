@@ -55,6 +55,7 @@ import { useUnits } from '../../lib/units';
 import { LOCALRADAR_HANDLE } from '../../lib/aggregated';
 import { isGhostVenue } from '../../lib/hostProfiles';
 import { venueInfo } from '../../lib/venues';
+import { showsTravelTime } from '../../lib/pointCard';
 import type { VenueTarget } from '../../screens/VenueHubScreen';
 
 const NAV_BAR_HEIGHT = 72;
@@ -581,7 +582,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
               <Text style={styles.distanceText}>{formatDistance(view.distanceMeters)} away</Text>
             </View>
           ) : null}
-          {view.eta ? (
+          {view.eta && showsTravelTime(view.distanceMeters) ? (
             <View style={styles.etaChip}>
               <Footprints size={12} color={c.textMuted} strokeWidth={2.25} />
               <Text style={styles.etaText}>{view.eta}</Text>
