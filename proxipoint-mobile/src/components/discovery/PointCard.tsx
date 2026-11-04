@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Car, Check, Info, PersonStanding, User, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
-import { distanceLabel, goingLabel, pointTiming, type TimingKind } from '../../lib/pointCard';
+import { distanceLabel, goingLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
@@ -182,7 +182,7 @@ export const PointCard: React.FC<{
               <Text style={[styles.pillText, styles.pillTextPlain, { color: pills.distance.fg }]} numberOfLines={1}>
                 {distance}
               </Text>
-              {!distanceOnly && distanceMeters == null && node.eta ? <TravelIcon size={13} color={pills.distance.fg} strokeWidth={2.25} /> : null}
+              {!distanceOnly && distanceMeters == null && node.eta && showsTravelTime(node.distanceMeters) ? <TravelIcon size={13} color={pills.distance.fg} strokeWidth={2.25} /> : null}
             </View>
           ) : null}
           {extra !== undefined ? (
