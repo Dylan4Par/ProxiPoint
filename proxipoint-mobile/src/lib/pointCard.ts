@@ -46,7 +46,7 @@ export function pointTiming(node: TimedPoint, now = Date.now()): Timing | null {
 /** "540m • 7 min walk" (the travel part only when the Point has one). */
 /** Walking pace the app's ETAs use. */
 export const WALK_METERS_PER_MIN = 80;
-/** Travel times show only for Points within this long a walk; further out, just the distance. */
+/** Within this long a walk a Point shows its walk / drive time; further out, its distance. */
 export const MAX_TRAVEL_WALK_MIN = 30;
 
 /** Whether a Point is close enough to show its walk / drive time (about 2.4 km, 1.5 mi). */
@@ -54,11 +54,14 @@ export function showsTravelTime(meters: number | null | undefined): boolean {
   return meters == null || meters <= MAX_TRAVEL_WALK_MIN * WALK_METERS_PER_MIN;
 }
 
+/**
+ * The distance pill: the walk / drive time when it's within a 30-minute walk ("9 min walk"),
+ * otherwise the distance ("618 mi"). The distance stands in when there's no time to show.
+ */
 export function distanceLabel(meters: number | undefined, eta?: string | null): string | null {
-  const distance = formatDistance(meters);
-  const travel = showsTravelTime(meters) ? eta?.trim() || null : null;
-  if (!distance) return travel;
-  return travel ? `${distance} • ${travel}` : distance;
+  const travel = eta?.trim() || null;
+  if (travel && showsTravelTime(meters)) return travel;
+  return formatDistance(meters) ?? null;
 }
 
 /** "12+" next to the faces; null hides the stack. */
