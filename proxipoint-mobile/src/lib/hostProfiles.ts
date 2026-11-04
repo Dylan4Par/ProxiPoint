@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { PointRecap } from './pointRecap';
 import { LOCALRADAR_HANDLE, ghostVenueBio, venueHandleFor, type VenueTier } from './aggregated';
+import { DSM_PROFILES } from './demoDesMoines';
 
 /**
  * Public profiles for the sample hosts in useDiscoveryStore. Placeholder data until the backend
@@ -324,7 +325,8 @@ const ALL_PROFILES: HostProfile[] = [
   LOCALRADAR,
   ...PROFILES.map((profile) =>
     GHOST_VENUE_HANDLES.has(profile.handle) ? ghostVenue(profile.handle, profile.displayName, profile.followers) : profile,
-  ),
+  ),  // Des Moines demo organizers (demoDesMoines.ts).
+  ...DSM_PROFILES,
 ];
 
 const BY_HANDLE = new Map(ALL_PROFILES.map((profile) => [profile.handle.toLowerCase(), profile]));

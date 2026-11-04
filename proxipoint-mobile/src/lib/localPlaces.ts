@@ -1,5 +1,6 @@
 import { calculateDistanceMeters } from './locationFilter';
 import type { ChannelPost, PostPlace } from './channels';
+import { DSM_PLACES } from './demoDesMoines';
 
 /**
  * Places: the parks, venues, trails, intersections and buildings people post about. Every post
@@ -61,7 +62,8 @@ export const SAMPLE_PLACES: LocalPlace[] = [
   { id: 'pl-erie-library', name: 'Erie Community Library', kind: 'building', ...at(-150, -520), area: 'Erie, CO' },
   { id: 'pl-coal-creek', name: 'Coal Creek Trail', kind: 'trail', ...at(1100, -260), area: 'Erie, CO' },
   { id: 'pl-community-park', name: 'Erie Community Park', kind: 'park', ...at(620, -820), area: 'Erie, CO' },
-  { id: 'pl-brickhouse', name: 'The Brickhouse', kind: 'venue', ...at(210, 260), area: 'Erie, CO' },
+  { id: 'pl-brickhouse', name: 'The Brickhouse', kind: 'venue', ...at(210, 260), area: 'Erie, CO' },  // Des Moines demo (demoDesMoines.ts).
+  ...DSM_PLACES,
 ];
 
 /** A post's place, pointing at a LocalPlace. */
