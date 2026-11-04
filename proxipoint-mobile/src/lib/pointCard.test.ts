@@ -26,14 +26,15 @@ test('starts-in wording', () => {
 });
 
 test('distance pill and going count', () => {
-  assert.equal(distanceLabel(540, '7 min walk'), '540m • 7 min walk');
-  assert.equal(distanceLabel(1400, '4 min drive'), '1.4 km • 4 min drive');
-  assert.equal(distanceLabel(540, ''), '540m');
-  assert.equal(distanceLabel(undefined, null), null);
-  // Past a 30-minute walk (2.4 km): the distance alone, no walk or drive time.
-  assert.equal(distanceLabel(2400, '30 min walk'), '2.4 km • 30 min walk');
+  // Within a 30-minute walk (2.4 km): the time alone; further out: the distance alone.
+  assert.equal(distanceLabel(540, '7 min walk'), '7 min walk');
+  assert.equal(distanceLabel(1400, '4 min drive'), '4 min drive');
+  assert.equal(distanceLabel(2400, '30 min walk'), '30 min walk');
   assert.equal(distanceLabel(2500, '8 min drive'), '2.5 km');
   assert.equal(distanceLabel(994000, '3110 min drive'), '994 km');
+  // No time to show: the distance.
+  assert.equal(distanceLabel(540, ''), '540m');
+  assert.equal(distanceLabel(undefined, null), null);
   assert.equal(goingLabel(12), '12+');
   assert.equal(goingLabel(1200), '1.2k+');
   assert.equal(goingLabel(0), null);
