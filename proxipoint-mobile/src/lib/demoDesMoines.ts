@@ -25,17 +25,17 @@ interface DsmVenue {
   longitude: number;
 }
 
-// Coordinates: see the PR for how they were looked up.
+// Coordinates from Geocodio (rooftop, or address-range for Walker’s Place and Big Dog Billiards), Nov 2026.
 const VENUES = {
-  walkers: { id: 'dsm-walkers', name: 'Walker’s Place', address: '475 NE Broadway Ave, Des Moines, IA 50313', latitude: 41.6487, longitude: -93.6055 },
-  ricochet: { id: 'dsm-ricochet', name: 'Ricochet', address: '400 Locust St Ste 105, Des Moines, IA 50309', latitude: 41.5869, longitude: -93.6227 },
-  cheapSeats: { id: 'dsm-cheap-seats', name: 'Cheap Seats Sports Bar', address: '2301 Hubbell Ave, Des Moines, IA 50317', latitude: 41.609, longitude: -93.5733 },
-  greenwood: { id: 'dsm-greenwood', name: 'Greenwood Lounge', address: '3707 Ingersoll Ave, Des Moines, IA 50312', latitude: 41.5857, longitude: -93.6684 },
-  gt: { id: 'dsm-gt', name: 'GT', address: '3013 Ingersoll Ave, Des Moines, IA 50312', latitude: 41.5856, longitude: -93.6575 },
-  johnnys: { id: 'dsm-johnnys', name: 'Johnny’s Hall of Fame', address: '302 Court Ave, Des Moines, IA 50309', latitude: 41.5851, longitude: -93.6213 },
-  toads: { id: 'dsm-toads', name: 'Toads Tavern', address: '3002 State Ave, Des Moines, IA 50317', latitude: 41.6226, longitude: -93.5707 },
-  bigDog: { id: 'dsm-big-dog', name: 'Big Dog Billiards', address: '4510 NE 14th St, Des Moines, IA 50313', latitude: 41.6393, longitude: -93.5966 },
-  thirsty: { id: 'dsm-thirsty', name: 'Thirsty Sportsman', address: '4808 SW 9th St, Des Moines, IA 50315', latitude: 41.545, longitude: -93.6267 },
+  walkers: { id: 'dsm-walkers', name: 'Walker’s Place', address: '475 NE Broadway Ave, Des Moines, IA 50313', latitude: 41.644189, longitude: -93.61298 },
+  ricochet: { id: 'dsm-ricochet', name: 'Ricochet', address: '400 Locust St Ste 105, Des Moines, IA 50309', latitude: 41.587132, longitude: -93.622805 },
+  cheapSeats: { id: 'dsm-cheap-seats', name: 'Cheap Seats Sports Bar', address: '2301 Hubbell Ave, Des Moines, IA 50317', latitude: 41.603784, longitude: -93.574133 },
+  greenwood: { id: 'dsm-greenwood', name: 'Greenwood Lounge', address: '3707 Ingersoll Ave, Des Moines, IA 50312', latitude: 41.586524, longitude: -93.667299 },
+  gt: { id: 'dsm-gt', name: 'GT', address: '3013 Ingersoll Ave, Des Moines, IA 50312', latitude: 41.586292, longitude: -93.658546 },
+  johnnys: { id: 'dsm-johnnys', name: 'Johnny’s Hall of Fame', address: '302 Court Ave, Des Moines, IA 50309', latitude: 41.585086, longitude: -93.620561 },
+  toads: { id: 'dsm-toads', name: 'Toads Tavern', address: '3002 State Ave, Des Moines, IA 50317', latitude: 41.60163, longitude: -93.558231 },
+  bigDog: { id: 'dsm-big-dog', name: 'Big Dog Billiards', address: '4510 NE 14th St, Des Moines, IA 50313', latitude: 41.642016, longitude: -93.600302 },
+  thirsty: { id: 'dsm-thirsty', name: 'Thirsty Sportsman', address: '4808 SW 9th St, Des Moines, IA 50315', latitude: 41.540346, longitude: -93.626327 },
 } satisfies Record<string, DsmVenue>;
 type VenueKey = keyof typeof VENUES;
 
