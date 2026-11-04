@@ -40,19 +40,27 @@ const VENUES = {
 type VenueKey = keyof typeof VENUES;
 
 /**
- * Photos of each game (the tag-photo collection in Spaces). Empty = seeded stock stand-ins.
+ * Photos of each game, from the tag-photo collection in Spaces (tools/tag-photos in
+ * overwatchcore-ingest; Pexels photos). Each is uploaded as a 1200x675 "wide" crop and a 400x400
+ * "square" one; these are the wide ones. Empty = seeded stock stand-ins.
  */
+const TAG_PHOTOS = 'https://proxipoint-assets.sfo3.cdn.digitaloceanspaces.com/tag-photos/tags/';
 export const DSM_PHOTOS: Record<DsmGame, string[]> = {
-  trivia: [],
-  pool: [],
-  darts: [],
-  cornhole: [],
+  trivia: [`${TAG_PHOTOS}trivia-night/01-93c2e2fc-wide.jpg`, `${TAG_PHOTOS}trivia-night/02-575ac999-wide.jpg`],
+  pool: [`${TAG_PHOTOS}billiards/01-261c1aed-wide.jpg`, `${TAG_PHOTOS}billiards/02-aea50b52-wide.jpg`],
+  darts: [`${TAG_PHOTOS}darts/01-26946c68-wide.jpg`, `${TAG_PHOTOS}darts/02-d337bebc-wide.jpg`],
+  cornhole: [`${TAG_PHOTOS}cornhole/01-33ec5ff9-wide.jpg`, `${TAG_PHOTOS}cornhole/02-82a4d597-wide.jpg`],
 };
 
-/** The n-th photo of a game (wraps around), or a fixed stand-in when the game has none. */
-export function dsmPhoto(game: DsmGame, n: number, seed: string): string {
+/**
+ * The n-th photo of a game (wraps around), or a fixed stand-in when the game has none. 'square'
+ * picks the 400x400 crop, for small round spots (event covers on cards, avatars).
+ */
+export function dsmPhoto(game: DsmGame, n: number, seed: string, shape: 'wide' | 'square' = 'wide'): string {
   const list = DSM_PHOTOS[game];
-  return list.length > 0 ? list[n % list.length] : `https://picsum.photos/seed/${seed}/1200/900`;
+  if (list.length === 0) return shape === 'square' ? `https://picsum.photos/seed/${seed}/600/600` : `https://picsum.photos/seed/${seed}/1200/900`;
+  const wide = list[n % list.length];
+  return shape === 'square' ? wide.replace(/-wide\.jpg$/, '-square.jpg') : wide;
 }
 
 // ---- Organizers ---------------------------------------------------------------------------
@@ -98,7 +106,7 @@ export const DSM_PROFILES: HostProfile[] = (Object.keys(ORGANIZER) as DsmGame[])
     following: 12 + i * 7,
     pointsHosted: 180 + i * 61,
     joined: 'August 2025',
-    avatarUri: dsmPhoto(game, 0, `dsm-avatar-${game}`),
+    avatarUri: dsmPhoto(game, 0, `dsm-avatar-${game}`, 'square'),
     recaps: [],
     contact: { visibility: 'private' },
   };
@@ -240,7 +248,7 @@ export const DSM_SEED_POINTS: DsmSeedPoint[] = NIGHTS.map(([id, venueKey, game, 
     radiusMeters: going > 40 ? 1000 : 750,
     near: { latitude: venue.latitude, longitude: venue.longitude },
     hostedBy: true,
-    coverPhotoUri: dsmPhoto(game, i, id),
+    coverPhotoUri: dsmPhoto(game, i, id, 'square'),
   };
 });
 
