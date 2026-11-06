@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Car, Check, Info, PersonStanding, User, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
+import { hostAvatarUri } from '../../lib/hostProfiles';
 import { distanceLabel, goingLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
@@ -14,13 +16,22 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
 /**
  * The Point card used on Discover and the Explore Map list:
  *
- *   (photo)  #Tag  [⚡ BOOSTED]
- *            Title
- *            Venue
- *   [● LIVE NOW] [540m • 7 min walk 🚶]        (faces 12+) [✓ RSVP]
+ *   (badge)  #Tag  [⚡ BOOSTED]                  ░▒▓ photo
+ *            Title                               ░▒▓
+ *            Venue                               ░▒▓
+ *   [● LIVE NOW] [540m • 7 min walk 🚶]  (faces 12+) [✓ RSVP]
+ *
+ * Badge: the host's profile picture, or the tag's icon when they have none.
+ * Photo: the event's own cover photo fills the right side behind the text and buttons, at 50%
+ * on the far right fading to nothing at its left edge. No cover photo = plain card.
  *
  * Pills keep fixed light colors in dark mode (like the design) and soft tints in light mode.
  */
+
+/** Share of the card's width the background photo covers, from the right edge. */
+const PHOTO_WIDTH = '60%';
+/** Photo strength at its right edge (fades to 0 at its left edge). */
+const PHOTO_MAX_OPACITY = 0.5;
 
 /** Pill colors per mode. They're fixed (not theme tokens) because the light theme inverts tokens. */
 const PILLS = {
@@ -93,6 +104,10 @@ export const PointCard: React.FC<{
   };
   const TravelIcon = node.etaMode === 'drive' ? Car : PersonStanding;
   const timingColors = timing ? pills[timing.kind as TimingKind] : null;
+  const avatar = hostAvatarUri(node.host);
+  const photo = node.coverPhotoLargeUri ?? node.coverPhotoUri ?? null;
+  // SVG ids must be plain names; useId gives ":r1:"-style ones.
+  const fadeId = `pc-fade-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   return (
     <TouchableOpacity
@@ -104,13 +119,30 @@ export const PointCard: React.FC<{
       accessibilityHint="Opens the details"
       testID={testID ?? `point-card-${node.id}`}
     >
+      {photo ? (
+        // Drawn first, so everything else sits on top. The photo is fully opaque and a gradient
+        // in the card's own color covers it: solid on the left, half on the right. Same look as
+        // fading the photo itself, without an SVG mask (unreliable on some Android versions).
+        <View style={styles.photoWrap} pointerEvents="none" testID="point-card-photo">
+          <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+            <Defs>
+              <LinearGradient id={fadeId} x1="0" y1="0" x2="1" y2="0">
+                <Stop offset="0" stopColor={c.surface} stopOpacity={1} />
+                <Stop offset="1" stopColor={c.surface} stopOpacity={1 - PHOTO_MAX_OPACITY} />
+              </LinearGradient>
+            </Defs>
+            <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${fadeId})`} />
+          </Svg>
+        </View>
+      ) : null}
       {city ? (
-        <Text style={styles.city} numberOfLines={1} testID="point-card-city">
+        <Text style={[styles.city, photo ? styles.onPhoto : null]} numberOfLines={1} testID="point-card-city">
           {city}
         </Text>
       ) : null}
       <View style={styles.top}>
-        <CategoryBadge tag={tag} title={node.title} photoUri={node.coverPhotoUri} size={46} />
+        <CategoryBadge tag={tag} title={node.title} photoUri={avatar} size={46} />
         <View style={styles.copy}>
           <View style={[styles.tagRow, city ? styles.tagRowWithCity : null]}>
             {tag ? (
@@ -239,7 +271,12 @@ const createStyles = (c: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
       gap: 8,
+      // Keeps the background photo inside the rounded corners.
+      overflow: 'hidden',
     },
+    photoWrap: { position: 'absolute', top: 0, right: 0, bottom: 0, width: PHOTO_WIDTH },
+    // Small text over the photo: a soft halo in the card's color keeps it readable.
+    onPhoto: { textShadowColor: c.surface, textShadowRadius: 4, textShadowOffset: { width: 0, height: 0 } },
     // Selected on the map: a soft green outline, like the design's middle card.
     cardSelected: { borderColor: c.green, borderWidth: 1.5 },
     top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
