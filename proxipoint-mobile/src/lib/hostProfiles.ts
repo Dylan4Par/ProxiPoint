@@ -378,6 +378,15 @@ export function getHostProfile(handle: string): HostProfile {
   );
 }
 
+/**
+ * A host's profile picture, or null when they haven't set one (or aren't known here yet).
+ * Point cards show it in their round badge; without one the badge shows the tag's icon.
+ */
+export function hostAvatarUri(handle: string | null | undefined): string | null {
+  if (!handle) return null;
+  return BY_HANDLE.get(normalizeHandle(handle))?.avatarUri ?? null;
+}
+
 // Who you follow (in memory for now; POST/DELETE /me/following/:handle later).
 let following = new Set<string>();
 const followListeners = new Set<() => void>();
