@@ -29,7 +29,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
  */
 
 /** Share of the card's width the background photo covers, from the right edge. */
-const PHOTO_WIDTH = '60%';
+const PHOTO_WIDTH = '20%';
 /** Photo strength at its right edge (fades to 0 at its left edge). */
 const PHOTO_MAX_OPACITY = 0.65;
 
