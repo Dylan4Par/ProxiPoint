@@ -19,7 +19,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
  *   photo▓▒░ Venue
  *   photo▓▒░ [● LIVE NOW] [540m • 7 min walk 🚶]    [✓ RSVP]
  *
- * Photo: the event's own cover photo down the card's left edge, at an even 60% with a long, smooth
+ * Photo: the event's own cover photo down the card's left edge, at full strength with a long, smooth
  * fade to the card's color over its right half. The details start clear of it: no text on the photo.
  * No cover photo = no photo column, and the details start at the card's normal padding.
  *
@@ -31,7 +31,7 @@ const PHOTO_WIDTH = 84;
 /** Where the details start when there's a photo: just past the photo's faded edge, never on it. */
 const PHOTO_CONTENT_INSET = PHOTO_WIDTH + 8;
 /** Photo strength (the same across the photo, apart from the fade on its left edge). */
-const PHOTO_OPACITY = 0.6;
+const PHOTO_OPACITY = 1;
 /** Share of the photo's width, at its right edge, that fades out from PHOTO_OPACITY to 0. */
 const PHOTO_FADE = 0.5;
 /**
@@ -135,7 +135,7 @@ export const PointCard: React.FC<{
     >
       {photo ? (
         // Drawn first, so everything else sits on top. The photo is fully opaque and a gradient
-        // in the card's own color covers it: 40% over the left half, easing to solid on the right. Same look
+        // in the card's own color covers it: clear over the left half, easing to solid on the right. Same look
         // as fading the photo itself, without an SVG mask (unreliable on some Android versions).
         <View style={styles.photoWrap} pointerEvents="none" testID="point-card-photo">
           <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} resizeMode="cover" />
