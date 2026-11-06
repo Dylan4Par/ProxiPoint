@@ -1,6 +1,6 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
 import { Car, Check, Info, PersonStanding, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
 import { hostAvatarUri } from '../../lib/hostProfiles';
@@ -104,7 +104,9 @@ export const PointCard: React.FC<{
   const avatar = hostAvatarUri(node.host);
   const photo = node.coverPhotoLargeUri ?? node.coverPhotoUri ?? null;
   // SVG ids must be plain names; useId gives ":r1:"-style ones.
-  const fadeId = `pc-fade-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  const svgId = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const fadeId = `pc-fade-${svgId}`;
+  const glowId = `pc-glow-${svgId}`;
 
   return (
     <TouchableOpacity
@@ -135,9 +137,25 @@ export const PointCard: React.FC<{
         </View>
       ) : null}
       {city ? (
-        <Text style={[styles.city, photo ? styles.onPhoto : null]} numberOfLines={1} testID="point-card-city">
-          {city}
-        </Text>
+        <View style={styles.city} pointerEvents="none">
+          {photo ? (
+            // Fuzzy pill: a soft glow in the card's color behind the name that fades the photo
+            // out around it. An oval radial gradient: strong through the middle, soft at the edges.
+            <Svg style={styles.cityGlow} width="100%" height="100%">
+              <Defs>
+                <RadialGradient id={glowId} cx="50%" cy="50%" rx="50%" ry="50%">
+                  <Stop offset="0" stopColor={c.surface} stopOpacity={0.92} />
+                  <Stop offset="0.55" stopColor={c.surface} stopOpacity={0.85} />
+                  <Stop offset="1" stopColor={c.surface} stopOpacity={0} />
+                </RadialGradient>
+              </Defs>
+              <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${glowId})`} />
+            </Svg>
+          ) : null}
+          <Text style={[styles.cityText, photo ? styles.onPhoto : null]} numberOfLines={1} testID="point-card-city">
+            {city}
+          </Text>
+        </View>
       ) : null}
       <View style={styles.top}>
         <CategoryBadge tag={tag} title={node.title} photoUri={avatar} size={46} />
@@ -267,12 +285,10 @@ const createStyles = (c: ThemeColors) =>
     tagRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
     // Leaves room for the city in the card's top-right corner.
     tagRowWithCity: { paddingRight: 100 },
-    city: {
-      position: 'absolute',
-      top: 9,
-      right: 12,
-      maxWidth: 118,
-      zIndex: 1,
+    city: { position: 'absolute', top: 9, right: 12, maxWidth: 118, zIndex: 1 },
+    // Reaches past the name on every side, so the glow's soft edge falls outside the letters.
+    cityGlow: { position: 'absolute', top: -8, bottom: -8, left: -18, right: -18 },
+    cityText: {
       // Full text color, a size up and heavy, so it reads over the photo.
       color: c.text,
       fontSize: 12,
