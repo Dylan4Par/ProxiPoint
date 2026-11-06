@@ -22,16 +22,18 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
  *   [● LIVE NOW] [540m • 7 min walk 🚶]               [✓ RSVP]
  *
  * Badge: the host's profile picture, or the tag's icon when they have none.
- * Photo: the event's own cover photo fills the right side behind the text and buttons, at 65%
- * on the far right fading to nothing at its left edge. No cover photo = plain card.
+ * Photo: the event's own cover photo fills the right side behind the text and buttons at an even
+ * 60%, with a short soft fade to nothing along its left edge. No cover photo = plain card.
  *
  * Pills keep fixed light colors in dark mode (like the design) and soft tints in light mode.
  */
 
 /** Share of the card's width the background photo covers, from the right edge. */
 const PHOTO_WIDTH = '20%';
-/** Photo strength at its right edge (fades to 0 at its left edge). */
-const PHOTO_MAX_OPACITY = 0.65;
+/** Photo strength (the same across the photo, apart from the fade on its left edge). */
+const PHOTO_OPACITY = 0.6;
+/** Share of the photo's width, from its left edge, that fades in from 0 to PHOTO_OPACITY. */
+const PHOTO_FADE = 0.3;
 
 /** Pill colors per mode. They're fixed (not theme tokens) because the light theme inverts tokens. */
 const PILLS = {
@@ -116,7 +118,7 @@ export const PointCard: React.FC<{
     >
       {photo ? (
         // Drawn first, so everything else sits on top. The photo is fully opaque and a gradient
-        // in the card's own color covers it: solid on the left, half on the right. Same look as
+        // in the card's own color covers it: solid at the left edge, 40% over the rest. Same look as
         // fading the photo itself, without an SVG mask (unreliable on some Android versions).
         <View style={styles.photoWrap} pointerEvents="none" testID="point-card-photo">
           <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} resizeMode="cover" />
@@ -124,7 +126,8 @@ export const PointCard: React.FC<{
             <Defs>
               <LinearGradient id={fadeId} x1="0" y1="0" x2="1" y2="0">
                 <Stop offset="0" stopColor={c.surface} stopOpacity={1} />
-                <Stop offset="1" stopColor={c.surface} stopOpacity={1 - PHOTO_MAX_OPACITY} />
+                <Stop offset={PHOTO_FADE} stopColor={c.surface} stopOpacity={1 - PHOTO_OPACITY} />
+                <Stop offset="1" stopColor={c.surface} stopOpacity={1 - PHOTO_OPACITY} />
               </LinearGradient>
             </Defs>
             <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${fadeId})`} />
