@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { AccessibilityInfo, Animated, Easing, StyleSheet, Text, View } from 'react-native';
-import { BRAND_CYAN, BRAND_NAVY, BRAND_TILE, PIN_TIP, ProxiPointLogo } from './ProxiPointLogo';
+import { BRAND_CYAN, BRAND_NAVY, BRAND_TILE, PIN_HEIGHT, PIN_TIP, ProxiPointLogo } from './ProxiPointLogo';
 
 /**
  * Fills the parent edge to edge. Written out by hand because StyleSheet.absoluteFillObject
@@ -102,7 +102,7 @@ export const AnimatedSplash: React.FC<{ onFinish: () => void }> = ({ onFinish })
   }, []);
 
   // Squash/stretch around the tip (bottom) rather than the middle.
-  const pinHeight = LOGO * (85 / 120);
+  const pinHeight = LOGO * PIN_HEIGHT;
   const squashShift = scaleY.interpolate({
     inputRange: [0.72, 1, 1.06],
     outputRange: [pinHeight * 0.14, 0, -pinHeight * 0.03],
