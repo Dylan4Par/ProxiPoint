@@ -20,20 +20,23 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
  *   photo▓▒░ [● LIVE NOW] [540m • 7 min walk 🚶]    [✓ RSVP]
  *
  * Photo: the event's own cover photo down the card's left edge, at full strength with a long, smooth
- * fade to the card's color over its right half. The details start clear of it: no text on the photo.
+ * fade to the card's color over its right side. The details start clear of it: no text on the photo.
  * No cover photo = no photo column, and the details start at the card's normal padding.
  *
  * Pills keep fixed light colors in dark mode (like the design) and soft tints in light mode.
  */
 
 /** Width of the photo column on the card's left edge (fixed, so it's the same on every phone). */
-const PHOTO_WIDTH = 84;
-/** Where the details start when there's a photo: just past the photo's faded edge, never on it. */
-const PHOTO_CONTENT_INSET = PHOTO_WIDTH + 8;
+const PHOTO_WIDTH = 98;
+/**
+ * Where the details start when there's a photo. The photo's fade has all but finished by here
+ * (about 1% photo at the first letter), so no text sits on the photo itself.
+ */
+const PHOTO_CONTENT_INSET = 92;
 /** Photo strength (the same across the photo, apart from the fade on its left edge). */
 const PHOTO_OPACITY = 1;
 /** Share of the photo's width, at its right edge, that fades out from PHOTO_OPACITY to 0. */
-const PHOTO_FADE = 0.5;
+const PHOTO_FADE = 0.42;
 /**
  * Gradient stops for the cover over the photo: even (1 - PHOTO_OPACITY) up to the fade, then an
  * eased ramp to solid, reaching it a little before the edge so no sliver of photo shows there.
