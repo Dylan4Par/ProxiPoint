@@ -141,16 +141,21 @@ export const PointCard: React.FC<{
           {photo ? (
             // Fuzzy pill: a soft glow in the card's color behind the name that fades the photo
             // out around it. An oval radial gradient: strong through the middle, soft at the edges.
-            <Svg style={styles.cityGlow} width="100%" height="100%">
-              <Defs>
-                <RadialGradient id={glowId} cx="50%" cy="50%" rx="50%" ry="50%">
-                  <Stop offset="0" stopColor={c.surface} stopOpacity={0.92} />
-                  <Stop offset="0.55" stopColor={c.surface} stopOpacity={0.85} />
-                  <Stop offset="1" stopColor={c.surface} stopOpacity={0} />
-                </RadialGradient>
-              </Defs>
-              <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${glowId})`} />
-            </Svg>
+            // The View sets the glow's size and place (past the name on every side); the Svg just
+            // fills it. (An Svg sized by its own width/height props ignores the insets and lands
+            // up and to the left of the name.)
+            <View style={styles.cityGlow}>
+              <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+                <Defs>
+                  <RadialGradient id={glowId} cx="50%" cy="50%" rx="50%" ry="50%">
+                    <Stop offset="0" stopColor={c.surface} stopOpacity={0.92} />
+                    <Stop offset="0.55" stopColor={c.surface} stopOpacity={0.85} />
+                    <Stop offset="1" stopColor={c.surface} stopOpacity={0} />
+                  </RadialGradient>
+                </Defs>
+                <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${glowId})`} />
+              </Svg>
+            </View>
           ) : null}
           <Text style={[styles.cityText, photo ? styles.onPhoto : null]} numberOfLines={1} testID="point-card-city">
             {city}
