@@ -1,9 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Defs, LinearGradient, RadialGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { Car, Check, Info, PersonStanding, Zap } from 'lucide-react-native';
-import { CategoryBadge } from './CategoryBadge';
-import { hostAvatarUri } from '../../lib/hostProfiles';
 import { distanceLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
@@ -16,23 +14,25 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
 /**
  * The Point card used on Discover and the Explore Map list:
  *
- *   (badge)  #Tag  [⚡ BOOSTED]                  ░▒▓ photo
- *            Title                               ░▒▓
- *            Venue                               ░▒▓
- *   [● LIVE NOW] [540m • 7 min walk 🚶]               [✓ RSVP]
+ *   photo▓▒░ #Tag  [⚡ BOOSTED]                        City
+ *   photo▓▒░ Title
+ *   photo▓▒░ Venue
+ *   photo▓▒░ [● LIVE NOW] [540m • 7 min walk 🚶]    [✓ RSVP]
  *
- * Badge: the host's profile picture, or the tag's icon when they have none.
- * Photo: the event's own cover photo fills the right side behind the text and buttons at an even
- * 60%, with a short soft fade to nothing along its left edge. No cover photo = plain card.
+ * Photo: the event's own cover photo down the card's left edge, at an even 60% with a short
+ * soft fade to nothing along its right edge; the details start just inside that fade.
+ * No cover photo = no photo column, and the details start at the card's normal padding.
  *
  * Pills keep fixed light colors in dark mode (like the design) and soft tints in light mode.
  */
 
-/** Share of the card's width the background photo covers, from the right edge. */
-const PHOTO_WIDTH = '28%';
+/** Width of the photo column on the card's left edge (fixed, so it's the same on every phone). */
+const PHOTO_WIDTH = 90;
+/** Where the details start when there's a photo: a little inside the photo's soft right edge. */
+const PHOTO_CONTENT_INSET = 80;
 /** Photo strength (the same across the photo, apart from the fade on its left edge). */
 const PHOTO_OPACITY = 0.6;
-/** Share of the photo's width, from its left edge, that fades in from 0 to PHOTO_OPACITY. */
+/** Share of the photo's width, at its right edge, that fades out from PHOTO_OPACITY to 0. */
 const PHOTO_FADE = 0.3;
 
 /** Pill colors per mode. They're fixed (not theme tokens) because the light theme inverts tokens. */
@@ -101,17 +101,14 @@ export const PointCard: React.FC<{
   };
   const TravelIcon = node.etaMode === 'drive' ? Car : PersonStanding;
   const timingColors = timing ? pills[timing.kind as TimingKind] : null;
-  const avatar = hostAvatarUri(node.host);
   const photo = node.coverPhotoLargeUri ?? node.coverPhotoUri ?? null;
   // SVG ids must be plain names; useId gives ":r1:"-style ones.
-  const svgId = useId().replace(/[^a-zA-Z0-9]/g, '');
-  const fadeId = `pc-fade-${svgId}`;
-  const glowId = `pc-glow-${svgId}`;
+  const fadeId = `pc-fade-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   return (
     <TouchableOpacity
       activeOpacity={0.9}
-      style={[styles.card, selected && styles.cardSelected]}
+      style={[styles.card, photo ? styles.cardWithPhoto : null, selected && styles.cardSelected]}
       onPress={onOpen}
       accessibilityRole="button"
       accessibilityLabel={[node.title, timing?.label, where, distance, node.facts?.priceLabel, boosted ? 'Boosted' : null].filter(Boolean).join('. ')}
@@ -120,16 +117,16 @@ export const PointCard: React.FC<{
     >
       {photo ? (
         // Drawn first, so everything else sits on top. The photo is fully opaque and a gradient
-        // in the card's own color covers it: solid at the left edge, 40% over the rest. Same look as
-        // fading the photo itself, without an SVG mask (unreliable on some Android versions).
+        // in the card's own color covers it: 40% over most of it, solid at its right edge. Same look
+        // as fading the photo itself, without an SVG mask (unreliable on some Android versions).
         <View style={styles.photoWrap} pointerEvents="none" testID="point-card-photo">
           <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
             <Defs>
               <LinearGradient id={fadeId} x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor={c.surface} stopOpacity={1} />
-                <Stop offset={PHOTO_FADE} stopColor={c.surface} stopOpacity={1 - PHOTO_OPACITY} />
-                <Stop offset="1" stopColor={c.surface} stopOpacity={1 - PHOTO_OPACITY} />
+                <Stop offset="0" stopColor={c.surface} stopOpacity={1 - PHOTO_OPACITY} />
+                <Stop offset={1 - PHOTO_FADE} stopColor={c.surface} stopOpacity={1 - PHOTO_OPACITY} />
+                <Stop offset="1" stopColor={c.surface} stopOpacity={1} />
               </LinearGradient>
             </Defs>
             <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${fadeId})`} />
@@ -138,32 +135,12 @@ export const PointCard: React.FC<{
       ) : null}
       {city ? (
         <View style={styles.city} pointerEvents="none">
-          {photo ? (
-            // Fuzzy pill: a soft glow in the card's color behind the name that fades the photo
-            // out around it. An oval radial gradient: strong through the middle, soft at the edges.
-            // The View sets the glow's size and place (past the name on every side); the Svg just
-            // fills it. (An Svg sized by its own width/height props ignores the insets and lands
-            // up and to the left of the name.)
-            <View style={styles.cityGlow}>
-              <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-                <Defs>
-                  <RadialGradient id={glowId} cx="50%" cy="50%" rx="50%" ry="50%">
-                    <Stop offset="0" stopColor={c.surface} stopOpacity={0.92} />
-                    <Stop offset="0.55" stopColor={c.surface} stopOpacity={0.85} />
-                    <Stop offset="1" stopColor={c.surface} stopOpacity={0} />
-                  </RadialGradient>
-                </Defs>
-                <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${glowId})`} />
-              </Svg>
-            </View>
-          ) : null}
-          <Text style={[styles.cityText, photo ? styles.onPhoto : null]} numberOfLines={1} testID="point-card-city">
+          <Text style={styles.cityText} numberOfLines={1} testID="point-card-city">
             {city}
           </Text>
         </View>
       ) : null}
       <View style={styles.top}>
-        <CategoryBadge tag={tag} title={node.title} photoUri={avatar} size={46} />
         <View style={styles.copy}>
           <View style={[styles.tagRow, city ? styles.tagRowWithCity : null]}>
             {tag ? (
@@ -277,12 +254,12 @@ const createStyles = (c: ThemeColors) =>
       paddingHorizontal: 12,
       paddingVertical: 10,
       gap: 8,
-      // Keeps the background photo inside the rounded corners.
+      // Keeps the photo inside the rounded corners.
       overflow: 'hidden',
     },
-    photoWrap: { position: 'absolute', top: 0, right: 0, bottom: 0, width: PHOTO_WIDTH },
-    // Small text over the photo: a soft halo in the card's color keeps it readable.
-    onPhoto: { textShadowColor: c.surface, textShadowRadius: 6, textShadowOffset: { width: 0, height: 0 } },
+    // Details move right to make room for the photo column.
+    cardWithPhoto: { paddingLeft: PHOTO_CONTENT_INSET },
+    photoWrap: { position: 'absolute', top: 0, left: 0, bottom: 0, width: PHOTO_WIDTH },
     // Selected on the map: a soft green outline, like the design's middle card.
     cardSelected: { borderColor: c.green, borderWidth: 1.5 },
     top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
@@ -291,10 +268,8 @@ const createStyles = (c: ThemeColors) =>
     // Leaves room for the city in the card's top-right corner.
     tagRowWithCity: { paddingRight: 100 },
     city: { position: 'absolute', top: 9, right: 12, maxWidth: 118, zIndex: 1 },
-    // Reaches past the name on every side, so the glow's soft edge falls outside the letters.
-    cityGlow: { position: 'absolute', top: -8, bottom: -8, left: -18, right: -18 },
     cityText: {
-      // Full text color, a size up and heavy, so it reads over the photo.
+      // Full text color, a size up and heavy.
       color: c.text,
       fontSize: 12,
       fontWeight: '900',
