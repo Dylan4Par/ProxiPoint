@@ -1,10 +1,10 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { Car, Check, Info, PersonStanding, User, Zap } from 'lucide-react-native';
+import { Car, Check, Info, PersonStanding, Zap } from 'lucide-react-native';
 import { CategoryBadge } from './CategoryBadge';
 import { hostAvatarUri } from '../../lib/hostProfiles';
-import { distanceLabel, goingLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
+import { distanceLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
@@ -19,7 +19,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
  *   (badge)  #Tag  [⚡ BOOSTED]                  ░▒▓ photo
  *            Title                               ░▒▓
  *            Venue                               ░▒▓
- *   [● LIVE NOW] [540m • 7 min walk 🚶]  (faces 12+) [✓ RSVP]
+ *   [● LIVE NOW] [540m • 7 min walk 🚶]               [✓ RSVP]
  *
  * Badge: the host's profile picture, or the tag's icon when they have none.
  * Photo: the event's own cover photo fills the right side behind the text and buttons, at 65%
@@ -42,8 +42,6 @@ const PILLS = {
     distance: { bg: '#cfe3ff', fg: '#0f2a4a' },
     rsvp: { bg: '#f1f5f9', fg: '#0f172a' },
     boosted: { bg: 'rgba(245, 158, 11, 0.14)', border: '#b45309', fg: '#fbbf24' },
-    face: ['#c4b5fd', '#fdba74'],
-    count: { bg: '#cbd5e1', fg: '#0f172a' },
   },
   light: {
     live: { bg: '#dcfce7', fg: '#14532d', dot: '#16a34a' },
@@ -52,8 +50,6 @@ const PILLS = {
     distance: { bg: '#dbeafe', fg: '#1e3a8a' },
     rsvp: { bg: '#0f172a', fg: '#ffffff' },
     boosted: { bg: '#fef3c7', border: '#f59e0b', fg: '#92400e' },
-    face: ['#ddd6fe', '#fed7aa'],
-    count: { bg: '#e2e8f0', fg: '#0f172a' },
   },
 } as const;
 
@@ -90,7 +86,6 @@ export const PointCard: React.FC<{
   const distance = distanceOnly
     ? formatDistanceWordsIn(distanceMeters ?? node.distanceMeters, getUnits())
     : distanceLabel(distanceMeters ?? node.distanceMeters, distanceMeters == null ? node.eta : null);
-  const going = goingLabel(node.attendeeCount);
   // The extra pill is laid out (invisible) first; it stays only if its right edge is inside the
   // pills' row, so it never wraps under or pushes against RSVP.
   const [extraFits, setExtraFits] = useState<boolean | null>(null);
@@ -176,21 +171,6 @@ export const PointCard: React.FC<{
             </Text>
           ) : null}
         </View>
-        {/* Going faces: top row's bottom-right corner, right above RSVP (no extra row). */}
-        {going ? (
-          <View style={styles.faces} accessibilityLabel={`${going} going`}>
-            {pills.face.map((bg, i) => (
-              <View key={bg} style={[styles.face, { backgroundColor: bg }, i > 0 && styles.faceOverlap]}>
-                <User size={12} color="#334155" strokeWidth={2.25} />
-              </View>
-            ))}
-            <View style={[styles.face, styles.faceOverlap, styles.count, { backgroundColor: pills.count.bg }]}>
-              <Text style={[styles.countText, { color: pills.count.fg }]} numberOfLines={1} adjustsFontSizeToFit>
-                {going}
-              </Text>
-            </View>
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.bottom}>
@@ -327,19 +307,6 @@ const createStyles = (c: ThemeColors) =>
     pillText: { fontSize: 12, fontWeight: '800', letterSpacing: 0.2, flexShrink: 1 },
     pillTextPlain: { fontWeight: '600', letterSpacing: 0 },
     actions: { flexDirection: 'row', alignItems: 'center' },
-    faces: { flexDirection: 'row', alignItems: 'center', alignSelf: 'flex-end' },
-    face: {
-      width: 24,
-      height: 24,
-      borderRadius: 12,
-      borderWidth: 2,
-      borderColor: c.surface,
-      alignItems: 'center',
-      justifyContent: 'center',
-    },
-    faceOverlap: { marginLeft: -8 },
-    count: { width: 30, paddingHorizontal: 2 },
-    countText: { fontSize: 9, fontWeight: '800' },
     rsvp: {
       flexDirection: 'row',
       alignItems: 'center',
