@@ -22,7 +22,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
  *   [● LIVE NOW] [540m • 7 min walk 🚶]  (faces 12+) [✓ RSVP]
  *
  * Badge: the host's profile picture, or the tag's icon when they have none.
- * Photo: the event's own cover photo fills the right side behind the text and buttons, at 50%
+ * Photo: the event's own cover photo fills the right side behind the text and buttons, at 65%
  * on the far right fading to nothing at its left edge. No cover photo = plain card.
  *
  * Pills keep fixed light colors in dark mode (like the design) and soft tints in light mode.
@@ -31,7 +31,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
 /** Share of the card's width the background photo covers, from the right edge. */
 const PHOTO_WIDTH = '60%';
 /** Photo strength at its right edge (fades to 0 at its left edge). */
-const PHOTO_MAX_OPACITY = 0.5;
+const PHOTO_MAX_OPACITY = 0.65;
 
 /** Pill colors per mode. They're fixed (not theme tokens) because the light theme inverts tokens. */
 const PILLS = {
@@ -290,7 +290,8 @@ const createStyles = (c: ThemeColors) =>
       right: 12,
       maxWidth: 110,
       zIndex: 1,
-      color: c.textMuted,
+      // Full text color (not muted) so it reads over the photo.
+      color: c.text,
       fontSize: 11,
       fontWeight: '700',
     },
