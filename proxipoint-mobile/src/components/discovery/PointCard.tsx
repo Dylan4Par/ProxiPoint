@@ -19,21 +19,39 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
  *   photo▓▒░ Venue
  *   photo▓▒░ [● LIVE NOW] [540m • 7 min walk 🚶]    [✓ RSVP]
  *
- * Photo: the event's own cover photo down the card's left edge, at an even 60% with a short
- * soft fade to nothing along its right edge; the details start just inside that fade.
+ * Photo: the event's own cover photo down the card's left edge, at an even 60% with a long, smooth
+ * fade to the card's color over its right half. The details start clear of it: no text on the photo.
  * No cover photo = no photo column, and the details start at the card's normal padding.
  *
  * Pills keep fixed light colors in dark mode (like the design) and soft tints in light mode.
  */
 
 /** Width of the photo column on the card's left edge (fixed, so it's the same on every phone). */
-const PHOTO_WIDTH = 90;
-/** Where the details start when there's a photo: a little inside the photo's soft right edge. */
-const PHOTO_CONTENT_INSET = 80;
+const PHOTO_WIDTH = 84;
+/** Where the details start when there's a photo: just past the photo's faded edge, never on it. */
+const PHOTO_CONTENT_INSET = PHOTO_WIDTH + 8;
 /** Photo strength (the same across the photo, apart from the fade on its left edge). */
 const PHOTO_OPACITY = 0.6;
 /** Share of the photo's width, at its right edge, that fades out from PHOTO_OPACITY to 0. */
-const PHOTO_FADE = 0.3;
+const PHOTO_FADE = 0.5;
+/**
+ * Gradient stops for the cover over the photo: even (1 - PHOTO_OPACITY) up to the fade, then an
+ * eased ramp to solid, reaching it a little before the edge so no sliver of photo shows there.
+ * Eased (smoothstep) rather than straight, so the fade has no visible start line.
+ */
+const FADE_STOPS: { offset: number; opacity: number }[] = (() => {
+  const start = 1 - PHOTO_FADE;
+  const end = 0.96;
+  const steps = [0, 0.25, 0.5, 0.75, 1];
+  return [
+    { offset: 0, opacity: 1 - PHOTO_OPACITY },
+    ...steps.map((t) => ({
+      offset: start + (end - start) * t,
+      opacity: 1 - PHOTO_OPACITY + PHOTO_OPACITY * t * t * (3 - 2 * t),
+    })),
+    { offset: 1, opacity: 1 },
+  ];
+})();
 
 /** Pill colors per mode. They're fixed (not theme tokens) because the light theme inverts tokens. */
 const PILLS = {
@@ -117,16 +135,16 @@ export const PointCard: React.FC<{
     >
       {photo ? (
         // Drawn first, so everything else sits on top. The photo is fully opaque and a gradient
-        // in the card's own color covers it: 40% over most of it, solid at its right edge. Same look
+        // in the card's own color covers it: 40% over the left half, easing to solid on the right. Same look
         // as fading the photo itself, without an SVG mask (unreliable on some Android versions).
         <View style={styles.photoWrap} pointerEvents="none" testID="point-card-photo">
           <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} resizeMode="cover" />
           <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
             <Defs>
               <LinearGradient id={fadeId} x1="0" y1="0" x2="1" y2="0">
-                <Stop offset="0" stopColor={c.surface} stopOpacity={1 - PHOTO_OPACITY} />
-                <Stop offset={1 - PHOTO_FADE} stopColor={c.surface} stopOpacity={1 - PHOTO_OPACITY} />
-                <Stop offset="1" stopColor={c.surface} stopOpacity={1} />
+                {FADE_STOPS.map((st) => (
+                  <Stop key={st.offset} offset={st.offset} stopColor={c.surface} stopOpacity={st.opacity} />
+                ))}
               </LinearGradient>
             </Defs>
             <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${fadeId})`} />
