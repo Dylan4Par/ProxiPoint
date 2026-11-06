@@ -259,24 +259,24 @@ const createStyles = (c: ThemeColors) =>
     },
     photoWrap: { position: 'absolute', top: 0, right: 0, bottom: 0, width: PHOTO_WIDTH },
     // Small text over the photo: a soft halo in the card's color keeps it readable.
-    onPhoto: { textShadowColor: c.surface, textShadowRadius: 4, textShadowOffset: { width: 0, height: 0 } },
+    onPhoto: { textShadowColor: c.surface, textShadowRadius: 6, textShadowOffset: { width: 0, height: 0 } },
     // Selected on the map: a soft green outline, like the design's middle card.
     cardSelected: { borderColor: c.green, borderWidth: 1.5 },
     top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     copy: { flex: 1, minWidth: 0, gap: 1 },
     tagRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
     // Leaves room for the city in the card's top-right corner.
-    tagRowWithCity: { paddingRight: 92 },
+    tagRowWithCity: { paddingRight: 100 },
     city: {
       position: 'absolute',
       top: 9,
       right: 12,
-      maxWidth: 110,
+      maxWidth: 118,
       zIndex: 1,
-      // Full text color (not muted) so it reads over the photo.
+      // Full text color, a size up and heavy, so it reads over the photo.
       color: c.text,
-      fontSize: 11,
-      fontWeight: '700',
+      fontSize: 12,
+      fontWeight: '900',
     },
     tag: { color: c.accent, fontSize: 12, fontWeight: '800', flexShrink: 1 },
     boosted: {
