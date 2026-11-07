@@ -1,8 +1,8 @@
-import React, { useEffect, useId, useRef, useState } from 'react';
-import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import React, { useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Car, Check, PersonStanding } from 'lucide-react-native';
 import { BoostBolt } from './BoostBolt';
+import { FadedPhoto } from './FadedPhoto';
 import { distanceLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
@@ -34,28 +34,7 @@ const PHOTO_WIDTH = 98;
  * (about 1% photo at the first letter), so no text sits on the photo itself.
  */
 const PHOTO_CONTENT_INSET = 92;
-/** Photo strength (the same across the photo, apart from the fade on its left edge). */
-const PHOTO_OPACITY = 1;
-/** Share of the photo's width, at its right edge, that fades out from PHOTO_OPACITY to 0. */
-const PHOTO_FADE = 0.42;
-/**
- * Gradient stops for the cover over the photo: even (1 - PHOTO_OPACITY) up to the fade, then an
- * eased ramp to solid, reaching it a little before the edge so no sliver of photo shows there.
- * Eased (smoothstep) rather than straight, so the fade has no visible start line.
- */
-const FADE_STOPS: { offset: number; opacity: number }[] = (() => {
-  const start = 1 - PHOTO_FADE;
-  const end = 0.96;
-  const steps = [0, 0.25, 0.5, 0.75, 1];
-  return [
-    { offset: 0, opacity: 1 - PHOTO_OPACITY },
-    ...steps.map((t) => ({
-      offset: start + (end - start) * t,
-      opacity: 1 - PHOTO_OPACITY + PHOTO_OPACITY * t * t * (3 - 2 * t),
-    })),
-    { offset: 1, opacity: 1 },
-  ];
-})();
+// Photo strength and fade: see FadedPhoto (shared with the Featured Recommendations deck).
 
 /** Pill colors per mode. They're fixed (not theme tokens) because the light theme inverts tokens. */
 const PILLS = {
@@ -122,8 +101,6 @@ export const PointCard: React.FC<{
   const TravelIcon = node.etaMode === 'drive' ? Car : PersonStanding;
   const timingColors = timing ? pills[timing.kind as TimingKind] : null;
   const photo = node.coverPhotoLargeUri ?? node.coverPhotoUri ?? null;
-  // SVG ids must be plain names; useId gives ":r1:"-style ones.
-  const fadeId = `pc-fade-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
 
   return (
     <TouchableOpacity
@@ -135,24 +112,8 @@ export const PointCard: React.FC<{
       accessibilityHint="Opens the details"
       testID={testID ?? `point-card-${node.id}`}
     >
-      {photo ? (
-        // Drawn first, so everything else sits on top. The photo is fully opaque and a gradient
-        // in the card's own color covers it: clear over the left half, easing to solid on the right. Same look
-        // as fading the photo itself, without an SVG mask (unreliable on some Android versions).
-        <View style={styles.photoWrap} pointerEvents="none" testID="point-card-photo">
-          <Image source={{ uri: photo }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-          <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
-            <Defs>
-              <LinearGradient id={fadeId} x1="0" y1="0" x2="1" y2="0">
-                {FADE_STOPS.map((st) => (
-                  <Stop key={st.offset} offset={st.offset} stopColor={c.surface} stopOpacity={st.opacity} />
-                ))}
-              </LinearGradient>
-            </Defs>
-            <Rect x="0" y="0" width="100%" height="100%" fill={`url(#${fadeId})`} />
-          </Svg>
-        </View>
-      ) : null}
+      {/* Drawn first, so everything else sits on top. */}
+      {photo ? <FadedPhoto uri={photo} style={styles.photoWrap} testID="point-card-photo" /> : null}
       {city ? (
         <View style={styles.city} pointerEvents="none">
           <Text style={styles.cityText} numberOfLines={1} testID="point-card-city">
