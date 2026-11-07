@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, PanResponder, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { Check, Flame, Share2, Sparkles, Zap } from 'lucide-react-native';
+import { Check, Flame, Share2, Sparkles } from 'lucide-react-native';
+import { BoostBolt } from '../discovery/BoostBolt';
 import { CategoryBadge } from '../discovery/CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
@@ -197,13 +198,11 @@ export const RecommendationDeck: React.FC<{
               </View>
             </View>
 
-            {/* FEATURED (or POPULAR) · LIVE NOW · Ends 9:30 PM · 1.4 miles */}
+            {/* ⚡ (or POPULAR) · LIVE NOW · Ends 9:30 PM · 1.4 miles */}
             <View style={styles.meta}>
               {featured ? (
-                <View style={styles.badge}>
-                  <Zap size={11} color={GOLD} fill={GOLD} strokeWidth={2} />
-                  <Text style={styles.badgeText}>FEATURED</Text>
-                </View>
+                // Same bolt pill as boosted Point cards.
+                <BoostBolt accessibilityLabel="Featured" testID="deck-featured" />
               ) : mode === 'popular' ? (
                 <View style={[styles.badge, styles.badgePopular]}>
                   <Flame size={11} color={c.accent} strokeWidth={2.5} />
@@ -212,7 +211,7 @@ export const RecommendationDeck: React.FC<{
               ) : null}
               {pick.live ? (
                 // LiveBadge pins itself to the top of its row and draws its glow 2 px outside its box:
-                // centered here, with room for the glow, so it lines up with FEATURED.
+                // centered here, with room for the glow, so it lines up with the badge beside it.
                 <View style={styles.liveWrap}>
                   <LiveBadge label="LIVE NOW" />
                 </View>

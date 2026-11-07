@@ -1,7 +1,8 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { Car, Check, PersonStanding, Zap } from 'lucide-react-native';
+import { Car, Check, PersonStanding } from 'lucide-react-native';
+import { BoostBolt } from './BoostBolt';
 import { distanceLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
@@ -64,7 +65,6 @@ const PILLS = {
     later: { bg: '#1e293b', fg: '#cbd5e1', dot: '#94a3b8' },
     distance: { bg: '#cfe3ff', fg: '#0f2a4a' },
     rsvp: { bg: '#f1f5f9', fg: '#0f172a' },
-    boosted: { bg: 'rgba(245, 158, 11, 0.14)', border: '#b45309', fg: '#fbbf24' },
   },
   light: {
     live: { bg: '#dcfce7', fg: '#14532d', dot: '#16a34a' },
@@ -72,7 +72,6 @@ const PILLS = {
     later: { bg: '#e2e8f0', fg: '#334155', dot: '#64748b' },
     distance: { bg: '#dbeafe', fg: '#1e3a8a' },
     rsvp: { bg: '#0f172a', fg: '#ffffff' },
-    boosted: { bg: '#fef3c7', border: '#f59e0b', fg: '#92400e' },
   },
 } as const;
 
@@ -170,16 +169,7 @@ export const PointCard: React.FC<{
               </Text>
             ) : null}
             {boosted ? (
-              <TouchableOpacity
-                style={[styles.boosted, { backgroundColor: pills.boosted.bg, borderColor: pills.boosted.border }]}
-                onPress={onWhyBoosted}
-                disabled={!onWhyBoosted}
-                hitSlop={8}
-                accessibilityRole={onWhyBoosted ? 'button' : 'text'}
-                accessibilityLabel={onWhyBoosted ? 'Boosted. Why am I seeing this?' : 'Boosted'}
-              >
-                <Zap size={11} color={pills.boosted.fg} fill={pills.boosted.fg} strokeWidth={2.5} />
-              </TouchableOpacity>
+              <BoostBolt onPress={onWhyBoosted} accessibilityLabel={onWhyBoosted ? 'Boosted. Why am I seeing this?' : 'Boosted'} />
             ) : null}
           </View>
           <Text style={styles.title} numberOfLines={1}>
@@ -294,15 +284,6 @@ const createStyles = (c: ThemeColors) =>
       fontWeight: '900',
     },
     tag: { color: c.accent, fontSize: 12, fontWeight: '800', flexShrink: 1 },
-    // Just the bolt in a small pill, so it fits beside the #tag without wrapping the row.
-    boosted: {
-      alignItems: 'center',
-      justifyContent: 'center',
-      paddingHorizontal: 6,
-      height: 18,
-      borderRadius: 9,
-      borderWidth: 1,
-    },
     title: { color: c.text, fontSize: 16, fontWeight: '800', lineHeight: 20 },
     venue: { color: c.textMuted, fontSize: 12 },
     via: { color: c.textFaint, fontStyle: 'italic' },
