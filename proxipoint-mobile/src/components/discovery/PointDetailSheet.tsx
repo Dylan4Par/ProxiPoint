@@ -37,7 +37,6 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import * as Calendar from 'expo-calendar';
-import { CategoryBadge } from './CategoryBadge';
 import { LiveBadge } from '../drops/LiveBadge';
 import { ReportSheet, type ReportTarget } from '../safety/ReportSheet';
 import { hostOf } from '../../lib/moderation';
@@ -499,7 +498,6 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
         ) : null}
 
         <View style={styles.titleRow}>
-          <CategoryBadge tag={view.tag} title={view.title} photoUri={null} size={56} />
           <View style={styles.titleCopy}>
             {view.tags.length > 0 ? (
               <View style={styles.tagRow} testID="point-detail-tags">
