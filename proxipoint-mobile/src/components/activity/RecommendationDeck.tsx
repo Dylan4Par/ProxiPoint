@@ -7,7 +7,6 @@ import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
 import { pointTiming } from '../../lib/pointCard';
 import { pointShareContent } from '../../lib/pointShare';
-import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { formatClock } from '../../lib/calendarRange';
 import { formatCount } from '../../lib/discoverFeed';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
@@ -46,7 +45,6 @@ export const RecommendationDeck: React.FC<{
   onToggleRsvp: (id: string) => void;
 }> = ({ picks, mode = 'boosted', onOpenPoint, onToggleRsvp }) => {
   const styles = useThemedStyles(createStyles);
-  useUnits(); // re-render when Settings switches miles / km
   const { colors: c } = useTheme();
   // Shuffled once per visit to the Feed (this deck remounts each time), and kept in that order
   // while you're here, even as the list refreshes.
@@ -159,8 +157,6 @@ export const RecommendationDeck: React.FC<{
   const featured = mode === 'boosted' && pick.boosted;
   const timing = pick.live ? null : pointTiming(node);
   const endsAt = pick.live && node.endsAt ? new Date(node.endsAt) : null;
-  // Just the distance, in words ("13 miles"), like Discover's cards: no travel time.
-  const distance = formatDistanceWordsIn(node.distanceMeters, getUnits());
   const photo = node.coverPhotoLargeUri ?? node.coverPhotoUri ?? null;
   const going = node.attendeeCount && node.attendeeCount > 0 ? ` (${formatCount(node.attendeeCount)})` : '';
 
@@ -218,7 +214,7 @@ export const RecommendationDeck: React.FC<{
               </View>
             </View>
 
-            {/* ⚡ (or POPULAR) · LIVE NOW · Ends 9:30 PM · 1.4 miles */}
+            {/* ⚡ (or POPULAR) · LIVE NOW · Ends 9:30 PM */}
             <View style={styles.meta}>
               {featured ? (
                 // Same bolt pill as boosted Point cards.
@@ -244,14 +240,6 @@ export const RecommendationDeck: React.FC<{
                 <View style={styles.metaItem}>
                   <Text style={styles.metaDot}>·</Text>
                   <Text style={styles.metaText}>Ends {formatClock(endsAt)}</Text>
-                </View>
-              ) : null}
-              {distance ? (
-                <View style={[styles.metaItem, styles.metaShrink]}>
-                  <Text style={styles.metaDot}>·</Text>
-                  <Text style={[styles.metaText, styles.metaShrink]} numberOfLines={1}>
-                    {distance}
-                  </Text>
                 </View>
               ) : null}
             </View>
@@ -377,7 +365,6 @@ const createStyles = (c: ThemeColors) =>
     metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     metaDot: { color: c.textFaint, fontSize: 12, fontWeight: '800' },
     metaText: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
-    metaShrink: { flexShrink: 1 },
     timePill: {
       paddingHorizontal: 8,
       paddingVertical: 3,
