@@ -175,6 +175,17 @@ export async function signIn(emailRaw: string, password: string): Promise<AuthSe
   return localSession(account);
 }
 
+/**
+ * Swap the refresh token for a fresh session (new access AND refresh token). Throws AuthError
+ * 'invalid_credentials' when the server refuses it (expired, ended, or already used), 'network'
+ * when it can't be reached. Call it through useAuthStore's token keeper, never directly: it makes
+ * sure only one refresh runs at a time.
+ */
+export async function refreshSession(session: AuthSession): Promise<AuthSession> {
+  if (!usingLocalAuth) return call<AuthSession>('/v1/auth/refresh', { refreshToken: session.refreshToken });
+  return { ...session, expiresAt: Date.now() + 30 * 24 * 3600 * 1000 };
+}
+
 /** Always "sent", whether or not the email has an account (so it can't be used to look people up). */
 export async function requestPasswordReset(emailRaw: string): Promise<void> {
   const email = normalizeEmail(emailRaw);
