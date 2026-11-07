@@ -319,7 +319,8 @@ const createStyles = (c: ThemeColors) =>
     card: {
       backgroundColor: c.surface,
       borderRadius: 18,
-      borderWidth: 1.5,
+      // A bold outline (3 px) so the featured picks stand out from the cards below.
+      borderWidth: 3,
       borderColor: c.accentBorder,
     },
     // Peeking cards: narrower and lower, so the stack reads as a deck.
