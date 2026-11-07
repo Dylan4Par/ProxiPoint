@@ -1,7 +1,7 @@
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
-import { Car, Check, Info, PersonStanding, Zap } from 'lucide-react-native';
+import { Car, Check, PersonStanding, Zap } from 'lucide-react-native';
 import { distanceLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
 import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
@@ -14,7 +14,7 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
 /**
  * The Point card used on Discover and the Explore Map list:
  *
- *   photo▓▒░ #Tag  [⚡ BOOSTED]                        City
+ *   photo▓▒░ #Tag  [⚡]                                City
  *   photo▓▒░ Title
  *   photo▓▒░ Venue
  *   photo▓▒░ [● LIVE NOW] [540m • 7 min walk 🚶]    [✓ RSVP]
@@ -80,7 +80,7 @@ export const PointCard: React.FC<{
   node: DiscoveryNode;
   onOpen: () => void;
   onToggleRsvp: () => void;
-  /** Paid Boost: labeled; with onWhyBoosted the label also explains why. */
+  /** Paid Boost: a small lightning-bolt pill; with onWhyBoosted, tapping it explains why. */
   boosted?: boolean;
   onWhyBoosted?: () => void;
   /** Selected on the map (Explore Map list). */
@@ -178,9 +178,7 @@ export const PointCard: React.FC<{
                 accessibilityRole={onWhyBoosted ? 'button' : 'text'}
                 accessibilityLabel={onWhyBoosted ? 'Boosted. Why am I seeing this?' : 'Boosted'}
               >
-                <Zap size={10} color={pills.boosted.fg} fill={pills.boosted.fg} strokeWidth={2.5} />
-                <Text style={[styles.boostedText, { color: pills.boosted.fg }]}>BOOSTED</Text>
-                {onWhyBoosted ? <Info size={11} color={pills.boosted.fg} strokeWidth={2.5} /> : null}
+                <Zap size={11} color={pills.boosted.fg} fill={pills.boosted.fg} strokeWidth={2.5} />
               </TouchableOpacity>
             ) : null}
           </View>
@@ -296,16 +294,15 @@ const createStyles = (c: ThemeColors) =>
       fontWeight: '900',
     },
     tag: { color: c.accent, fontSize: 12, fontWeight: '800', flexShrink: 1 },
+    // Just the bolt in a small pill, so it fits beside the #tag without wrapping the row.
     boosted: {
-      flexDirection: 'row',
       alignItems: 'center',
-      gap: 4,
+      justifyContent: 'center',
       paddingHorizontal: 6,
-      paddingVertical: 1,
-      borderRadius: 10,
+      height: 18,
+      borderRadius: 9,
       borderWidth: 1,
     },
-    boostedText: { fontSize: 10, fontWeight: '900', letterSpacing: 0.5 },
     title: { color: c.text, fontSize: 16, fontWeight: '800', lineHeight: 20 },
     venue: { color: c.textMuted, fontSize: 12 },
     via: { color: c.textFaint, fontStyle: 'italic' },
