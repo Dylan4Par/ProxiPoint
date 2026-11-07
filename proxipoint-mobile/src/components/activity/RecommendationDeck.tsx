@@ -1,8 +1,8 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, PanResponder, Platform, Share, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { AccessibilityInfo, Animated, Easing, PanResponder, Platform, Share, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Check, Flame, Share2, Sparkles } from 'lucide-react-native';
 import { BoostBolt } from '../discovery/BoostBolt';
-import { CategoryBadge } from '../discovery/CategoryBadge';
+import { FadedPhoto, PHOTO_CONTENT_RATIO } from '../discovery/FadedPhoto';
 import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
 import { pointTiming } from '../../lib/pointCard';
@@ -28,6 +28,10 @@ function shuffleKey(seed: number, id: string): number {
   return (h >>> 0) / 4294967296;
 }
 const CARD_HEIGHT = 162;
+/** Share of the card's width the event photo covers, from the left edge. */
+const PHOTO_SHARE = 0.3;
+/** Card padding (all sides, and on the left when there's no photo). */
+const CARD_PADDING = 14;
 
 /**
  * Discover → FEATURED RECOMMENDATIONS: a stack of picks that turns to the next card every 5 seconds,
@@ -54,6 +58,11 @@ export const RecommendationDeck: React.FC<{
     .map((entry) => entry.pick);
   const count = cards.length;
   const cardHeight = CARD_HEIGHT;
+  // The card's width, for where the details start beside the photo. Until it's measured, the
+  // screen width minus Discover's 16 px side padding is a close guess.
+  const { width: screenWidth } = useWindowDimensions();
+  const [cardWidth, setCardWidth] = useState(0);
+  const photoWidth = Math.round((cardWidth || screenWidth - 32) * PHOTO_SHARE);
 
   const [index, setIndex] = useState(0);
   const [held, setHeld] = useState(false);
@@ -152,6 +161,7 @@ export const RecommendationDeck: React.FC<{
   const endsAt = pick.live && node.endsAt ? new Date(node.endsAt) : null;
   // Just the distance, in words ("13 miles"), like Discover's cards: no travel time.
   const distance = formatDistanceWordsIn(node.distanceMeters, getUnits());
+  const photo = node.coverPhotoLargeUri ?? node.coverPhotoUri ?? null;
   const going = node.attendeeCount && node.attendeeCount > 0 ? ` (${formatCount(node.attendeeCount)})` : '';
 
   const frontStyle = {
@@ -164,7 +174,7 @@ export const RecommendationDeck: React.FC<{
 
   return (
     <View testID="activity-recs">
-      <View style={[styles.stack, { height: cardHeight + 14 }]}>
+      <View style={[styles.stack, { height: cardHeight + 14 }]} onLayout={(e) => setCardWidth(e.nativeEvent.layout.width)}>
         {/* The cards "behind", peeking out under the front one */}
         {count > 2 ? <View style={[styles.card, styles.ghost, styles.ghostBack, { height: cardHeight }]} /> : null}
         {count > 1 ? <View style={[styles.card, styles.ghost, styles.ghostMid, { height: cardHeight }]} /> : null}
@@ -175,15 +185,25 @@ export const RecommendationDeck: React.FC<{
             onPress={() => onOpenPoint(node.id)}
             onPressIn={() => setHeld(true)}
             onPressOut={() => setHeld(false)}
-            style={[styles.card, styles.frontCard, { height: cardHeight }, pick.boosted && styles.cardBoosted]}
+            style={[
+              styles.card,
+              styles.frontCard,
+              { height: cardHeight },
+              // Details start just past the photo's fade, like the Point cards.
+              photo ? { paddingLeft: Math.round(photoWidth * PHOTO_CONTENT_RATIO) } : null,
+              pick.boosted && styles.cardBoosted,
+            ]}
             accessibilityRole="button"
             accessibilityLabel={`Recommendation ${index + 1} of ${count}: ${node.title}. ${pick.reasons.join(', ')}`}
             accessibilityHint="Opens the Point on Discover"
             testID={`activity-rec-${node.id}`}
           >
-            {/* Icon tile · #tag · venue, and the title under them using the card's full width. */}
+            {/* The event's photo down the left 30%, fading into the card (same as the Point cards). */}
+            {photo ? (
+              <FadedPhoto uri={photo} style={[styles.photo, { width: photoWidth }]} testID="activity-rec-photo" />
+            ) : null}
+            {/* #tag · venue, and the title under them. */}
             <View style={styles.main}>
-              <CategoryBadge tag={mainTag} title={node.title} photoUri={node.coverPhotoUri ?? null} size={44} />
               <View style={styles.copy}>
                 <View style={styles.topLine}>
                   <Text style={[styles.tagLine, styles.tagLineShrink]} numberOfLines={1}>
@@ -221,18 +241,18 @@ export const RecommendationDeck: React.FC<{
                 </View>
               ) : null}
               {endsAt ? (
-                <>
+                <View style={styles.metaItem}>
                   <Text style={styles.metaDot}>·</Text>
                   <Text style={styles.metaText}>Ends {formatClock(endsAt)}</Text>
-                </>
+                </View>
               ) : null}
               {distance ? (
-                <>
+                <View style={[styles.metaItem, styles.metaShrink]}>
                   <Text style={styles.metaDot}>·</Text>
                   <Text style={[styles.metaText, styles.metaShrink]} numberOfLines={1}>
                     {distance}
                   </Text>
-                </>
+                </View>
               ) : null}
             </View>
 
@@ -257,7 +277,7 @@ export const RecommendationDeck: React.FC<{
                 accessibilityLabel={`Share ${node.title}`}
                 testID="activity-rec-share"
               >
-                <Share2 size={16} color={c.accent} strokeWidth={2.5} />
+                <Share2 size={14} color={c.accent} strokeWidth={2.5} />
                 <Text style={styles.viewText}>Share</Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -270,7 +290,7 @@ export const RecommendationDeck: React.FC<{
                 accessibilityState={{ selected: Boolean(node.isRsvpd) }}
                 testID="activity-rec-rsvp"
               >
-                <Check size={15} color={node.isRsvpd ? c.accent : c.onAccent} strokeWidth={3} />
+                <Check size={14} color={node.isRsvpd ? c.accent : c.onAccent} strokeWidth={3} />
                 <Text style={[styles.rsvpText, node.isRsvpd && styles.rsvpTextOn]}>
                   {node.isRsvpd ? 'GOING' : 'RSVP'}
                   {going}
@@ -320,7 +340,9 @@ const createStyles = (c: ThemeColors) =>
     ghostBack: { top: 14, transform: [{ scaleX: 0.9 }], opacity: 0.45, borderColor: c.border },
     front: { position: 'absolute', top: 0, left: 0, right: 0 },
     // Rows centered with a fixed gap, so the space above the first row and below the buttons is even.
-    frontCard: { padding: 14, gap: 12, justifyContent: 'center' },
+    // overflow: hidden keeps the photo inside the rounded corners.
+    frontCard: { padding: CARD_PADDING, gap: 10, justifyContent: 'center', overflow: 'hidden' },
+    photo: { position: 'absolute', top: 0, left: 0, bottom: 0 },
     cardBoosted: { borderColor: 'rgba(245, 158, 11, 0.7)' },
     emptyCard: { flexDirection: 'row', alignItems: 'center', gap: 10, padding: 14, borderWidth: 1, borderColor: c.border },
     emptyText: { flex: 1, color: c.textMuted, fontSize: 13, lineHeight: 18 },
@@ -349,7 +371,10 @@ const createStyles = (c: ThemeColors) =>
     badgeText: { color: GOLD, fontSize: 10, fontWeight: '900', letterSpacing: 0.8 },
     badgePopular: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
     badgeTextPopular: { color: c.accent },
-    meta: { flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 24 },
+    // Wraps onto a second line when it doesn't fit beside the photo.
+    meta: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', columnGap: 6, rowGap: 2, minHeight: 24 },
+    // A "·" and the text after it wrap together, so a line never ends on a lone dot.
+    metaItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
     metaDot: { color: c.textFaint, fontSize: 12, fontWeight: '800' },
     metaText: { color: c.textMuted, fontSize: 12, fontWeight: '600' },
     metaShrink: { flexShrink: 1 },
@@ -363,34 +388,34 @@ const createStyles = (c: ThemeColors) =>
     },
     timeText: { color: c.accent, fontSize: 11, fontWeight: '800' },
     actions: { flexDirection: 'row', gap: 10 },
-    // View Drop: outlined; RSVP: filled (the main action).
+    // Share: outlined; RSVP: filled (the main action). Same size: equal width, 34 px tall.
     viewBtn: {
       flex: 1,
       flexDirection: 'row',
-      gap: 6,
-      minHeight: 42,
-      borderRadius: 12,
+      gap: 5,
+      height: 34,
+      borderRadius: 10,
       backgroundColor: c.base,
       borderWidth: 1,
       borderColor: c.borderStrong,
       alignItems: 'center',
       justifyContent: 'center',
     },
-    viewText: { color: c.accent, fontSize: 14, fontWeight: '800' },
+    viewText: { color: c.accent, fontSize: 13, fontWeight: '800' },
     rsvpBtn: {
       flex: 1,
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 6,
-      minHeight: 42,
-      borderRadius: 12,
+      gap: 5,
+      height: 34,
+      borderRadius: 10,
       backgroundColor: c.accent,
       borderWidth: 1,
       borderColor: c.accent,
     },
     rsvpBtnOn: { backgroundColor: c.accentTint, borderColor: c.accentBorder },
-    rsvpText: { color: c.onAccent, fontSize: 13, fontWeight: '800', letterSpacing: 0.6 },
+    rsvpText: { color: c.onAccent, fontSize: 12.5, fontWeight: '800', letterSpacing: 0.4 },
     rsvpTextOn: { color: c.accent },
     controls: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 2, minHeight: 12 },
     dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
