@@ -64,10 +64,12 @@ const CENTER_OFFSET_Y = CANVAS_HEIGHT / 2 - (BEACON_WORLD_Y - WORLD_OFFSET);
 //   screen = pan - WORLD_OFFSET + zoom * w
 // Pins, labels and your own dot are counter-scaled so they stay the same size on screen.
 /**
- * Furthest out: the map shows this much across (70 miles, about web zoom 9: the whole regional
- * metro corridor), whatever the phone's width. MapTiles has layers out that far.
+ * Furthest out: the map shows this much across, whatever the phone's width.
+ * Stopgap (Nov 2026): 15 miles, down from 70. Zooming out past about 30 km across, the whole map
+ * (tiles and pins) stopped drawing on Android with no error in the app or the device log; the cause
+ * is still being looked into. Put it back to 70 once that's fixed.
  */
-const MAX_VIEW_WIDTH_METERS = 70 * 1609.344;
+const MAX_VIEW_WIDTH_METERS = 15 * 1609.344;
 const MIN_ZOOM = width / (MAX_VIEW_WIDTH_METERS * WORLD_SCALE);
 const MAX_ZOOM = 3;
 
