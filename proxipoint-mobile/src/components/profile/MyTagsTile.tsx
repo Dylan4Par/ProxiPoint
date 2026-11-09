@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { Bell, Globe, Lock, Plus, Users, X } from 'lucide-react-native';
 import { INTEREST_TAG_LIMIT } from '../../lib/myProfile';
@@ -13,12 +13,6 @@ function cleanTag(raw: string): string {
   const body = raw.replace(/#/g, '').replace(/[^A-Za-z0-9_]/g, '');
   return body ? `#${body.slice(0, 30)}` : '';
 }
-
-/** Rows of followed #tags shown before the list scrolls on its own. */
-const VISIBLE_ROWS = 5;
-const CHIP_GAP = 8;
-/** A chip's height until the first one is measured (13pt text, 7pt padding, border). */
-const CHIP_HEIGHT_GUESS = 34;
 
 const same = (a: string, b: string) => a.replace(/^#+/, '').toLowerCase() === b.replace(/^#+/, '').toLowerCase();
 
@@ -43,8 +37,7 @@ export const MyTagsTile: React.FC<{
   const [error, setError] = useState('');
   const knownTags = useDiscoveryStore((state) => state.tags) as string[];
   const full = tags.length >= INTEREST_TAG_LIMIT;
-  const [chipHeight, setChipHeight] = useState(CHIP_HEIGHT_GUESS);
-  const listMax = VISIBLE_ROWS * chipHeight + (VISIBLE_ROWS - 1) * CHIP_GAP;
+  const rowRef = useRef<ScrollView>(null);
 
   // Only tags on the allowed list (lib/hashtags): the exact one typed, or the best match.
   const add = (raw: string) => {
@@ -62,7 +55,9 @@ export const MyTagsTile: React.FC<{
       setError(`You can follow up to ${INTEREST_TAG_LIMIT} #tags.`);
       return;
     }
-    onChange([...tags, tag], isPublic);
+    // Newest first: a new #tag goes to the front of the row.
+    onChange([tag, ...tags], isPublic);
+    rowRef.current?.scrollTo({ x: 0, animated: true }); // show the new one
     setInput('');
     setError('');
   };
@@ -109,29 +104,17 @@ export const MyTagsTile: React.FC<{
       </View>
 
       {tags.length ? (
-        // Up to 5 rows show; more scroll inside the tile (the page keeps scrolling around it).
+        // One row that scrolls sideways, newest #tag first.
         <ScrollView
-          style={{ maxHeight: listMax }}
+          ref={rowRef}
+          horizontal
+          showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.chips}
-          nestedScrollEnabled
-          persistentScrollbar
-          showsVerticalScrollIndicator
           keyboardShouldPersistTaps="handled"
           testID="profile-tags-list"
         >
-          {tags.map((tag, i) => (
-            <View
-              key={tag}
-              style={styles.chip}
-              onLayout={
-                i === 0
-                  ? (e) => {
-                      const h = Math.round(e.nativeEvent.layout.height);
-                      if (h > 0 && h !== chipHeight) setChipHeight(h);
-                    }
-                  : undefined
-              }
-            >
+          {tags.map((tag) => (
+            <View key={tag} style={styles.chip}>
               <Text style={styles.chipText}>{tag}</Text>
               {nearbyCounts[tag] ? (
                 <Text style={styles.chipCount} accessibilityLabel={`${nearbyCounts[tag]} people nearby`}>
@@ -257,7 +240,7 @@ const createStyles = (c: ThemeColors) =>
     visibilityCopy: { flex: 1, gap: 1 },
     visibilityLabel: { color: c.text, fontSize: 14, fontWeight: '700' },
     hint: { flex: 1, color: c.textMuted, fontSize: 12, lineHeight: 17 },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: CHIP_GAP },
+    chips: { flexDirection: 'row', gap: 8, paddingRight: 4 },
     count: { color: c.textMuted, fontSize: 12, fontWeight: '600', marginTop: -4 },
     countFull: { color: c.amber },
     chip: {
