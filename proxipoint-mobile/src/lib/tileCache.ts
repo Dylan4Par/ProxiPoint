@@ -8,13 +8,13 @@ import { tileFileName } from './tileFileName';
  * and ignores `cache: 'force-cache'`, so tiles were being downloaded over and over.
  *
  * - Kept up to MAX_AGE_MS (then the folder starts fresh), and at most MAX_FILES tiles.
- * - At most CONCURRENT downloads at once; the rest wait in line, street-level tiles first.
+ * - At most CONCURRENT downloads at once; the rest wait in line, the newest view's tiles first.
  * - The phone can also clear the cache folder when it's short of space; tiles just download again.
  */
 
 const MAX_AGE_MS = 3 * 24 * 3600 * 1000; // a few days: fresh enough for map edits
 const MAX_FILES = 4000; // ~200 MB at most at @2x; usually far less
-const CONCURRENT = 6;
+const CONCURRENT = 8;
 
 let dir: Directory | null = null;
 let fileCount = 0;
@@ -79,7 +79,7 @@ export function loadTile(url: string, urgent = false): Promise<string | null> {
   const pending = inFlight.get(url);
   if (pending) return pending;
   const job = new Promise<string | null>((resolve) => {
-    // Street-level tiles (what you're looking at) jump the line ahead of the wide layers.
+    // Tiles for the view you're on now jump the line ahead of older requests.
     const enqueue = urgent ? queue.unshift.bind(queue) : queue.push.bind(queue);
     enqueue(async () => {
       try {
