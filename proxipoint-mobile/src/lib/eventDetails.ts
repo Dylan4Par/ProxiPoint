@@ -27,6 +27,12 @@ export interface EventFacts {
   notices: string[];
   /** One factual line ("Featuring X, with Y. Doors 6:30 PM."). */
   hook: string;
+  /** For Discover's filters (lib/discoverPrefs): lowest price (0 when free), null when not listed. */
+  priceMin?: number | null;
+  free?: boolean;
+  /** 18 or 21 when there's an age limit. */
+  minAge?: number | null;
+  allAges?: boolean;
 }
 
 const NOTICE_LABELS: Record<string, string> = {
@@ -71,6 +77,10 @@ export function eventFacts(raw: unknown): EventFacts | null {
     ageLabel: age ? `${age}+` : d.all_ages === true ? 'All ages' : null,
     notices,
     hook: typeof d.hook === 'string' ? d.hook.trim() : '',
+    priceMin: isNum(d.price_min) ? d.price_min : d.free === true ? 0 : null,
+    free: d.free === true,
+    minAge: age,
+    allAges: d.all_ages === true,
   };
   return facts.priceLabel || facts.ageLabel || facts.notices.length || facts.hook ? facts : null;
 }

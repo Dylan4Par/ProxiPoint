@@ -37,6 +37,16 @@ import {
   type TagMatchMode,
 } from '../../lib/discoverTagFilter';
 import { countFeed } from '../../lib/discoverFeed';
+import {
+  PRICE_CHOICES,
+  TIMES_OF_DAY,
+  activePrefsCount,
+  clearDiscoverPrefs,
+  prefsAllow,
+  setDiscoverPrefs,
+  useDiscoverPrefs,
+  type PrefsNode,
+} from '../../lib/discoverPrefs';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 import { useKeyboardHeight } from '../common/KeyboardAwareScrollView';
 
@@ -135,7 +145,9 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const tagFilter = useDiscoverTagFilter();
   // Sort only orders Explore Map's card list, so it lives (and counts) only in Explore's sheet.
   // The Filter badge: how many #tag filters are on (Discover's own, or Explore's chip tags).
-  const activeCount = distanceInBar ? tagFilter.tags.length : activeTags.length;
+  // Discover's Filter: tag preference, price, time of day, age & access (lib/discoverPrefs).
+  const prefs = useDiscoverPrefs();
+  const activeCount = distanceInBar ? activePrefsCount(prefs) : activeTags.length;
   // Discover's distance button and menu, in words: "15 miles", "Within 1 mile", "Any distance".
   const rangeLabel = formatRangeWords(rangeMeters, units);
   // Distance dropdown, opened under its button.
@@ -201,9 +213,8 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   const eventCount = !tagModalOpen
     ? 0
     : distanceInBar
-      ? countFeed(
-          nodes as never,
-          Date.now(),
+      ? countFeed(nodes as never, Date.now(), (node) =>
+          prefsAllow(node as unknown as PrefsNode, prefs, followed.tags) &&
           discoverFeedAllows({
             center: { latitude: discoverPlace.latitude, longitude: discoverPlace.longitude },
             rangeMeters,
@@ -213,7 +224,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             followedTags: followed.filter,
             tags: tagFilter.tags,
             mode: tagFilter.mode,
-          }),
+          })(node),
         )
       : countFeed(nodes as never, Date.now(), (node) =>
           matchesDiscoverFilters(node, {
@@ -227,8 +238,9 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             tagFilter: { tags: activeTags, mode: exploreMode },
           }),
         );
-  const canClearAll = shelf.tags.length > 0 || shelf.mode !== 'any';
+  const canClearAll = distanceInBar ? activeCount > 0 : shelf.tags.length > 0 || shelf.mode !== 'any';
   const clearAll = () => {
+    if (distanceInBar) clearDiscoverPrefs();
     shelf.clear();
     setNewTagInput('');
     setLimitNote(false);
@@ -314,7 +326,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             activeOpacity={0.8}
             onPress={() => setTagModalOpen(true)}
             accessibilityRole="button"
-            accessibilityLabel={activeCount ? `Filter, ${activeCount} #tag ${activeCount === 1 ? 'filter' : 'filters'} on` : 'Filter'}
+            accessibilityLabel={activeCount ? `Filter, ${activeCount} ${distanceInBar ? '' : '#tag '}${activeCount === 1 ? 'filter' : 'filters'} on` : 'Filter'}
             testID="filter-manage-tags"
           >
             <Text style={[styles.filterWord, activeCount > 0 && styles.filterWordActive]}>Filter</Text>
@@ -517,6 +529,99 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
             </View>
 
             <>
+            {distanceInBar ? (
+            <ScrollView contentContainerStyle={styles.sheetContent} testID="discover-filter">
+              {/* TAG PREFERENCES: only Points with your followed #tags. */}
+              <Text style={styles.prefSection}>TAG PREFERENCES</Text>
+              <View style={styles.prefToggleRow}>
+                <View style={styles.prefToggleCopy}>
+                  <Text style={styles.prefToggleLabel}>Only show my followed tags</Text>
+                  <Text style={styles.prefHint}>
+                    {followed.tags.length
+                      ? `Limits the feed to your ${followed.tags.length} tracked ${followed.tags.length === 1 ? 'interest' : 'interests'}`
+                      : 'Follow #tags on your Profile to use this.'}
+                  </Text>
+                </View>
+                <Switch
+                  value={prefs.followedOnly}
+                  onValueChange={(on) => setDiscoverPrefs({ followedOnly: on })}
+                  disabled={!followed.tags.length && !prefs.followedOnly}
+                  trackColor={{ false: c.borderStrong, true: c.accentTrack }}
+                  thumbColor={prefs.followedOnly ? c.accent : c.textMuted}
+                  accessibilityLabel="Only show my followed tags"
+                  testID="filter-followed-only"
+                />
+              </View>
+
+              {/* PRICE: one choice. */}
+              <Text style={[styles.prefSection, styles.sectionGap]}>PRICE</Text>
+              <View style={styles.prefChips} accessibilityRole="radiogroup">
+                {PRICE_CHOICES.map((option) => {
+                  const on = prefs.price === option.id;
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.prefChip, on && styles.prefChipOn]}
+                      onPress={() => setDiscoverPrefs({ price: option.id })}
+                      accessibilityRole="radio"
+                      accessibilityState={{ selected: on }}
+                      testID={`filter-price-${option.id}`}
+                    >
+                      <View style={[styles.radio, on && styles.radioOn]}>{on ? <View style={styles.radioDot} /> : null}</View>
+                      <Text style={[styles.prefChipText, on && styles.prefChipTextOn]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* TIME OF DAY: any of the picked parts of the day; none = any time. */}
+              <Text style={[styles.prefSection, styles.sectionGap]}>TIME OF DAY</Text>
+              <View style={styles.prefChips}>
+                {TIMES_OF_DAY.map((option) => {
+                  const on = prefs.times.includes(option.id);
+                  return (
+                    <TouchableOpacity
+                      key={option.id}
+                      style={[styles.prefChip, on && styles.prefChipOn]}
+                      onPress={() =>
+                        setDiscoverPrefs({ times: on ? prefs.times.filter((t) => t !== option.id) : [...prefs.times, option.id] })
+                      }
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: on }}
+                      testID={`filter-time-${option.id}`}
+                    >
+                      {on ? <Check size={14} color={c.accent} strokeWidth={3} /> : null}
+                      <Text style={[styles.prefChipText, on && styles.prefChipTextOn]}>{option.label}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+
+              {/* AGE & ACCESS: either one when both are on. */}
+              <Text style={[styles.prefSection, styles.sectionGap]}>AGE & ACCESS</Text>
+              {[
+                { key: 'over21' as const, label: '21+ only', on: prefs.over21 },
+                { key: 'allAges' as const, label: 'All Ages / Family Friendly', on: prefs.allAges },
+              ].map((row) => (
+                <TouchableOpacity
+                  key={row.key}
+                  style={styles.checkRow}
+                  onPress={() => setDiscoverPrefs(row.key === 'over21' ? { over21: !row.on } : { allAges: !row.on })}
+                  accessibilityRole="checkbox"
+                  accessibilityState={{ checked: row.on }}
+                  testID={`filter-age-${row.key}`}
+                >
+                  <View style={[styles.checkBox, row.on && styles.checkBoxOn]}>
+                    {row.on ? <Check size={14} color={c.onAccent} strokeWidth={3} /> : null}
+                  </View>
+                  <Text style={styles.prefChipText}>{row.label}</Text>
+                </TouchableOpacity>
+              ))}
+              <Text style={[styles.prefHint, styles.prefFootnote]}>
+                Price and age filters show Points that list them; ones without a price or age rule are left out while these are on.
+              </Text>
+            </ScrollView>
+            ) : (
             <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.sheetContent}>
               {/* Zone 1: active #tag filters, each with × to drop it. */}
               <Text style={[styles.sectionSubtitle, dFull && styles.activeCountFull]} testID="filter-active-count">
@@ -666,6 +771,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
               )}
 
             </ScrollView>
+            )}
 
             {/* The button shows what you'll get: "Show 18 Events", or a warning when nothing matches. */}
             <View style={styles.sheetButtons}>
@@ -964,6 +1070,33 @@ const createStyles = (c: ThemeColors) =>
   sectionSubtitleInline: { marginBottom: 0 },
   activeCount: { color: c.textMuted, fontSize: 11, fontWeight: '700' },
   activeCountFull: { color: c.amber },
+  // Discover's Filter sheet
+  prefSection: { color: c.textMuted, fontSize: 12, fontWeight: '800', letterSpacing: 0.6, marginBottom: 10 },
+  prefToggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  prefToggleCopy: { flex: 1, gap: 2 },
+  prefToggleLabel: { color: c.text, fontSize: 15, fontWeight: '700' },
+  prefHint: { color: c.textMuted, fontSize: 12, lineHeight: 17 },
+  prefFootnote: { marginTop: 14 },
+  prefChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  prefChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+  },
+  prefChipOn: { borderColor: c.accent, backgroundColor: c.accentTint },
+  prefChipText: { color: c.text, fontSize: 14, fontWeight: '600' },
+  prefChipTextOn: { color: c.accent, fontWeight: '800' },
+  radio: { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: c.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  radioOn: { borderColor: c.accent },
+  radioDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: c.accent },
+  checkRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8 },
+  checkBox: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: c.borderStrong, alignItems: 'center', justifyContent: 'center' },
+  checkBoxOn: { backgroundColor: c.accent, borderColor: c.accent },
   limitNote: { color: c.amber, fontSize: 12, fontWeight: '600', marginTop: -2, marginBottom: 8 },
   maxBadge: {
     height: 44,
