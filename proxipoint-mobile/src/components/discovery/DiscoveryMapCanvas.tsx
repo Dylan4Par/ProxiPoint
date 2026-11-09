@@ -1097,7 +1097,7 @@ export const DiscoveryMapCanvas: React.FC<{
           latitude={viewPlace.latitude}
           longitude={viewPlace.longitude}
           mode={mode}
-          // A light wash in light mode (kept faint so OSM Bright's colours show); navy in dark.
+          // A light wash in light mode (kept faint so the Outdoors colours show); navy in dark.
           tint={mode === 'light' ? 'rgba(233, 238, 245, 0.05)' : 'rgba(10, 17, 32, 0.28)'}
           wideLayers={wideLayers}
           focus={tileFocus}
