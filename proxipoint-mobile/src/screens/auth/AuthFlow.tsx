@@ -77,9 +77,12 @@ const VALUE_LINES = [
   { Icon: Lock, text: 'You choose what’s shared, and who sees it' },
 ];
 
+/** Welcome subtitle: one shade stronger than the usual muted text, for bright screens. */
+const TAGLINE_COLOR = { light: '#475569', dark: '#cbd5e1' } as const;
+
 const WelcomePage: React.FC<{ onSignUp: () => void; onSignIn: () => void }> = ({ onSignUp, onSignIn }) => {
   const styles = useThemedStyles(createStyles);
-  const { colors: c } = useTheme();
+  const { colors: c, mode } = useTheme();
   // Set when the app signed someone out on its own (60 days away, or a year on this phone).
   const notice = useAuthStore((s) => s.notice);
   return (
@@ -100,13 +103,18 @@ const WelcomePage: React.FC<{ onSignUp: () => void; onSignIn: () => void }> = ({
       <View style={styles.hero}>
         <ProxiPointLogo size={88} />
         <Text style={styles.wordmark}>ProxiPoint</Text>
-        <Text style={styles.tagline}>See what’s happening around you, right now.</Text>
+        <Text
+          style={[styles.tagline, { color: mode === 'light' ? TAGLINE_COLOR.light : TAGLINE_COLOR.dark }]}
+          textBreakStrategy="balanced"
+        >
+          See what’s happening around you, right now.
+        </Text>
       </View>
       <View style={styles.values}>
         {VALUE_LINES.map(({ Icon, text }) => (
           <View key={text} style={styles.valueRow}>
             <View style={styles.valueIcon}>
-              <Icon size={18} color={c.accent} strokeWidth={2.2} />
+              <Icon size={22} color={c.accent} strokeWidth={2.2} />
             </View>
             {/* "balanced" evens out the two lines when a line wraps (Android). */}
             <Text style={styles.valueText} textBreakStrategy="balanced">
@@ -432,12 +440,12 @@ const createStyles = (c: ThemeColors) =>
     wordmark: { color: c.text, fontSize: 34, fontWeight: '800', letterSpacing: -0.5, marginTop: 8 },
     tagline: { color: c.textMuted, fontSize: 16, textAlign: 'center', lineHeight: 22, maxWidth: 280 },
     // Capped width and centered, so lines wrap evenly on wider phones instead of running long.
-    values: { marginTop: 40, gap: 18, width: '100%', maxWidth: 330, alignSelf: 'center' },
+    values: { marginTop: 40, gap: 28, width: '100%', maxWidth: 330, alignSelf: 'center' },
     valueRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     valueIcon: {
-      width: 36,
-      height: 36,
-      borderRadius: 18,
+      width: 46,
+      height: 46,
+      borderRadius: 23,
       backgroundColor: c.accentTint,
       alignItems: 'center',
       justifyContent: 'center',
