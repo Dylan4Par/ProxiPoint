@@ -1,4 +1,4 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { MAP_TILE_MAX_ZOOM, MAP_TILE_URLS } from '../../lib/mapTileUrls';
 import { cachedTileUri, forgetTile, loadTile } from '../../lib/tileCache';
@@ -82,6 +82,18 @@ const TileImage = memo(
       />
     );
   },
+  // Only re-draw a tile when it moves or changes. The tile lists are worked out afresh each time
+  // the view changes (new objects, same tiles), which re-rendered every tile on screen mid-pinch.
+  (a, b) =>
+    a.uri === b.uri &&
+    a.unit === b.unit &&
+    a.origin.x === b.origin.x &&
+    a.origin.y === b.origin.y &&
+    a.tile.left === b.tile.left &&
+    a.tile.top === b.tile.top &&
+    a.tile.width === b.tile.width &&
+    a.tile.height === b.tile.height &&
+    a.onReady === b.onReady,
 );
 TileImage.displayName = 'TileImage';
 
@@ -128,13 +140,17 @@ export const MapTiles: React.FC<{
     lastPlace.current = placeKey;
     drawn.current = new Set();
   }
-  const checkDone = () => {
+  // Stable (they only read refs), so tiles aren't re-rendered just because these were re-made.
+  const checkDone = useCallback(() => {
     if (wantRef.current.every((t) => drawn.current.has(t.key))) setUnder(wantRef.current);
-  };
-  const onReady = (key: string) => {
-    drawn.current.add(key);
-    checkDone();
-  };
+  }, []);
+  const onReady = useCallback(
+    (key: string) => {
+      drawn.current.add(key);
+      checkDone();
+    },
+    [checkDone],
+  );
   useEffect(checkDone, [want]);
   useEffect(() => setUnder([]), [placeKey]);
 
