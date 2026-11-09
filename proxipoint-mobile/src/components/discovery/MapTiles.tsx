@@ -103,6 +103,18 @@ export const MapTiles: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [latitude, longitude, level, view.minX, view.maxX, view.minY, view.maxY],
   );
+  // A low-detail backdrop, always underneath: three levels coarser (each tile covers 64 of the
+  // current ones) and three times the view each way. A fast pinch-out then shows a softer map
+  // around the detailed tiles instead of a blank screen while the next level downloads.
+  const backdropLevel = Math.max(3, level - 3);
+  const backdrop = useMemo(() => {
+    if (backdropLevel >= level) return [];
+    const w = view.maxX - view.minX;
+    const h = view.maxY - view.minY;
+    const wide = { minX: view.minX - w, maxX: view.maxX + w, minY: view.minY - h, maxY: view.maxY + h };
+    return tilesForView({ latitude, longitude }, wide, backdropLevel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latitude, longitude, level, backdropLevel, view.minX, view.maxX, view.minY, view.maxY]);
 
   // The last set whose tiles had all drawn: kept underneath until `want` has drawn too.
   const [under, setUnder] = useState<GridTile[]>([]);
@@ -133,7 +145,7 @@ export const MapTiles: React.FC<{
    * Tiles of one level inside a container scaled up by `unit` (world units per layout unit), so each
    * tile is laid out at ~256 px and the scale does the rest.
    */
-  const group = (tiles: GridTile[], layer: 'base' | 'labels', ready?: (key: string) => void) => {
+  const group = (tiles: GridTile[], layer: 'base' | 'labels', ready?: (key: string) => void, keyName: string = layer) => {
     const template = urls[layer];
     if (!template || !tiles.length) return null;
     const unit = Math.max(1e-6, tiles[0].width / TILE_LAYOUT);
@@ -147,11 +159,11 @@ export const MapTiles: React.FC<{
       // One container per level, and one key per tile, so a tile already on screen is never
       // unmounted and re-read when the tiles are picked again (that was the flicker on zoom).
       <View
-        key={`${layer}-${tiles[0].z}`}
+        key={`${keyName}-${tiles[0].z}`}
         style={[styles.group, { left: x0 * unit, top: y0 * unit, width: x1 - x0, height: y1 - y0, transform: [{ scale: unit }] }]}
       >
         {tiles.map((t) => (
-          <TileImage key={`${layer}-${t.key}`} uri={tileUrl(template, t)} tile={t} unit={unit} origin={origin} onReady={ready} />
+          <TileImage key={`${keyName}-${t.key}`} uri={tileUrl(template, t)} tile={t} unit={unit} origin={origin} onReady={ready} />
         ))}
       </View>
     );
@@ -163,6 +175,8 @@ export const MapTiles: React.FC<{
 
   return (
     <View style={styles.layer} pointerEvents="none">
+      {/* The backdrop first, so everything else draws over it. */}
+      {group(backdrop, 'base', undefined, 'backdrop')}
       {levels.map((z) => group(tilesAt(z), 'base', urls.labels ? undefined : onReady))}
       {/* The tint, also laid out small and scaled up (one huge view can fail to draw too). */}
       <View style={[styles.tintLayer, { backgroundColor: tint, transform: [{ scale: (2 * TINT_REACH) / TINT_LAYOUT }] }]} />
