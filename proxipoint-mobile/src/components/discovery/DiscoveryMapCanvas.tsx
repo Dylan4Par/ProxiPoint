@@ -509,6 +509,8 @@ export const DiscoveryMapCanvas: React.FC<{
     // the cards load once it's let go (onPanResponderRelease / Terminate hand them over).
     pendingBounds.current = { minX, maxX, minY, maxY };
     if (gesture.current.mode === 'none') flushBounds();
+    // Settled (not mid-gesture): bring the street tiles to where the map is.
+    if (gesture.current.mode === 'none') followTiles(screenCenterWorld(offsetX, offsetY, z));
     // Far from the area's center (or zoomed well out)? Offer "Search this area".
     const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, areaRangeRef.current);
     if (offer !== offerAreaRef.current) {
@@ -522,6 +524,20 @@ export const DiscoveryMapCanvas: React.FC<{
     x: (viewSize.current.width / 2 + WORLD_OFFSET - offsetX) / z,
     y: (visibleMapHeight() / 2 + WORLD_OFFSET - offsetY) / z,
   });
+
+  // Where the street tiles are loaded around (world units). They follow the map once it settles
+  // somewhere new (a drag, or a jump to a Point), so far-off streets don't stay gray until
+  // "Search this area"; that button now only reloads Points.
+  const [tileFocus, setTileFocus] = useState({ x: 480, y: 480 });
+  const tileFocusRef = useRef(tileFocus);
+  const followTiles = (center: { x: number; y: number }) => {
+    const f = tileFocusRef.current;
+    // The street layer reaches ~480-920 units from its focus; move it before the view nears an edge.
+    if (Math.hypot(center.x - f.x, center.y - f.y) < 300) return;
+    const next = { x: Math.round(center.x / 50) * 50, y: Math.round(center.y / 50) * 50 };
+    tileFocusRef.current = next;
+    setTileFocus(next);
+  };
 
   const [offerArea, setOfferArea] = useState(false);
   const offerAreaRef = useRef(false);
@@ -937,6 +953,9 @@ export const DiscoveryMapCanvas: React.FC<{
     const placeKey = `${viewPlace.latitude},${viewPlace.longitude}`;
     if (placeKey === lastPlace.current) return;
     lastPlace.current = placeKey;
+    // A new area: the world is redrawn around it, so the tiles start at its middle again.
+    tileFocusRef.current = { x: 480, y: 480 };
+    setTileFocus(tileFocusRef.current);
     if (keepViewOnPlaceChange.current) {
       // "Search this area": the new area's center is where the middle of the screen already is,
       // so keep the zoom and jump (no glide) to the same view around it.
@@ -1078,8 +1097,10 @@ export const DiscoveryMapCanvas: React.FC<{
           latitude={viewPlace.latitude}
           longitude={viewPlace.longitude}
           mode={mode}
-          tint={mode === 'light' ? 'rgba(233, 238, 245, 0.12)' : 'rgba(10, 17, 32, 0.28)'}
+          // A light wash in light mode (kept faint so OSM Bright's colours show); navy in dark.
+          tint={mode === 'light' ? 'rgba(233, 238, 245, 0.05)' : 'rgba(10, 17, 32, 0.28)'}
           wideLayers={wideLayers}
+          focus={tileFocus}
         />
 
         {/* You: at the middle of the map when it's showing your area; elsewhere (or hidden,

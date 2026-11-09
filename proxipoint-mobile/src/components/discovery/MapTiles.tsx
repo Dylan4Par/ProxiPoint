@@ -66,6 +66,8 @@ function tilesFor(
   zoom = TILE_ZOOM,
   from = 0,
   to = WORLD_SIZE,
+  /** Moves the covered square (world units) so it's around the part of the map in view. */
+  shift: { x: number; y: number } = { x: 0, y: 0 },
 ): Tile[] {
   const n = 2 ** zoom;
   const lat0 = center.latitude;
@@ -74,10 +76,10 @@ function tilesFor(
   const lonAt = (x: number) => lon0 + ((x - ORIGIN) / SCALE / (EARTH_RADIUS * Math.cos((lat0 * Math.PI) / 180))) * (180 / Math.PI);
   const latAt = (y: number) => lat0 - ((y - ORIGIN) / SCALE / EARTH_RADIUS) * (180 / Math.PI);
 
-  const xMin = Math.floor(lonToTileX(lonAt(from), n));
-  const xMax = Math.floor(lonToTileX(lonAt(to), n));
-  const yMin = Math.floor(latToTileY(latAt(from), n));
-  const yMax = Math.floor(latToTileY(latAt(to), n));
+  const xMin = Math.floor(lonToTileX(lonAt(from + shift.x), n));
+  const xMax = Math.floor(lonToTileX(lonAt(to + shift.x), n));
+  const yMin = Math.floor(latToTileY(latAt(from + shift.y), n));
+  const yMax = Math.floor(latToTileY(latAt(to + shift.y), n));
   const urls = TILE_URLS[mode];
 
   const tiles: Tile[] = [];
@@ -122,11 +124,21 @@ export const MapTiles: React.FC<{
   tint: string;
   /** How many of the wider layers to draw (wideLayersFor); the streets always show. */
   wideLayers?: number;
-}> = memo(({ latitude, longitude, mode, tint, wideLayers = 0 }) => {
-  const tiles = useMemo(() => tilesFor({ latitude, longitude }, mode), [latitude, longitude, mode]);
+  /**
+   * The world point the street tiles are loaded around (the middle of the map once it settles),
+   * so moving to a far-off Point shows its streets straight away. Default: the area's center.
+   */
+  focus?: { x: number; y: number };
+}> = memo(({ latitude, longitude, mode, tint, wideLayers = 0, focus }) => {
+  const sx = focus ? focus.x - ORIGIN : 0;
+  const sy = focus ? focus.y - ORIGIN : 0;
+  const tiles = useMemo(
+    () => tilesFor({ latitude, longitude }, mode, TILE_ZOOM, 0, WORLD_SIZE, { x: sx, y: sy }),
+    [latitude, longitude, mode, sx, sy],
+  );
   const wide = useMemo(
-    () => tilesFor({ latitude, longitude }, mode, WIDE_ZOOM, WIDE_MIN, WIDE_MAX),
-    [latitude, longitude, mode],
+    () => tilesFor({ latitude, longitude }, mode, WIDE_ZOOM, WIDE_MIN, WIDE_MAX, { x: sx, y: sy }),
+    [latitude, longitude, mode, sx, sy],
   );
   // Only worked out (and downloaded) once the view is wide enough to need them.
   const far = useMemo(
