@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
-import { MAP_ATTRIBUTION } from '../../lib/mapTileUrls';
+import { MAP_ATTRIBUTION, MAP_STYLES } from '../../lib/mapTileUrls';
 import { useExploreTagMode } from '../../lib/exploreTagMode';
 import {
   View,
@@ -9,9 +9,17 @@ import {
   Dimensions,
   Animated,
   Easing,
-  PanResponder,
   AccessibilityInfo,
 } from 'react-native';
+import {
+  Camera,
+  Map as MapLibreMap,
+  Marker,
+  type CameraRef,
+  type LngLat,
+  type StyleSpecification,
+  type ViewStateChangeEvent,
+} from '@maplibre/maplibre-react-native';
 import { resolveMapMode, useMapStyle } from '../../lib/mapStyle';
 import { chipFilterTags, toCanvasCoordinates, useDiscoveryStore, type DiscoveryNode } from '../../stores/useDiscoveryStore';
 import { matchesDiscoverFilters, useFollowedTagsFilter, useMyChannelsOnly } from '../../lib/discoverFilters';
@@ -19,9 +27,8 @@ import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
-import { MapTiles } from './MapTiles';
-import { roundView, tileLevelFor, type WorldBox } from '../../lib/tileGrid';
 import { fitView } from '../../lib/mapFit';
+import { mapZoomFor, worldViewFor, type Bounds } from '../../lib/mapZoom';
 import { MapPinGlyph } from './MapPinGlyph';
 import { MapRecenterButton, mapControlPositions } from './MapControls';
 import { CARD_SHEET_RADIUS } from './EventCardList';
@@ -42,34 +49,25 @@ import { fromCanvasCoordinates, shouldOfferAreaSearch, visibleRadiusMeters, WORL
 import { setMapTouching } from '../../lib/mapGesture';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
+/**
+ * Explore Map: Stadia's vector map drawn by MapLibre (lib/mapTileUrls MAP_STYLES), with the
+ * app's own pins on top.
+ *
+ * MapLibre handles pan and pinch itself, on the phone's UI thread, and draws the streets and
+ * labels smoothly at every zoom (no picture tiles stretching or swapping, no stutter while the
+ * app's JavaScript is busy). Pins, bubbles, posts and your dot are MapLibre Markers: our own views,
+ * which MapLibre places on the map every frame, so they move with it exactly.
+ *
+ * Pin grouping, the card list's "in view" and Search this area still work in the app's world units
+ * (lib/mapArea), worked out from the map's bounds each time it settles (lib/mapZoom).
+ */
+
 const { width, height } = Dimensions.get('window');
 const CANVAS_HEIGHT = height * 0.52;
 
-// Beacon world coordinates inside 1400x1400 world
-const BEACON_WORLD_X = 480;
-const BEACON_WORLD_Y = 480;
-const WORLD_OFFSET = 200; // top: -200, left: -200
-/**
- * Padding around the world's own box (world units), so the box stays large on screen even fully
- * zoomed out (70 miles: 1400 units shrink to ~11 px, and Android then skips drawing the view and
- * everything in it). 60,000 units is about 133 km each way, past the widest view.
- */
-const WORLD_PAD = 60000;
-
-// Exact offset needed to place (BEACON_WORLD_X, BEACON_WORLD_Y) at (width / 2, CANVAS_HEIGHT / 2)
-const CENTER_OFFSET_X = width / 2 - (BEACON_WORLD_X - WORLD_OFFSET);
-const CENTER_OFFSET_Y = CANVAS_HEIGHT / 2 - (BEACON_WORLD_Y - WORLD_OFFSET);
-
-// Zoom: the map scales from its top-left corner, so a world point w is drawn at
-//   screen = pan - WORLD_OFFSET + zoom * w
-// Pins, labels and your own dot are counter-scaled so they stay the same size on screen.
-/**
- * Furthest out: the map shows this much across, whatever the phone's width.
- * Stopgap (Nov 2026): 15 miles, down from 70. Zooming out past about 30 km across, the whole map
- * (tiles and pins) stopped drawing on Android with no error in the app or the device log; the cause
- * is still being looked into. Put it back to 70 once that's fixed.
- */
-const MAX_VIEW_WIDTH_METERS = 15 * 1609.344;
+// Zoom is in world units here (screen points per world unit; lib/mapZoom converts to MapLibre's).
+/** Furthest out: the map shows this much across, whatever the phone's width. */
+const MAX_VIEW_WIDTH_METERS = 70 * 1609.344;
 const MIN_ZOOM = width / (MAX_VIEW_WIDTH_METERS * WORLD_SCALE);
 const MAX_ZOOM = 3;
 
@@ -84,6 +82,8 @@ const DEFAULT_ZOOM = MAX_ZOOM / ZOOM_STEP ** 5;
 /** Box for a pinned post's bubble + tail (the tail tip sits at the bottom middle). */
 const POST_PIN_SIZE = 32;
 const clampZoom = (value: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value));
+/** How long the map glides for a jump to a Point, a cluster or Recenter. */
+const MOVE_MS = 450;
 
 // Pin head center sits this far below the top of the pin + label column.
 const PIN_HEAD_CENTER = 17;
@@ -122,6 +122,9 @@ function mainHashtag(node: unknown): string | null {
   const clean = first.replace(/^#+/, '');
   return clean ? `#${clean}` : null;
 }
+
+type Spot = { latitude: number; longitude: number };
+const lngLat = (spot: Spot): LngLat => [spot.longitude, spot.latitude];
 
 export const DiscoveryMapCanvas: React.FC<{
   liveOnly?: boolean;
@@ -195,14 +198,6 @@ export const DiscoveryMapCanvas: React.FC<{
   const activeTab = useDiscoveryStore((s) => s.activeTab);
   const selfCoordinates = useDiscoveryStore((s) => s.selfCoordinates);
   const viewPlace = useDiscoveryStore((s) => s.viewPlace);
-  // Your dot, placed relative to the city being shown; hidden when it's off the map entirely.
-  const me = toCanvasCoordinates(
-    selfCoordinates.latitude,
-    selfCoordinates.longitude,
-    viewPlace.latitude,
-    viewPlace.longitude,
-  );
-  const meOnMap = me.x > -WORLD_OFFSET && me.x < 1400 - WORLD_OFFSET && me.y > -WORLD_OFFSET && me.y < 1400 - WORLD_OFFSET ? me : null;
   useModeration(); // re-filter when you report or block someone
   const allNodes = Object.values(nodes || {});
   // Same filters as the card list: hashtag chip, Live Now, and Nearby / RSVP'd.
@@ -300,8 +295,9 @@ export const DiscoveryMapCanvas: React.FC<{
 
   // Zoom in coarse steps, so clusters are worked out again only when the zoom really changes.
   const zoomStep = (z: number) => Math.round(Math.log(z) / Math.log(1.15));
-  const [clusterStep, setClusterStep] = useState(0);
-  const clusterStepRef = useRef(0);
+  // Starts at the map's opening zoom; the map then reports its real zoom once it settles.
+  const [clusterStep, setClusterStep] = useState(() => zoomStep(DEFAULT_ZOOM));
+  const clusterStepRef = useRef(clusterStep);
 
   const selectedNode = nodeList.find((item) => item.id === selectedNodeId) ?? null;
 
@@ -463,107 +459,65 @@ export const DiscoveryMapCanvas: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cardRequest?.key, clusters]);
 
-  const pan = useRef(new Animated.ValueXY({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y })).current;
-  const currentPan = useRef({ x: CENTER_OFFSET_X, y: CENTER_OFFSET_Y });
-
+  // ---- The map's view, in world units -------------------------------------------------------
   // Real size of the map area (measured on layout); the screen-based guess is only a fallback.
   const viewSize = useRef({ width, height: CANVAS_HEIGHT });
   // Set once the user drags, pinches or zooms, so a late layout doesn't yank the map back.
   const userMoved = useRef(false);
-
-  // Zoom level, as an Animated value for drawing and a plain number for maths.
-  const zoom = useRef(new Animated.Value(DEFAULT_ZOOM)).current;
+  // World zoom of the last settled view (screen points per world unit).
   const currentZoom = useRef(DEFAULT_ZOOM);
-  const counterZoom = useRef(Animated.divide(1, zoom)).current;
-
-  const pendingBounds = useRef<{ minX: number; maxX: number; minY: number; maxY: number } | null>(null);
-  const boundsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const flushBounds = () => {
-    if (boundsTimer.current) clearTimeout(boundsTimer.current);
-    boundsTimer.current = null;
-    if (pendingBounds.current) setViewportBounds(pendingBounds.current);
-    pendingBounds.current = null;
-  };
-  useEffect(() => () => {
-    if (boundsTimer.current) clearTimeout(boundsTimer.current);
-  }, []);
-
-  /** Visible area in world coordinates, so the card list matches the pins on screen. */
-  const calculateBounds = (offsetX: number, offsetY: number, z = currentZoom.current) => {
-    const step = zoomStep(z);
-    // Pins are grouped again only once the pinch ends: re-grouping every ~15% of zoom mid-pinch
-    // re-drew every pin while the fingers were moving, which froze the zoom for a moment.
-    if (gesture.current.mode !== 'pinch' && step !== clusterStepRef.current) {
-      clusterStepRef.current = step;
-      setClusterStep(step);
-    }
-    // World position of the map's top-left corner (same units as each Point's x / y).
-    const left = (WORLD_OFFSET - offsetX) / z;
-    const top = (WORLD_OFFSET - offsetY) / z;
-    const minX = left - 40;
-    const maxX = left + viewSize.current.width / z + 40;
-    const minY = top - 40;
-    const maxY = top + visibleMapHeight() / z + 40;
-    // The card list follows these, but not while a finger is on the map: the map drags freely and
-    // the cards load once it's let go (onPanResponderRelease / Terminate hand them over).
-    pendingBounds.current = { minX, maxX, minY, maxY };
-    if (gesture.current.mode === 'none') flushBounds();
-    // Settled (not mid-gesture): the map tiles are picked again for what's on screen.
-    if (gesture.current.mode === 'none') followTiles({ minX, maxX, minY, maxY }, z);
-    // Mid-pinch (a few times a second at most): switch to the next tile level as soon as the zoom
-    // reaches it, and cover more as the view grows past the tiles, so they're never stretched until
-    // labels look huge, and a zoom-out never shows a small patch of tiles on a blank map.
-    else if (gesture.current.mode === 'pinch') followTiles({ minX, maxX, minY, maxY }, z, true);
-    // Far from the area's center (or zoomed well out)? Offer "Search this area".
-    const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, areaRangeRef.current);
-    if (offer !== offerAreaRef.current) {
-      offerAreaRef.current = offer;
-      setOfferArea(offer);
-    }
-  };
-
-  /** The world point in the middle of the visible map. */
-  const screenCenterWorld = (offsetX = currentPan.current.x, offsetY = currentPan.current.y, z = currentZoom.current) => ({
-    x: (viewSize.current.width / 2 + WORLD_OFFSET - offsetX) / z,
-    y: (visibleMapHeight() / 2 + WORLD_OFFSET - offsetY) / z,
-  });
-
-  // What the map tiles cover: the view and zoom from the last time the map settled (after a drag,
-  // a pinch or a jump to a Point). MapTiles draws one detail level for it (lib/tileGrid), so the
-  // map fills in wherever you go; "Search this area" only reloads Points. Not updated mid-gesture
-  // (the tiles' margin covers a drag until you let go).
-  const [tileView, setTileView] = useState<{ view: WorldBox; zoom: number }>({
-    view: { minX: 280, maxX: 680, minY: 180, maxY: 780 },
-    zoom: 1,
-  });
-  const tileViewRef = useRef(tileView);
-  const lastPinchTiles = useRef(0);
-  const followTiles = (box: WorldBox, z: number, pinching = false) => {
-    const view = roundView(box, Math.max(10, (box.maxX - box.minX) / 10));
-    const prev = tileViewRef.current;
-    const sameLevel = tileLevelFor(prev.zoom, viewPlace.latitude) === tileLevelFor(z, viewPlace.latitude);
-    const sameView =
-      prev.view.minX === view.minX && prev.view.maxX === view.maxX && prev.view.minY === view.minY && prev.view.maxY === view.maxY;
-    // The tiles cover the last planned view plus a 30% margin (lib/tileGrid): is this view inside it?
-    const padX = (prev.view.maxX - prev.view.minX) * 0.3;
-    const padY = (prev.view.maxY - prev.view.minY) * 0.3;
-    const covered =
-      box.minX >= prev.view.minX - padX && box.maxX <= prev.view.maxX + padX && box.minY >= prev.view.minY - padY && box.maxY <= prev.view.maxY + padY;
-    if (sameLevel && (sameView || (pinching && covered))) return;
-    if (pinching) {
-      const now = Date.now();
-      if (now - lastPinchTiles.current < 200) return; // the release picks up anything skipped
-      lastPinchTiles.current = now;
-    }
-    tileViewRef.current = { view, zoom: z };
-    setTileView(tileViewRef.current);
-  };
+  // The map's last settled bounds, to work the world view out again when the area or the card
+  // list changes without the map moving.
+  const lastBounds = useRef<Bounds | null>(null);
+  // Latest area (the map's event handlers can run between renders).
+  const viewPlaceRef = useRef(viewPlace);
+  viewPlaceRef.current = viewPlace;
+  const toWorld = (latitude: number, longitude: number) =>
+    toCanvasCoordinates(latitude, longitude, viewPlaceRef.current.latitude, viewPlaceRef.current.longitude);
+  const toSpot = (p: { x: number; y: number }): Spot =>
+    fromCanvasCoordinates(p.x, p.y, viewPlaceRef.current.latitude, viewPlaceRef.current.longitude);
+  // The middle of the visible map and its size, in world units (for Search this area).
+  const visibleWorld = useRef<{ center: { x: number; y: number }; width: number; height: number } | null>(null);
 
   const [offerArea, setOfferArea] = useState(false);
   const offerAreaRef = useRef(false);
   // The radius the current area was loaded with: the default, or the last search's (see
   // shouldOfferAreaSearch), so a city-wide search doesn't bring the button straight back.
   const areaRangeRef = useRef(AREA_RANGE_METERS);
+
+  /**
+   * The map settled at these bounds: the card list, pin groups and Search this area follow.
+   * (Not while a finger is moving the map: MapLibre reports the end of each move.)
+   */
+  const applyView = (bounds: Bounds | null = lastBounds.current) => {
+    if (!bounds) return;
+    lastBounds.current = bounds;
+    const share = visibleMapHeight() / Math.max(1, viewSize.current.height);
+    const view = worldViewFor(bounds, viewSize.current.width, share, toWorld);
+    if (!view) return;
+    const z = view.zoom;
+    currentZoom.current = z;
+    const step = zoomStep(z);
+    if (step !== clusterStepRef.current) {
+      clusterStepRef.current = step;
+      setClusterStep(step);
+    }
+    // A little past each edge, so a pin half on screen still has its card.
+    setViewportBounds({ minX: view.minX - 40, maxX: view.maxX + 40, minY: view.minY - 40, maxY: view.maxY + 40 });
+    const visible = {
+      center: { x: (view.minX + view.maxX) / 2, y: (view.minY + view.maxY) / 2 },
+      width: view.maxX - view.minX,
+      height: view.maxY - view.minY,
+    };
+    visibleWorld.current = visible;
+    // Far from the area's center (or zoomed well out)? Offer "Search this area".
+    const offer = shouldOfferAreaSearch(visible.center, visible.width, areaRangeRef.current);
+    if (offer !== offerAreaRef.current) {
+      offerAreaRef.current = offer;
+      setOfferArea(offer);
+    }
+  };
+
   // "Search this area" fades in when offered and out when tapped (or no longer offered).
   const searchFade = useRef(new Animated.Value(0)).current;
   const [searchShown, setSearchShown] = useState(false);
@@ -577,13 +531,12 @@ export const DiscoveryMapCanvas: React.FC<{
       });
     }
   }, [offerArea, searchFade]);
-  // Set while the area moves to where you're looking, so the map stays put instead of gliding.
+  // Set while the area moves to where you're looking (the map itself stays where it is).
   const keepViewOnPlaceChange = useRef(false);
   const searchThisArea = () => {
-    if (!onSearchArea) return;
-    const z = currentZoom.current;
-    const center = screenCenterWorld();
-    const spot = fromCanvasCoordinates(center.x, center.y, viewPlace.latitude, viewPlace.longitude);
+    const visible = visibleWorld.current;
+    if (!onSearchArea || !visible) return;
+    const spot = toSpot(visible.center);
     keepViewOnPlaceChange.current = true;
     offerAreaRef.current = false;
     // Fade the button out right away (on the UI thread), then load the new area a frame later so
@@ -591,147 +544,84 @@ export const DiscoveryMapCanvas: React.FC<{
     searchFade.stopAnimation();
     Animated.timing(searchFade, { toValue: 0, duration: 200, useNativeDriver: true }).start(() => setSearchShown(false));
     setOfferArea(false);
-    const radiusMeters = visibleRadiusMeters(viewSize.current.width / z, visibleMapHeight() / z);
+    const radiusMeters = visibleRadiusMeters(visible.width, visible.height);
     areaRangeRef.current = Math.max(AREA_RANGE_METERS, radiusMeters);
     setTimeout(() => onSearchArea({ ...spot, radiusMeters }), 32);
   };
 
-  // ---- Animated moves -----------------------------------------------------------------------
-  // One path drives both zoom and position (two separate springs drifted out of step and swung
-  // the map sideways). It runs on the native driver: each value gets its own easing curve sampled
-  // from the shared path, so they stay in lockstep on the UI thread and the JS work a move kicks
-  // off (re-clustering pins, refreshing the card list) can't make it stutter.
-  type View2 = { pan: { x: number; y: number }; z: number };
-  const move = useRef<{
-    startedAt: number;
-    duration: number;
-    at: (t: number) => View2;
-    anim: Animated.CompositeAnimation;
-  } | null>(null);
-
-  /** Stops a move where it is, so a drag or pinch carries on from what's on screen. */
-  const stopMove = () => {
-    const m = move.current;
-    if (!m) return;
-    move.current = null;
-    m.anim.stop();
-    // Native values aren't read back synchronously, so work out where the path had got to.
-    const v = m.at(Math.min(1, (Date.now() - m.startedAt) / m.duration));
-    currentPan.current = v.pan;
-    currentZoom.current = v.z;
-    zoom.setValue(v.z);
-    pan.setValue(v.pan);
-  };
-
-  useEffect(
-    () => () => {
-      move.current?.anim.stop();
-      move.current = null;
-    },
-    [],
-  );
-
-  /** Moves and zooms the map (animated), keeping the refs in step. */
-  const animateTo = (target: { x: number; y: number }, z = currentZoom.current) => {
-    stopMove();
-    pan.stopAnimation();
-    zoom.stopAnimation();
-    const p0 = { ...currentPan.current };
-    const z0 = currentZoom.current;
-    currentPan.current = target;
-    currentZoom.current = z;
-    calculateBounds(target.x, target.y, z);
-    if (Math.abs(p0.x - target.x) < 0.5 && Math.abs(p0.y - target.y) < 0.5 && Math.abs(z0 - z) < 1e-4) return;
-
-    // Follow the world point at the middle of the visible map: zoom changes evenly (on a log
-    // scale) and that point glides from where it is to where it ends up, without overshoot.
-    const sx = viewSize.current.width / 2 + WORLD_OFFSET;
-    const sy = visibleMapHeight() / 2 + WORLD_OFFSET;
-    const w0 = { x: (sx - p0.x) / z0, y: (sy - p0.y) / z0 };
-    const w1 = { x: (sx - target.x) / z, y: (sy - target.y) / z };
-    const logRatio = Math.log(z / z0);
-    const sameZoom = Math.abs(logRatio) < 1e-6;
-    const ease = Easing.inOut(Easing.cubic);
-    const at = (t: number): View2 => {
-      const s = ease(t);
-      const zt = sameZoom ? z : z0 * Math.exp(logRatio * s);
-      // Weighting by 1/zoom keeps the motion on screen even while zooming.
-      const u = sameZoom ? s : (1 / z0 - 1 / zt) / (1 / z0 - 1 / z);
-      const wx = w0.x + (w1.x - w0.x) * u;
-      const wy = w0.y + (w1.y - w0.y) * u;
-      return { pan: { x: sx - zt * wx, y: sy - zt * wy }, z: zt };
+  // ---- Camera moves -------------------------------------------------------------------------
+  const cameraRef = useRef<CameraRef>(null);
+  // Moves asked for before the map has loaded wait for it (only the latest one matters).
+  const mapReady = useRef(false);
+  const pendingMove = useRef<(() => void) | null>(null);
+  const withCamera = (fn: (camera: CameraRef) => void) => {
+    const run = () => {
+      const camera = cameraRef.current;
+      if (!camera) return;
+      try {
+        fn(camera);
+      } catch {
+        // the map isn't ready after all: nothing to move
+      }
     };
-    const duration = sameZoom ? 320 : 420;
-    /** A native timing for one value, whose easing curve is that value's share of the path. */
-    const track = (value: Animated.Value, from: number, to: number, read: (v: View2) => number) => {
-      // No net change but the path may still bulge: animate over a 1-unit span instead.
-      const span = Math.abs(to - from) > 1e-3 ? to - from : 1;
-      return Animated.timing(value, {
-        toValue: from + span,
-        duration,
-        easing: (t) => (read(at(t)) - from) / span,
-        useNativeDriver: true,
-      });
-    };
-    const anims = [track(pan.x, p0.x, target.x, (v) => v.pan.x), track(pan.y, p0.y, target.y, (v) => v.pan.y)];
-    if (!sameZoom) anims.push(track(zoom, z0, z, (v) => v.z));
-    const anim = Animated.parallel(anims);
-    const m = { startedAt: Date.now(), duration, at, anim };
-    move.current = m;
-    anim.start(({ finished }) => {
-      if (!finished || move.current !== m) return;
-      move.current = null;
-      // Land exactly on the destination.
-      zoom.setValue(z);
-      pan.setValue(target);
-    });
+    if (mapReady.current) run();
+    else pendingMove.current = run;
   };
-
+  const onMapReady = () => {
+    if (mapReady.current) return;
+    mapReady.current = true;
+    const run = pendingMove.current;
+    pendingMove.current = null;
+    run?.();
+  };
+  // In case the map never reports loading (e.g. offline), stop holding moves back after a moment.
   useEffect(() => {
-    calculateBounds(CENTER_OFFSET_X, CENTER_OFFSET_Y);
+    const timer = setTimeout(onMapReady, 2000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /**
+   * Puts a spot in the middle of the visible map (above the card list or detail sheet), `lift`
+   * points higher, at world zoom `z` (or the current zoom). duration 0 jumps.
+   */
+  const moveTo = (spot: Spot, opts: { z?: number; lift?: number; duration?: number; fly?: boolean } = {}) => {
+    const hidden = Math.max(0, viewSize.current.height - visibleMapHeight());
+    // MapLibre centers in the part of the map left after the padding.
+    const padding = { top: 0, left: 0, right: 0, bottom: hidden + 2 * (opts.lift ?? 0) };
+    const z = opts.z != null ? clampZoom(opts.z) : undefined;
+    const zoom = z != null ? mapZoomFor(z, viewPlaceRef.current.latitude) : undefined;
+    const center = lngLat(spot);
+    withCamera((camera) =>
+      opts.duration === 0
+        ? camera.jumpTo({ center, zoom, padding })
+        : camera.easeTo({ center, zoom, padding, duration: opts.duration ?? MOVE_MS, easing: opts.fly ? 'fly' : 'ease' }),
+    );
+  };
 
   // Where the map sits on screen, to work out how much of it is visible above an overlay.
   const containerRef = useRef<View | null>(null);
-  const [frame, setFrame] = useState<{ top: number; width: number; height: number } | null>(null);
   const frameOrigin = useRef({ left: 0, top: 0 });
 
-  /** Pan that puts your position in the middle of the map (or of its visible part). */
-  const homeTarget = (z = DEFAULT_ZOOM, visibleHeight = viewSize.current.height) => ({
-    x: viewSize.current.width / 2 + WORLD_OFFSET - z * BEACON_WORLD_X,
-    y: visibleHeight / 2 + WORLD_OFFSET - z * BEACON_WORLD_Y,
-  });
-
-  /** Pan that puts a lat/lon in the middle of the visible map. */
-  const focusTargetFor = (spot: { latitude: number; longitude: number }, visibleHeight = visibleMapHeight()) => {
-    const world = toCanvasCoordinates(spot.latitude, spot.longitude, viewPlace.latitude, viewPlace.longitude);
-    const z = currentZoom.current;
-    return {
-      x: viewSize.current.width / 2 + WORLD_OFFSET - z * world.x,
-      y: visibleHeight / 2 + WORLD_OFFSET - z * world.y,
-    };
-  };
-
-  /** Zoom and pan that put every spot of a fit request in the visible map (null: no spots). */
-  const fitTargetFor = (
-    req: { points: Array<{ latitude: number; longitude: number }> },
-    visibleHeight = visibleMapHeight(),
-  ) => {
-    const world = req.points.map((p) => toCanvasCoordinates(p.latitude, p.longitude, viewPlace.latitude, viewPlace.longitude));
+  /** Zoom and middle that put every spot of a fit request in the visible map (null: no spots). */
+  const fitTargetFor = (req: { points: Array<{ latitude: number; longitude: number }> }) => {
+    const world = req.points.map((p) => toWorld(p.latitude, p.longitude));
+    const visibleH = visibleMapHeight();
     const fit = fitView(
       world,
-      { width: viewSize.current.width, height: visibleHeight },
+      { width: viewSize.current.width, height: visibleH },
       // Not closer than two steps out from the closest zoom; one spot opens at the usual zoom.
       { min: MIN_ZOOM, max: MAX_ZOOM / ZOOM_STEP ** 2, single: DEFAULT_ZOOM },
     );
     if (!fit) return null;
-    return {
-      z: fit.z,
-      target: { x: fit.screenX + WORLD_OFFSET - fit.z * fit.x, y: fit.screenY + WORLD_OFFSET - fit.z * fit.y },
+    // fitView puts world (x, y) at (screenX, screenY); moveTo centers on the visible middle.
+    const middle = {
+      x: fit.x + (viewSize.current.width / 2 - fit.screenX) / fit.z,
+      y: fit.y + (visibleH / 2 - fit.screenY) / fit.z,
     };
+    return { z: fit.z, spot: toSpot(middle) };
   };
 
-  /** Height of the map not hidden by the detail sheet. */
   // Latest values for timers and layout callbacks (which can run after a render).
   const coveredRef = useRef<number | null>(coveredFromY);
   coveredRef.current = coveredFromY;
@@ -760,18 +650,14 @@ export const DiscoveryMapCanvas: React.FC<{
   };
 
   /** Slides the selected Point to the middle of what's visible (at the current zoom). */
-  const focusSelected = () => {
+  const focusSelected = (duration?: number) => {
     const spot = selectedPosRef.current;
     if (!spot) return;
-    const z = currentZoom.current;
-    animateTo({
-      x: viewSize.current.width / 2 + WORLD_OFFSET - z * spot.x,
-      y: visibleMapHeight() / 2 - MARKER_VISUAL_SHIFT + WORLD_OFFSET - z * spot.y,
-    });
+    moveTo(toSpot(spot), { lift: MARKER_VISUAL_SHIFT, duration });
   };
 
-  // When the map changes size (rotation, or the card list expanding or collapsing), keep the selected
-  // Point once the resize settles, so it doesn't end up hidden behind the cards.
+  // While the card list slides up or down, the map's size changes every frame. Measuring each
+  // frame made it flicker, so after the first layout wait until the size stops changing.
   const resizeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const layoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const laidOut = useRef(false);
@@ -779,10 +665,6 @@ export const DiscoveryMapCanvas: React.FC<{
     if (resizeTimer.current) clearTimeout(resizeTimer.current);
     if (layoutTimer.current) clearTimeout(layoutTimer.current);
   }, []);
-  // While the card list slides up or down, the map's size changes every frame. Measuring (and
-  // re-rendering the whole map) each frame made it flicker and jump, so after the first layout
-  // wait until the size stops changing. The streets and pins are drawn on a large world canvas,
-  // so the newly uncovered part is already there while the list moves.
   const measureFrame = () => {
     if (!laidOut.current) {
       measureNow();
@@ -794,73 +676,41 @@ export const DiscoveryMapCanvas: React.FC<{
   const measureNow = () => {
     containerRef.current?.measureInWindow((x, y, w, h) => {
       // Ignore the tiny sizes the map passes through while the card list covers it.
-      if (Number.isFinite(y) && w > 0 && h >= 80) {
-        const firstLayout = !laidOut.current;
-        laidOut.current = true;
-        const previous = viewSize.current;
-        const resized = frame != null && (Math.abs(previous.height - h) > 2 || Math.abs(previous.width - w) > 2);
-        frameOrigin.current = { left: x, top: y };
-        viewSize.current = { width: w, height: h };
-        setFrame({ top: y, width: w, height: h });
-        const widthChanged = Math.abs(previous.width - w) > 2;
-        if (resized && widthChanged && selectedPosRef.current) {
-          // Rotated: center the selected Point again. (Height-only changes leave the view alone.)
-          if (resizeTimer.current) clearTimeout(resizeTimer.current);
-          resizeTimer.current = setTimeout(focusSelected, 60);
-        } else if (resized && userMoved.current && Math.abs(previous.width - w) > 2) {
-          // Rotated (the width changed): keep the same spot in the middle of the map.
-          stopMove();
-          const z = currentZoom.current;
-          const midX = (previous.width / 2 + WORLD_OFFSET - currentPan.current.x) / z;
-          const midY = (previous.height / 2 + WORLD_OFFSET - currentPan.current.y) / z;
-          const next = { x: w / 2 + WORLD_OFFSET - z * midX, y: h / 2 + WORLD_OFFSET - z * midY };
-          pan.setValue(next);
-          currentPan.current = next;
-          calculateBounds(next.x, next.y);
-        }
-        const fit =
-          fitRequest && fitRequest.key !== lastFitKey.current
-            ? fitTargetFor(fitRequest, Math.max(80, h - coveredBottomRef.current))
-            : null;
-        if (fitRequest && fit) {
-          // Opened from Discover's Map (N): zoomed to show every one of those Points.
-          lastFitKey.current = fitRequest.key;
-          userMoved.current = true;
-          stopMove();
-          zoom.setValue(fit.z);
-          currentZoom.current = fit.z;
-          pan.setValue(fit.target);
-          currentPan.current = fit.target;
-          calculateBounds(fit.target.x, fit.target.y, fit.z);
-        } else if (focusRequest && focusRequest.key !== lastFocusKey.current) {
-          // Opened to show a spot (e.g. a pinned post): start there instead of on you.
-          lastFocusKey.current = focusRequest.key;
-          userMoved.current = true;
-          const target = focusTargetFor(focusRequest, Math.max(80, h - coveredBottomRef.current));
-          pan.setValue(target);
-          currentPan.current = target;
-          calculateBounds(target.x, target.y);
-        } else if (firstLayout && selectedPosRef.current && openDetailRef.current) {
-          // Opened with a Point's details showing (tapped on Discover, a profile or a channel):
-          // start on that Point, in the middle of the map above the sheet, not on you.
-          userMoved.current = true;
-          const spot = selectedPosRef.current;
-          const z = currentZoom.current;
-          const target = {
-            x: w / 2 + WORLD_OFFSET - z * spot.x,
-            y: visibleMapHeight() / 2 - MARKER_VISUAL_SHIFT + WORLD_OFFSET - z * spot.y,
-          };
-          pan.setValue(target);
-          currentPan.current = target;
-          calculateBounds(target.x, target.y);
-        } else if (!userMoved.current && (firstLayout || previous.height < 200)) {
-          // First layout: put you in the real middle of the map (no animation). Later size changes
-          // (the card list opening or closing) keep the view where it is.
-          const home = homeTarget(currentZoom.current, Math.max(80, h - coveredBottomRef.current));
-          pan.setValue(home);
-          currentPan.current = home;
-          calculateBounds(home.x, home.y);
-        }
+      if (!Number.isFinite(y) || w <= 0 || h < 80) return;
+      const firstLayout = !laidOut.current;
+      laidOut.current = true;
+      const previous = viewSize.current;
+      frameOrigin.current = { left: x, top: y };
+      viewSize.current = { width: w, height: h };
+      if (!firstLayout && Math.abs(previous.width - w) > 2 && selectedPosRef.current) {
+        // Rotated: center the selected Point again. (MapLibre keeps the rest of the view.)
+        if (resizeTimer.current) clearTimeout(resizeTimer.current);
+        resizeTimer.current = setTimeout(() => focusSelected(), 60);
+      }
+      if (!firstLayout) {
+        applyView();
+        return;
+      }
+      // First layout: open where it should, now the real size is known (no animation).
+      const fit = fitRequest && fitRequest.key !== lastFitKey.current ? fitTargetFor(fitRequest) : null;
+      if (fitRequest && fit) {
+        // Opened from Discover's Map (N): zoomed to show every one of those Points.
+        lastFitKey.current = fitRequest.key;
+        userMoved.current = true;
+        moveTo(fit.spot, { z: fit.z, duration: 0 });
+      } else if (focusRequest && focusRequest.key !== lastFocusKey.current) {
+        // Opened to show a spot (e.g. a pinned post): start there instead of on you.
+        lastFocusKey.current = focusRequest.key;
+        userMoved.current = true;
+        moveTo(focusRequest, { duration: 0 });
+      } else if (selectedPosRef.current && openDetailRef.current) {
+        // Opened with a Point's details showing (tapped on Discover, a profile or a channel):
+        // start on that Point, in the middle of the map above the sheet, not on you.
+        userMoved.current = true;
+        focusSelected(0);
+      } else if (!userMoved.current) {
+        // Your area in the middle of the part of the map above the card list.
+        moveTo(viewPlaceRef.current, { z: DEFAULT_ZOOM, duration: 0 });
       }
     });
   };
@@ -871,15 +721,13 @@ export const DiscoveryMapCanvas: React.FC<{
   const lastFitKey = useRef(0);
   useEffect(() => {
     if (!fitRequest || fitRequest.key === lastFitKey.current) return;
-    // Not measured yet (the map was just created, e.g. by switching tabs): viewSize still holds a
-    // placeholder, so a fit worked out now lands in the wrong place. measureNow fits it instead,
-    // with the map's real size, on its first layout.
+    // Not measured yet: measureNow fits it with the map's real size on its first layout.
     if (!laidOut.current) return;
     const fit = fitTargetFor(fitRequest);
     if (!fit) return;
     lastFitKey.current = fitRequest.key;
     userMoved.current = true;
-    animateTo(fit.target, fit.z);
+    moveTo(fit.spot, { z: fit.z });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fitRequest?.key]);
   useEffect(() => {
@@ -887,7 +735,7 @@ export const DiscoveryMapCanvas: React.FC<{
     if (!laidOut.current) return; // measureNow handles it with the real size on first layout
     lastFocusKey.current = focusRequest.key;
     userMoved.current = true;
-    animateTo(focusTargetFor(focusRequest));
+    moveTo(focusRequest);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [focusRequest?.key]);
 
@@ -911,13 +759,8 @@ export const DiscoveryMapCanvas: React.FC<{
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedNodeId, coveredFromY, coveredKey]);
 
-  // Recenter: back on you, at the default zoom.
-  // (openCluster is defined below; keep the ref pointing at the latest one.)
-  const handleRecenter = () => animateTo(homeTarget(DEFAULT_ZOOM, visibleMapHeight()), DEFAULT_ZOOM);
-
-  // Same function every render (it calls the latest openCluster), so memoized bubbles keep it.
-  const openClusterRef = useRef<(cluster: MapClusterData) => void>(() => undefined);
-  const openClusterStable = useRef((cluster: MapClusterData) => openClusterRef.current(cluster)).current;
+  // Recenter: back on your area, at the default zoom.
+  const handleRecenter = (fly = false) => moveTo(viewPlaceRef.current, { z: DEFAULT_ZOOM, fly, duration: fly ? 900 : MOVE_MS });
 
   /** Bubble tapped: same spot → pick list; just close together → zoom in until they split. */
   const openCluster = (cluster: MapClusterData) => {
@@ -937,24 +780,14 @@ export const DiscoveryMapCanvas: React.FC<{
     const maxX = Math.max(...xs);
     const minY = Math.min(...ys);
     const maxY = Math.max(...ys);
-    const visibleH = visibleMapHeight();
     const pad = 120; // screen points of margin (pins, labels)
     const fit = Math.min(
       (viewSize.current.width - pad) / Math.max(1, maxX - minX),
-      (visibleH - pad) / Math.max(1, maxY - minY),
+      (visibleMapHeight() - pad) / Math.max(1, maxY - minY),
     );
     const next = clampZoom(Math.max(currentZoom.current * 1.4, Math.min(fit, MAX_ZOOM)));
-    const midX = (minX + maxX) / 2;
-    const midY = (minY + maxY) / 2;
-    animateTo(
-      {
-        x: viewSize.current.width / 2 + WORLD_OFFSET - next * midX,
-        y: visibleH / 2 + WORLD_OFFSET - next * midY,
-      },
-      next,
-    );
+    moveTo(toSpot({ x: (minX + maxX) / 2, y: (minY + maxY) / 2 }), { z: next });
   };
-  openClusterRef.current = openCluster;
 
   // The card list slid to a new height (collapsed, half or full): the map never moves for it.
   // Only refresh what counts as in view, so the cards match the pins above them.
@@ -963,7 +796,7 @@ export const DiscoveryMapCanvas: React.FC<{
     if (Math.abs(lastCoveredBottom.current - coveredBottom) < 1) return;
     lastCoveredBottom.current = coveredBottom;
     if (!laidOut.current) return;
-    calculateBounds(currentPan.current.x, currentPan.current.y);
+    applyView();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coveredBottom]);
 
@@ -973,115 +806,38 @@ export const DiscoveryMapCanvas: React.FC<{
     const placeKey = `${viewPlace.latitude},${viewPlace.longitude}`;
     if (placeKey === lastPlace.current) return;
     lastPlace.current = placeKey;
+    // World units are measured from the area's center, so the same view has new numbers.
+    applyView();
     if (keepViewOnPlaceChange.current) {
-      // "Search this area": the new area's center is where the middle of the screen already is,
-      // so keep the zoom and jump (no glide) to the same view around it.
+      // "Search this area": the new area is where you're already looking; the map stays put.
       keepViewOnPlaceChange.current = false;
-      stopMove();
-      const target = homeTarget(currentZoom.current, visibleMapHeight());
-      pan.stopAnimation();
-      zoom.setValue(currentZoom.current);
-      pan.setValue(target);
-      currentPan.current = target;
-      calculateBounds(target.x, target.y);
       return;
     }
     // A place picked from the list (not a search): back to the default range.
     areaRangeRef.current = AREA_RANGE_METERS;
     userMoved.current = false;
-    handleRecenter();
+    handleRecenter(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [viewPlace.latitude, viewPlace.longitude]);
 
-  // One finger drags; two fingers pinch to zoom (and drag) around the point between them.
-  const gesture = useRef({
-    mode: 'none' as 'none' | 'drag' | 'pinch',
-    startPan: { x: 0, y: 0 },
-    baseDx: 0,
-    baseDy: 0,
-    startZoom: 1,
-    startDistance: 1,
-    anchor: { x: 0, y: 0 }, // world point under the fingers when the pinch began
-  });
+  const onRegionDidChange = (event: { nativeEvent: ViewStateChangeEvent }) => {
+    const { bounds, userInteraction } = event.nativeEvent;
+    if (userInteraction) userMoved.current = true;
+    applyView(bounds as Bounds);
+  };
 
-  const panResponder = useRef(
-    PanResponder.create({
-      // Two fingers down claims the gesture straight away (so pins don't steal a pinch).
-      // While a pick sheet is open the map stays still: the sheets are Modals rendered inside the
-      // map, and React passes their touches up to it, so dragging on a sheet used to pan the map.
-      onStartShouldSetPanResponder: (evt) => !sheetOpen.current && evt.nativeEvent.touches.length >= 2,
-      onMoveShouldSetPanResponder: (evt, gestureState) =>
-        !sheetOpen.current &&
-        (evt.nativeEvent.touches.length >= 2 || Math.abs(gestureState.dx) > 4 || Math.abs(gestureState.dy) > 4),
-      onPanResponderGrant: () => {
-        stopMove();
-        pan.stopAnimation();
-        zoom.stopAnimation();
-        gesture.current.mode = 'none';
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        const g = gesture.current;
-        const touches = evt.nativeEvent.touches;
-        if (touches.length >= 2) {
-          const [a, b] = touches;
-          const midX = (a.pageX + b.pageX) / 2 - frameOrigin.current.left;
-          const midY = (a.pageY + b.pageY) / 2 - frameOrigin.current.top;
-          const distance = Math.max(1, Math.hypot(a.pageX - b.pageX, a.pageY - b.pageY));
-          if (g.mode !== 'pinch') {
-            g.mode = 'pinch';
-            userMoved.current = true;
-            g.startZoom = currentZoom.current;
-            g.startDistance = distance;
-            g.anchor = {
-              x: (midX + WORLD_OFFSET - currentPan.current.x) / g.startZoom,
-              y: (midY + WORLD_OFFSET - currentPan.current.y) / g.startZoom,
-            };
-          }
-          const z = clampZoom((g.startZoom * distance) / g.startDistance);
-          const next = { x: midX + WORLD_OFFSET - z * g.anchor.x, y: midY + WORLD_OFFSET - z * g.anchor.y };
-          currentZoom.current = z;
-          currentPan.current = next;
-          zoom.setValue(z);
-          pan.setValue(next);
-          calculateBounds(next.x, next.y, z);
-          return;
-        }
-        // One finger (including after lifting one finger from a pinch): drag from here.
-        if (g.mode !== 'drag') {
-          g.mode = 'drag';
-          userMoved.current = true;
-          g.startPan = { ...currentPan.current };
-          g.baseDx = gestureState.dx;
-          g.baseDy = gestureState.dy;
-        }
-        const next = {
-          x: g.startPan.x + gestureState.dx - g.baseDx,
-          y: g.startPan.y + gestureState.dy - g.baseDy,
-        };
-        currentPan.current = next;
-        pan.setValue(next);
-        calculateBounds(next.x, next.y);
-      },
-      onPanResponderRelease: () => {
-        gesture.current.mode = 'none';
-        setMapTouching(false);
-        calculateBounds(currentPan.current.x, currentPan.current.y);
-      },
-      onPanResponderTerminate: () => {
-        gesture.current.mode = 'none';
-        setMapTouching(false);
-        // Settle as on release (cards, pin groups and tiles catch up with the map).
-        calculateBounds(currentPan.current.x, currentPan.current.y);
-      },
-    })
-  ).current;
+  // Zoom limits in MapLibre's levels for this area (the world zoom limits don't depend on it).
+  const minMapZoom = mapZoomFor(MIN_ZOOM, viewPlace.latitude);
+  const maxMapZoom = mapZoomFor(MAX_ZOOM, viewPlace.latitude);
+  // The camera's first view (the first layout then fine-tunes it for the card list).
+  const initialView = useRef({ center: lngLat(viewPlace), zoom: mapZoomFor(DEFAULT_ZOOM, viewPlace.latitude) }).current;
 
   return (
     <View
       ref={containerRef}
       onLayout={measureFrame}
       style={styles.canvasContainer}
-      {...panResponder.panHandlers}
-      // onTouchStart sees every touch without taking it, so panning and pin taps still work.
+      // onTouchStart sees every touch without taking it, so the map still pans and pins still tap.
       onTouchStart={() => {
         if (sheetOpen.current) return;
         setMapTouching(true);
@@ -1093,126 +849,110 @@ export const DiscoveryMapCanvas: React.FC<{
       }}
       onTouchCancel={() => setMapTouching(false)}
     >
-      {/* The world. Its own box is padded by WORLD_PAD on every side (the content sits in the
-          inner view at the same spot as before): Android skips drawing a view whose own box is
-          tiny on screen, and fully zoomed out a 1400-unit box is only ~11 px, so the whole map
-          (tiles and pins) vanished. Scaling about the padded corner keeps every position the same. */}
-      <Animated.View
-        style={[
-          styles.interactiveWorld,
-          {
-            transformOrigin: [WORLD_PAD, WORLD_PAD, 0],
-            transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale: zoom }],
-          },
-        ]}
+      <MapLibreMap
+        style={StyleSheet.absoluteFill}
+        mapStyle={MAP_STYLES[mode] as string | StyleSpecification}
+        // Flat, north-up map: pan and zoom only.
+        touchRotate={false}
+        touchPitch={false}
+        // The credit line below is ours (it stays clear of the card list); no MapLibre logo.
+        attribution={false}
+        logo={false}
+        compass={false}
+        scaleBar={false}
+        onRegionDidChange={onRegionDidChange}
+        onDidFinishLoadingMap={onMapReady}
+        onDidFailLoadingMap={onMapReady}
       >
-        <View style={styles.worldContent} pointerEvents="box-none">
-        {/* Faint grid: only seen if the map tiles can't load (offline) */}
-        <View style={styles.gridLineH1} />
-        <View style={styles.gridLineH2} />
-        <View style={styles.gridLineH3} />
-        <View style={styles.gridLineV1} />
-        <View style={styles.gridLineV2} />
-        <View style={styles.gridLineV3} />
+        <Camera ref={cameraRef} initialViewState={initialView} minZoom={minMapZoom} maxZoom={maxMapZoom} />
 
-        {/* Real streets around the city being shown (moves and zooms with the pins) */}
-        <MapTiles
-          latitude={viewPlace.latitude}
-          longitude={viewPlace.longitude}
-          mode={mode}
-          // A light wash in light mode (kept faint so the Outdoors colours show); navy in dark.
-          tint={mode === 'light' ? 'rgba(233, 238, 245, 0.05)' : 'rgba(10, 17, 32, 0.28)'}
-          view={tileView.view}
-          zoom={tileView.zoom}
-        />
+        {/* You */}
+        <Marker id="me" lngLat={lngLat(selfCoordinates)} anchor="center">
+          <View pointerEvents="none" style={styles.userBeacon}>
+            <View style={styles.userPulseRing} />
+            <View style={styles.userCoreDot} />
+          </View>
+        </Marker>
 
-        {/* You: at the middle of the map when it's showing your area; elsewhere (or hidden,
-            when far away) while you're looking at another city. */}
-        {meOnMap ? (
-        <Animated.View
-          style={[
-            styles.userBeaconContainer,
-            { top: meOnMap.y, left: meOnMap.x },
-            { transformOrigin: [0, 0, 0], transform: [{ scale: counterZoom }] },
-          ]}
-        >
-          <View style={styles.userPulseRing} />
-          <View style={styles.userCoreDot} />
-        </Animated.View>
-        ) : null}
-
-        {/* Pinned channel posts: speech bubbles (one per group), under the Point pins. */}
+        {/* Pinned channel posts: speech bubbles (one per group), anchored on their tail. */}
         {postGroups.map((group) => {
           const many = group.members.length > 1;
           const only = group.members[0].post;
-          // Nudge is in screen pixels; the layer is in world units at this zoom.
-          const left = group.x + group.dx / clusterZoom - POST_PIN_SIZE / 2;
-          const top = group.y + group.dy / clusterZoom - POST_PIN_SIZE;
           return (
-            <Animated.View
+            <Marker
               key={`post-${group.key}`}
-              pointerEvents="box-none"
-              style={[
-                styles.postPin,
-                { top, left },
-                // Same size at any zoom, anchored on the bubble's tail.
-                { transformOrigin: [POST_PIN_SIZE / 2, POST_PIN_SIZE, 0], transform: [{ scale: counterZoom }] },
-              ]}
+              id={`post-${group.key}`}
+              lngLat={lngLat(toSpot(group))}
+              anchor="bottom"
+              // Nudged off a pin at the same spot (screen points).
+              offset={[group.dx, group.dy]}
+              onPress={() => (many ? setPickPosts(group.members.map((m) => m.post)) : onOpenPost?.(only.id))}
             >
-              <TouchableOpacity
-                activeOpacity={0.8}
-                onPress={() => (many ? setPickPosts(group.members.map((m) => m.post)) : onOpenPost?.(only.id))}
-                style={styles.postBubbleWrap}
+              <View
+                pointerEvents="none"
+                style={styles.postPin}
+                accessible
                 accessibilityRole="button"
                 accessibilityLabel={
-                  many
-                    ? `${group.members.length} posts here. Show the list`
-                    : `Post at ${only.place?.label ?? 'this spot'}: ${only.body}`
+                  many ? `${group.members.length} posts here. Show the list` : `Post at ${only.place?.label ?? 'this spot'}: ${only.body}`
                 }
                 testID={many ? `map-posts-${group.key}` : `map-post-${only.id}`}
               >
-                {/* Grouped: a second bubble peeking out behind, like a stack. */}
-                {many ? <View pointerEvents="none" style={styles.postBubbleBehind} /> : null}
-                <View style={styles.postBubble}>
-                  <MessageCircle size={13} color={c.white} fill={c.white} strokeWidth={2} />
-                  <Text style={styles.postBubbleCount}>{many ? group.members.length : only.upvotes}</Text>
+                <View style={styles.postBubbleWrap}>
+                  {/* Grouped: a second bubble peeking out behind, like a stack. */}
+                  {many ? <View style={styles.postBubbleBehind} /> : null}
+                  <View style={styles.postBubble}>
+                    <MessageCircle size={13} color={c.white} fill={c.white} strokeWidth={2} />
+                    <Text style={styles.postBubbleCount}>{many ? group.members.length : only.upvotes}</Text>
+                  </View>
                 </View>
-              </TouchableOpacity>
-              <View style={styles.postBubbleTail} />
-            </Animated.View>
+                <View style={styles.postBubbleTail} />
+              </View>
+            </Marker>
           );
         })}
 
-        {/* Interactive Event Nodes: pin + main hashtag */}
-        {/* Cluster bubbles (several Points close together) */}
+        {/* Cluster bubbles (several Points close together). The selected one is keyed apart so
+            it's added last, on top of its neighbours. */}
         {clusters.map((cluster) => (
-          <ClusterPin
-            key={cluster.key}
-            cluster={cluster}
-            showLabel={!hiddenLabels.has(cluster.key)}
-            postCount={postsByCluster[cluster.key]?.length ?? 0}
-            counterZoom={counterZoom}
-            onOpen={openClusterStable}
-          />
+          <Marker
+            key={`${cluster.key}${cluster.selected ? '-sel' : ''}`}
+            id={`cluster-${cluster.key}`}
+            lngLat={lngLat(toSpot(cluster))}
+            anchor="top"
+            // The bubble's middle on the spot.
+            offset={[0, -(BUBBLE_SIZE / 2 + 6)]}
+            onPress={() => openCluster(cluster)}
+          >
+            <ClusterPin cluster={cluster} showLabel={!hiddenLabels.has(cluster.key)} postCount={postsByCluster[cluster.key]?.length ?? 0} />
+          </Marker>
         ))}
 
-        {/* Single pins. Each is memoized: a pin only re-renders when its own look changes, not on
-            every map update (selection elsewhere, labels, the card list, Search this area). */}
-        {singles.map((item) => (
-          <SinglePin
-            key={item.id}
-            item={item}
-            isSelected={item.id === selectedNodeId}
-            live={isLiveNode(item)}
-            boosted={isBoosted(item.id, boostClock)}
-            showLabel={!hiddenLabels.has(item.id)}
-            counterZoom={counterZoom}
-            liveRingStyle={liveRingStyle}
-            onSelect={setSelectedNodeId}
-          />
-        ))}
-        </View>
-      </Animated.View>
+        {/* Single pins, anchored on the pin head. Each is memoized: a pin only re-renders when its
+            own look changes. The selected one is keyed apart so it's drawn on top. */}
+        {singles.map((item) => {
+          const selected = item.id === selectedNodeId;
+          return (
+            <Marker
+              key={`${item.id}${selected ? '-sel' : ''}`}
+              id={`pin-${item.id}`}
+              lngLat={[item.longitude, item.latitude]}
+              anchor="top"
+              offset={[0, -PIN_HEAD_CENTER]}
+              onPress={() => setSelectedNodeId(item.id)}
+            >
+              <SinglePin
+                item={item}
+                isSelected={selected}
+                live={isLiveNode(item)}
+                boosted={isBoosted(item.id, boostClock)}
+                showLabel={!hiddenLabels.has(item.id)}
+                liveRingStyle={liveRingStyle}
+              />
+            </Marker>
+          );
+        })}
+      </MapLibreMap>
 
       {/* A grouped post bubble: choose which post */}
       <PostPickSheet
@@ -1243,7 +983,7 @@ export const DiscoveryMapCanvas: React.FC<{
         }}
       />
 
-      {/* Map credit (required by the tile provider) */}
+      {/* Map credit (required by the map provider) */}
       <Text style={[styles.attribution, { bottom: 6 + coveredBottom }]} pointerEvents="none">
         {MAP_ATTRIBUTION}
       </Text>
@@ -1252,8 +992,8 @@ export const DiscoveryMapCanvas: React.FC<{
       <MapRecenterButton
         style={mapControlPositions().recenter}
         onPress={() => {
-          // Exploring a searched area: the map is drawn around that spot, so "back on you" means
-          // going home (the map then recenters on your area by itself).
+          // Exploring a searched area: "back on you" means going home (the map then recenters on
+          // your area by itself).
           if (viewPlace.kind === 'search' && onReturnHome) onReturnHome();
           else handleRecenter();
         }}
@@ -1294,62 +1034,30 @@ export const DiscoveryMapCanvas: React.FC<{
           <Plus size={22} color={c.accent} strokeWidth={2.75} />
         </TouchableOpacity>
       ) : null}
-
     </View>
   );
 };
 
-/** A cluster bubble, memoized like SinglePin: re-renders only when what it shows changes. */
+/**
+ * A cluster bubble, memoized: re-renders only when what it shows changes. Taps go to its Marker
+ * (MapLibre hands map taps to the Marker under the finger), so the bubble itself takes no touches
+ * and a drag that starts on it still moves the map.
+ */
 const ClusterPin = React.memo(
-  function ClusterPin({
-    cluster,
-    showLabel,
-    postCount,
-    counterZoom,
-    onOpen,
-  }: {
-    cluster: MapClusterData;
-    showLabel: boolean;
-    postCount: number;
-    counterZoom: ReturnType<typeof Animated.divide>;
-    onOpen: (cluster: MapClusterData) => void;
-  }) {
-    const styles = useThemedStyles(createStyles);
+  function ClusterPin({ cluster, showLabel, postCount }: { cluster: MapClusterData; showLabel: boolean; postCount: number }) {
     return (
-      <Animated.View
-        pointerEvents="box-none"
-        style={[
-          styles.nodeCluster,
-          { top: cluster.y - BUBBLE_SIZE / 2 - 6, left: cluster.x - PIN_COLUMN_WIDTH / 2 },
-          // Bubbles sit above single pins; boosted / selected bubbles above other bubbles.
-          { zIndex: cluster.selected ? 12 : cluster.members.some((m) => m.boosted) ? 10 : 8 },
-          {
-            transformOrigin: [PIN_COLUMN_WIDTH / 2, BUBBLE_SIZE / 2 + 6, 0],
-            transform: [{ scale: counterZoom }],
-          },
-        ]}
-      >
-        <ClusterBubble
-          cluster={cluster}
-          selected={cluster.selected}
-          showLabel={showLabel}
-          postCount={postCount}
-          onPress={() => onOpen(cluster)}
-        />
-      </Animated.View>
+      <View pointerEvents="none" style={{ maxWidth: PIN_COLUMN_WIDTH, alignItems: 'center' }}>
+        <ClusterBubble cluster={cluster} selected={cluster.selected} showLabel={showLabel} postCount={postCount} onPress={() => undefined} />
+      </View>
     );
   },
   (a, b) =>
     a.cluster.key === b.cluster.key &&
-    a.cluster.x === b.cluster.x &&
-    a.cluster.y === b.cluster.y &&
     a.cluster.selected === b.cluster.selected &&
     a.cluster.samePlace === b.cluster.samePlace &&
     clusterLook(a.cluster) === clusterLook(b.cluster) &&
     a.showLabel === b.showLabel &&
-    a.postCount === b.postCount &&
-    a.counterZoom === b.counterZoom &&
-    a.onOpen === b.onOpen,
+    a.postCount === b.postCount,
 );
 
 /** What a bubble draws from its members (count, live, boosted, label). */
@@ -1357,57 +1065,39 @@ function clusterLook(cluster: MapClusterData): string {
   return cluster.members.map((m) => `${m.id}:${m.live ? 1 : 0}${m.boosted ? 1 : 0}:${mainTagOf(m)}:${m.title ?? ''}`).join('|');
 }
 
-/** One single (unclustered) pin with its #tag label. */
+/** One single (unclustered) pin with its #tag label. Taps go to its Marker (see ClusterPin). */
 const SinglePin = React.memo(function SinglePin({
   item,
   isSelected,
   live,
   boosted,
   showLabel,
-  counterZoom,
   liveRingStyle,
-  onSelect,
 }: {
   item: DiscoveryNode;
   isSelected: boolean;
   live: boolean;
   boosted: boolean;
   showLabel: boolean;
-  counterZoom: ReturnType<typeof Animated.divide>;
   liveRingStyle: object;
-  onSelect: (id: string) => void;
 }) {
   const { colors: c } = useTheme();
   const styles = useThemedStyles(createStyles);
-  const posX = item.x ?? 480;
-  const posY = item.y ?? 480;
   const hashtag = mainHashtag(item);
   // Listed by @LocalRadar from a public source: its own (slate) pin color.
   const aggregated = isAggregated(item);
-  const select = () => onSelect(item.id);
   return (
-    <Animated.View
-      pointerEvents="box-none"
-      style={[
-        styles.nodeCluster,
-        { top: posY - PIN_HEAD_CENTER, left: posX - PIN_COLUMN_WIDTH / 2 },
-        // Same size on screen at any zoom, anchored on the pin head.
-        { transformOrigin: [PIN_COLUMN_WIDTH / 2, PIN_HEAD_CENTER, 0], transform: [{ scale: counterZoom }] },
-        isSelected && styles.nodeClusterSelected,
-      ]}
+    <View
+      pointerEvents="none"
+      style={styles.pinColumn}
+      accessible
+      accessibilityRole="button"
+      accessibilityLabel={`${hashtag ?? 'Point'}${live ? ', live now' : ''}${boosted ? ', boosted' : ''}`}
     >
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={select}
-        style={styles.pinWrapper}
-        accessibilityRole="button"
-        accessibilityLabel={`${hashtag ?? 'Point'}${live ? ', live now' : ''}${boosted ? ', boosted' : ''}`}
-      >
+      <View style={styles.pinWrapper}>
         {/* Selected: no ring around it; the pin itself shows it (larger, brighter, white rim)
             along with its highlighted #tag label. */}
-        {live ? <Animated.View pointerEvents="none" style={[styles.liveRing, liveRingStyle]} /> : null}
-        {/* One vector teardrop with an even rim (View borders went thin and lopsided
-            under the map's zoom scaling, and the tip used to cover the rim). */}
+        {live ? <Animated.View style={[styles.liveRing, liveRingStyle]} /> : null}
         <MapPinGlyph
           fill={
             live && isSelected
@@ -1428,15 +1118,13 @@ const SinglePin = React.memo(function SinglePin({
         />
         {/* Boosted: gold rim plus a bolt badge on the pin head */}
         {boosted ? (
-          <View pointerEvents="none" style={styles.boostBadge}>
+          <View style={styles.boostBadge}>
             <Zap size={9} color="#1f1300" fill="#1f1300" strokeWidth={2} />
           </View>
         ) : null}
-      </TouchableOpacity>
+      </View>
       {hashtag && showLabel ? (
-        <TouchableOpacity
-          activeOpacity={0.8}
-          onPress={select}
+        <View
           style={[
             styles.tagLabel,
             live && styles.tagLabelLive,
@@ -1454,25 +1142,21 @@ const SinglePin = React.memo(function SinglePin({
             <Text style={styles.tagHash}>#</Text>
             {hashtag.replace(/^#+/, '')}
           </Text>
-        </TouchableOpacity>
+        </View>
       ) : null}
-    </Animated.View>
+    </View>
   );
 },
 // Re-render only when something this pin shows changes (cluster updates hand over fresh objects).
 (a, b) =>
   a.item.id === b.item.id &&
-  a.item.x === b.item.x &&
-  a.item.y === b.item.y &&
   mainHashtag(a.item) === mainHashtag(b.item) &&
   isAggregated(a.item) === isAggregated(b.item) &&
   a.isSelected === b.isSelected &&
   a.live === b.live &&
   a.boosted === b.boosted &&
   a.showLabel === b.showLabel &&
-  a.counterZoom === b.counterZoom &&
-  a.liveRingStyle === b.liveRingStyle &&
-  a.onSelect === b.onSelect,
+  a.liveRingStyle === b.liveRingStyle,
 );
 
 const createStyles = (c: ThemeColors) =>
@@ -1483,52 +1167,8 @@ const createStyles = (c: ThemeColors) =>
     overflow: 'hidden',
     position: 'relative',
   },
-  interactiveWorld: {
-    width: 1400 + 2 * WORLD_PAD,
-    height: 1400 + 2 * WORLD_PAD,
-    position: 'absolute',
-    top: -WORLD_OFFSET - WORLD_PAD,
-    left: -WORLD_OFFSET - WORLD_PAD,
-  },
-  // The 1400-unit world, where it always was (same coordinates for tiles and pins).
-  worldContent: { position: 'absolute', left: WORLD_PAD, top: WORLD_PAD, width: 1400, height: 1400 },
-  gridLineH1: { position: 'absolute', top: 300, left: 0, right: 0, height: 1, backgroundColor: c.border },
-  gridLineH2: { position: 'absolute', top: 600, left: 0, right: 0, height: 1, backgroundColor: c.border },
-  gridLineH3: { position: 'absolute', top: 900, left: 0, right: 0, height: 1, backgroundColor: c.border },
-  gridLineV1: { position: 'absolute', left: 300, top: 0, bottom: 0, width: 1, backgroundColor: c.border },
-  gridLineV2: { position: 'absolute', left: 600, top: 0, bottom: 0, width: 1, backgroundColor: c.border },
-  gridLineV3: { position: 'absolute', left: 900, top: 0, bottom: 0, width: 1, backgroundColor: c.border },
-  roadDiagonal1: {
-    position: 'absolute',
-    top: 100,
-    left: 200,
-    width: 8,
-    height: 900,
-    backgroundColor: c.chipBlue,
-    transform: [{ rotate: '32deg' }],
-  },
-  roadDiagonal2: {
-    position: 'absolute',
-    top: 200,
-    right: 300,
-    width: 10,
-    height: 800,
-    backgroundColor: c.chipBlue,
-    transform: [{ rotate: '-40deg' }],
-  },
-  // Zero-size anchor sitting exactly on your location; the dot and ring are centered on it
-  // (otherwise the dot's top-left corner, not its middle, lands on the spot).
-  userBeaconContainer: {
-    position: 'absolute',
-    top: BEACON_WORLD_Y,
-    left: BEACON_WORLD_X,
-    width: 0,
-    height: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
-    zIndex: 2, // under pins and bubbles, so it never covers a count
-  },
+  // Your dot: the ring and dot centered in a box on your location.
+  userBeacon: { width: 34, height: 34, alignItems: 'center', justifyContent: 'center' },
   userCoreDot: {
     position: 'absolute',
     width: 14,
@@ -1548,13 +1188,7 @@ const createStyles = (c: ThemeColors) =>
     backgroundColor: c.meHalo,
   },
   /* Pinned post: violet speech bubble (Points use cyan/green/gold), tail on the spot. */
-  postPin: {
-    position: 'absolute',
-    width: POST_PIN_SIZE,
-    height: POST_PIN_SIZE,
-    alignItems: 'center',
-    zIndex: 3,
-  },
+  postPin: { alignItems: 'center' },
   postBubble: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1596,15 +1230,6 @@ const createStyles = (c: ThemeColors) =>
     borderRightColor: 'transparent',
     borderTopColor: c.violet,
   },
-  nodeCluster: {
-    position: 'absolute',
-    alignItems: 'center',
-    width: PIN_COLUMN_WIDTH,
-    zIndex: 4,
-  },
-  nodeClusterSelected: {
-    zIndex: 7,
-  },
   tagLabel: {
     marginTop: 1,
     maxWidth: PIN_COLUMN_WIDTH,
@@ -1628,6 +1253,8 @@ const createStyles = (c: ThemeColors) =>
   tagHash: { fontSize: 8.5, fontWeight: '600', opacity: 0.55 },
   // Ripple from the pin's point (where it touches the map): the tip is 17px below the head's
   // center (17, 17), so this 22px ring is centered on (17, 34).
+  // Ripple from the pin's point (where it touches the map): the tip is 17px below the head's
+  // center (17, 17), so this 22px ring is centered on (17, 34).
   liveRing: {
     position: 'absolute',
     top: 23,
@@ -1637,17 +1264,6 @@ const createStyles = (c: ThemeColors) =>
     borderRadius: 11,
     borderWidth: 2,
     borderColor: c.green,
-  },
-  pinHeadLive: { backgroundColor: c.greenDeep, borderColor: c.greenRim },
-  // Boost gold (same in day and night): thick rim on the head, bolt badge, gold label border.
-  pinHeadBoosted: {
-    borderColor: '#f59e0b',
-    borderWidth: 3,
-    shadowColor: '#f59e0b',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.9,
-    shadowRadius: 6,
-    elevation: 4,
   },
   boostBadge: {
     position: 'absolute',
@@ -1664,9 +1280,6 @@ const createStyles = (c: ThemeColors) =>
     elevation: 5,
   },
   tagLabelBoosted: { borderColor: '#f59e0b', borderWidth: 1.5 },
-  pinHeadLiveSelected: { backgroundColor: c.greenBright, borderColor: c.white },
-  pinTipLive: { borderTopColor: c.greenDeep },
-  pinTipLiveSelected: { borderTopColor: c.greenBright },
   tagLabelLive: { borderColor: 'rgba(52, 211, 153, 0.55)' },
   tagLabelLiveSelected: { borderColor: c.green },
   pinWrapper: {
@@ -1674,44 +1287,6 @@ const createStyles = (c: ThemeColors) =>
     justifyContent: 'center',
     zIndex: 6,
     padding: 6,
-  },
-  pinHead: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    backgroundColor: c.accentDeep,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: c.pinRim,
-  },
-  // Aggregated (listed by @LocalRadar): slate blue instead of cyan. Live and Boosted still win.
-  pinHeadAggregated: { backgroundColor: AGGREGATED_PIN },
-  pinHeadSelected: {
-    backgroundColor: c.sky,
-    borderColor: c.white,
-    transform: [{ scale: 1.25 }],
-  },
-  pinDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: c.white,
-  },
-  pinTip: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 4,
-    borderRightWidth: 4,
-    borderTopWidth: 6,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-    borderTopColor: c.accentDeep,
-    marginTop: -1,
-  },
-  pinTipAggregated: { borderTopColor: AGGREGATED_PIN },
-  pinTipSelected: {
-    borderTopColor: c.sky,
   },
   attribution: {
     position: 'absolute',
@@ -1769,4 +1344,6 @@ const createStyles = (c: ThemeColors) =>
     shadowRadius: 4,
   },
   searchAreaText: { color: c.base, fontSize: 13, fontWeight: '800' },
+  // A pin over its #tag label (the pin head's middle is PIN_HEAD_CENTER from the top).
+  pinColumn: { alignItems: 'center', maxWidth: PIN_COLUMN_WIDTH },
 });
