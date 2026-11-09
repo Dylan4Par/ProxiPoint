@@ -19,7 +19,8 @@ import { useTimeWindow } from '../../lib/timeWindow';
 import { isLiveNode } from '../../lib/liveStatus';
 import { MessageCircle, Plus, Search, Zap } from 'lucide-react-native';
 import { useModeration } from '../../lib/moderation';
-import { MapTiles, wideLayersFor } from './MapTiles';
+import { MapTiles } from './MapTiles';
+import { roundView, tileLevelFor, type WorldBox } from '../../lib/tileGrid';
 import { fitView } from '../../lib/mapFit';
 import { MapPinGlyph } from './MapPinGlyph';
 import { MapRecenterButton, mapControlPositions } from './MapControls';
@@ -298,18 +299,6 @@ export const DiscoveryMapCanvas: React.FC<{
 
   // ---- Clusters: pins that would overlap on screen become one bubble --------------------------
   const clusterZoom = Math.pow(1.15, clusterStep);
-  // Wider map layers load only once the view is zoomed out far enough to need them, and stay
-  // loaded for this area (map tiles are billed per download).
-  const neededLayers = wideLayersFor(Dimensions.get('window').width / (clusterZoom * WORLD_SCALE));
-  const [wideLayers, setWideLayers] = useState(neededLayers);
-  useEffect(() => {
-    if (neededLayers > wideLayers) setWideLayers(neededLayers);
-  }, [neededLayers, wideLayers]);
-  // A new area starts over from what its view needs.
-  useEffect(() => {
-    setWideLayers(neededLayers);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [viewPlace.latitude, viewPlace.longitude]);
   const { singles, clusters, hiddenLabels } = useMemo(() => {
     // Each pin / bubble takes up a box on screen (the circle plus its #tag label underneath).
     // Anything whose boxes would touch is merged, and merging repeats until nothing touches,
@@ -509,8 +498,8 @@ export const DiscoveryMapCanvas: React.FC<{
     // the cards load once it's let go (onPanResponderRelease / Terminate hand them over).
     pendingBounds.current = { minX, maxX, minY, maxY };
     if (gesture.current.mode === 'none') flushBounds();
-    // Settled (not mid-gesture): bring the street tiles to where the map is.
-    if (gesture.current.mode === 'none') followTiles(screenCenterWorld(offsetX, offsetY, z));
+    // Settled (not mid-gesture): the map tiles are picked again for what's on screen.
+    if (gesture.current.mode === 'none') followTiles({ minX, maxX, minY, maxY }, z);
     // Far from the area's center (or zoomed well out)? Offer "Search this area".
     const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, areaRangeRef.current);
     if (offer !== offerAreaRef.current) {
@@ -525,18 +514,24 @@ export const DiscoveryMapCanvas: React.FC<{
     y: (visibleMapHeight() / 2 + WORLD_OFFSET - offsetY) / z,
   });
 
-  // Where the street tiles are loaded around (world units). They follow the map once it settles
-  // somewhere new (a drag, or a jump to a Point), so far-off streets don't stay gray until
-  // "Search this area"; that button now only reloads Points.
-  const [tileFocus, setTileFocus] = useState({ x: 480, y: 480 });
-  const tileFocusRef = useRef(tileFocus);
-  const followTiles = (center: { x: number; y: number }) => {
-    const f = tileFocusRef.current;
-    // The street layer reaches ~480-920 units from its focus; move it before the view nears an edge.
-    if (Math.hypot(center.x - f.x, center.y - f.y) < 300) return;
-    const next = { x: Math.round(center.x / 50) * 50, y: Math.round(center.y / 50) * 50 };
-    tileFocusRef.current = next;
-    setTileFocus(next);
+  // What the map tiles cover: the view and zoom from the last time the map settled (after a drag,
+  // a pinch or a jump to a Point). MapTiles draws one detail level for it (lib/tileGrid), so the
+  // map fills in wherever you go; "Search this area" only reloads Points. Not updated mid-gesture
+  // (the tiles' margin covers a drag until you let go).
+  const [tileView, setTileView] = useState<{ view: WorldBox; zoom: number }>({
+    view: { minX: 280, maxX: 680, minY: 180, maxY: 780 },
+    zoom: 1,
+  });
+  const tileViewRef = useRef(tileView);
+  const followTiles = (box: WorldBox, z: number) => {
+    const view = roundView(box, Math.max(10, (box.maxX - box.minX) / 10));
+    const prev = tileViewRef.current;
+    const sameLevel = tileLevelFor(prev.zoom, viewPlace.latitude) === tileLevelFor(z, viewPlace.latitude);
+    const sameView =
+      prev.view.minX === view.minX && prev.view.maxX === view.maxX && prev.view.minY === view.minY && prev.view.maxY === view.maxY;
+    if (sameLevel && sameView) return;
+    tileViewRef.current = { view, zoom: z };
+    setTileView(tileViewRef.current);
   };
 
   const [offerArea, setOfferArea] = useState(false);
@@ -953,9 +948,6 @@ export const DiscoveryMapCanvas: React.FC<{
     const placeKey = `${viewPlace.latitude},${viewPlace.longitude}`;
     if (placeKey === lastPlace.current) return;
     lastPlace.current = placeKey;
-    // A new area: the world is redrawn around it, so the tiles start at its middle again.
-    tileFocusRef.current = { x: 480, y: 480 };
-    setTileFocus(tileFocusRef.current);
     if (keepViewOnPlaceChange.current) {
       // "Search this area": the new area's center is where the middle of the screen already is,
       // so keep the zoom and jump (no glide) to the same view around it.
@@ -1099,8 +1091,8 @@ export const DiscoveryMapCanvas: React.FC<{
           mode={mode}
           // A light wash in light mode (kept faint so the Outdoors colours show); navy in dark.
           tint={mode === 'light' ? 'rgba(233, 238, 245, 0.05)' : 'rgba(10, 17, 32, 0.28)'}
-          wideLayers={wideLayers}
-          focus={tileFocus}
+          view={tileView.view}
+          zoom={tileView.zoom}
         />
 
         {/* You: at the middle of the map when it's showing your area; elsewhere (or hidden,
