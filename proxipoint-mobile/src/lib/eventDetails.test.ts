@@ -23,7 +23,19 @@ test('facts for a 21+ show with door rules', () => {
     ageLabel: '21+',
     notices: ['Age 21+ only', 'Valid ID required at door', 'Clear bag policy'],
     hook: 'Featuring Nolan Gasser, with The Mighty Mighty. Doors 6:30 PM.',
+    priceMin: 30,
+    free: false,
+    minAge: 21,
+    allAges: false,
   });
+});
+
+test('numbers for Discover filters', () => {
+  assert.equal(eventFacts({ free: true })?.priceMin, 0);
+  assert.equal(eventFacts({ free: true })?.free, true);
+  assert.equal(eventFacts({ price_min: 12.5 })?.priceMin, 12.5);
+  assert.equal(eventFacts({ all_ages: true })?.allAges, true);
+  assert.equal(eventFacts({ all_ages: true })?.priceMin, null, 'no price listed');
 });
 
 test('sold out comes first; all ages; nothing to show', () => {

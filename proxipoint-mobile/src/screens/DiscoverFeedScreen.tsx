@@ -44,6 +44,7 @@ import {
 } from '../lib/discoverFeed';
 import { isNodeAllowed, useModeration } from '../lib/moderation';
 import { discoverFeedAllows, rankByTagMatches, removeDiscoverTag, useDiscoverTagFilter } from '../lib/discoverTagFilter';
+import { prefsAllow, useDiscoverPrefs, type PrefsNode } from '../lib/discoverPrefs';
 import { shortPlace } from '../lib/discoverMiniBar';
 import { countByHost, extraPill } from '../lib/cardExtraPill';
 import { useDiscoveryStore, type DiscoveryNode } from '../stores/useDiscoveryStore';
@@ -173,8 +174,11 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
     tags: tagFilter.tags,
     mode: tagFilter.mode,
   });
-  const allowed = (node: FeedNode) => visible(node) && allowedByFilters(node);
-  const filterKey = `${selectedTag}|${liveOnly}|${myChannelsOnly}|${followed.filter?.join(',') ?? ''}|${tagFilter.mode}:${tagFilter.tags.join(',')}`;
+  // Filter: tag preference, price, time of day, age & access (lib/discoverPrefs).
+  const prefs = useDiscoverPrefs();
+  const allowed = (node: FeedNode) =>
+    visible(node) && allowedByFilters(node) && prefsAllow(node as unknown as PrefsNode, prefs, followed.tags);
+  const filterKey = `${selectedTag}|${liveOnly}|${myChannelsOnly}|${followed.filter?.join(',') ?? ''}|${tagFilter.mode}:${tagFilter.tags.join(',')}|${JSON.stringify(prefs)}|${followed.tags.join(',')}`;
 
   // ---- Feed (no search) ----
   const { nearby, upcoming } = useMemo(
