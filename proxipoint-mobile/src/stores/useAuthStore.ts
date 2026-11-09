@@ -122,7 +122,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         seed: null,
         clock: null,
         status: 'signedOut',
-        notice: 'ProxiPoint now has real accounts. Please sign up again.',
+        // Only reaches people who used an earlier test build (a stand-in session on the phone);
+        // fresh installs have no saved session and never see it.
+        notice: 'We’ve upgraded our account system. Please create an account or sign in to get started.',
       });
       return;
     }

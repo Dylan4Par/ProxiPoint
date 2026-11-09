@@ -72,8 +72,8 @@ export const AuthFlow: React.FC = () => {
 // ---- Welcome --------------------------------------------------------------------------------
 
 const VALUE_LINES = [
-  { Icon: MapPin, text: 'Events, tips and questions pinned to real places near you' },
-  { Icon: MessagesSquare, text: 'Channels for your town, your crew and what you’re into' },
+  { Icon: MapPin, text: 'Discover and host events happening around you' },
+  { Icon: MessagesSquare, text: 'Channels for your town, your crew, and your interests' },
   { Icon: Lock, text: 'You choose what’s shared, and who sees it' },
 ];
 
@@ -93,7 +93,7 @@ const WelcomePage: React.FC<{ onSignUp: () => void; onSignIn: () => void }> = ({
       }
     >
       {notice ? (
-        <View style={styles.notice} accessibilityLiveRegion="polite">
+        <View style={[styles.notice, styles.noticeTop]} accessibilityLiveRegion="polite">
           <Text style={styles.noticeText}>{notice}</Text>
         </View>
       ) : null}
@@ -108,7 +108,10 @@ const WelcomePage: React.FC<{ onSignUp: () => void; onSignIn: () => void }> = ({
             <View style={styles.valueIcon}>
               <Icon size={18} color={c.accent} strokeWidth={2.2} />
             </View>
-            <Text style={styles.valueText}>{text}</Text>
+            {/* "balanced" evens out the two lines when a line wraps (Android). */}
+            <Text style={styles.valueText} textBreakStrategy="balanced">
+              {text}
+            </Text>
           </View>
         ))}
       </View>
@@ -428,7 +431,8 @@ const createStyles = (c: ThemeColors) =>
     hero: { alignItems: 'center', marginTop: 40, gap: 10 },
     wordmark: { color: c.text, fontSize: 34, fontWeight: '800', letterSpacing: -0.5, marginTop: 8 },
     tagline: { color: c.textMuted, fontSize: 16, textAlign: 'center', lineHeight: 22, maxWidth: 280 },
-    values: { marginTop: 40, gap: 18 },
+    // Capped width and centered, so lines wrap evenly on wider phones instead of running long.
+    values: { marginTop: 40, gap: 18, width: '100%', maxWidth: 330, alignSelf: 'center' },
     valueRow: { flexDirection: 'row', alignItems: 'center', gap: 14 },
     valueIcon: {
       width: 36,
@@ -482,6 +486,8 @@ const createStyles = (c: ThemeColors) =>
       padding: 12,
       marginTop: 8,
     },
+    // On the welcome page: extra room above, so it sits clear of the status bar and camera cutout.
+    noticeTop: { marginTop: 18 },
     noticeText: { color: c.textBody, fontSize: 14, lineHeight: 19 },
     devNote: { color: c.amber, fontSize: 12, marginTop: 10 },
     forgot: { alignSelf: 'flex-end', paddingVertical: 4 },
