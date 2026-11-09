@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ChevronLeft, Eye, EyeOff } from 'lucide-react-native';
-import { KeyboardAwareScrollView } from '../common/KeyboardAwareScrollView';
+import { KeyboardAwareScrollView, useKeyboardHeight } from '../common/KeyboardAwareScrollView';
 import { CallSignMark } from '../brand/CallSignMark';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -26,11 +26,21 @@ export const AuthPage: React.FC<{
   footer?: React.ReactNode;
   /** Shown at the top (e.g. onboarding progress), next to the back button. */
   header?: React.ReactNode;
+  /**
+   * With the keyboard open, also scroll this much of what's under the field you're typing in into
+   * view (e.g. the sign-up password checklist and the agree checkbox). Default 0.
+   */
+  revealBelow?: number;
   testID?: string;
-}> = ({ children, onBack, footer, header, testID }) => {
+}> = ({ children, onBack, footer, header, revealBelow = 0, testID }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const insets = useSafeAreaInsets();
+  // The bottom buttons ride up above the keyboard (the screen doesn't shrink for it on Android's
+  // edge-to-edge layout or on iOS), so Create account / Sign in stay tappable while typing.
+  const keyboardHeight = useKeyboardHeight();
+  const keyboardOpen = keyboardHeight > 0;
+  const [footerHeight, setFooterHeight] = useState(0);
   return (
     <View style={[styles.page, { paddingTop: insets.top + 8 }]} testID={testID}>
       {onBack || header ? (
@@ -50,12 +60,21 @@ export const AuthPage: React.FC<{
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
+        revealBelow={revealBelow}
+        keyboardOffset={footer ? footerHeight : 0}
       >
         <View style={styles.body}>{children}</View>
       </KeyboardAwareScrollView>
-      <View style={[styles.bottom, { paddingBottom: Math.max(insets.bottom, 8) }]}>
+      <View
+        style={[
+          styles.bottom,
+          keyboardOpen ? { marginBottom: keyboardHeight, paddingBottom: 8 } : { paddingBottom: Math.max(insets.bottom, 8) },
+        ]}
+        onLayout={(e) => setFooterHeight(e.nativeEvent.layout.height)}
+      >
         {footer}
-        <CallSignMark />
+        {/* The brand line steps aside while typing, to leave more room for the form. */}
+        {keyboardOpen ? null : <CallSignMark />}
       </View>
     </View>
   );
@@ -73,6 +92,13 @@ export const AuthTitle: React.FC<{ title: string; subtitle?: string }> = ({ titl
   );
 };
 
+/**
+ * Outline of a text field that isn't being typed in: at least 3:1 against the page and the field
+ * (the usual guideline for input edges), so the boxes stay clear in bright light. Only for these
+ * screens; the theme's own border color is kept soft for cards.
+ */
+const FIELD_OUTLINE = { light: '#7d8ca3', dark: '#526178' } as const;
+
 type AuthFieldProps = TextInputProps & {
   label: string;
   error?: string | null;
@@ -83,13 +109,20 @@ type AuthFieldProps = TextInputProps & {
 
 export const AuthField = React.forwardRef<TextInput, AuthFieldProps>(({ label, error, hint, prefix, secret, style, ...input }, ref) => {
   const styles = useThemedStyles(createStyles);
-  const { colors: c } = useTheme();
+  const { colors: c, mode } = useTheme();
   const [hidden, setHidden] = useState(true);
   const [focused, setFocused] = useState(false);
   return (
     <View style={styles.field}>
       <Text style={styles.label}>{label.toUpperCase()}</Text>
-      <View style={[styles.inputRow, focused && styles.inputFocused, !!error && styles.inputError]}>
+      <View
+        style={[
+          styles.inputRow,
+          { borderColor: mode === 'light' ? FIELD_OUTLINE.light : FIELD_OUTLINE.dark },
+          focused && styles.inputFocused,
+          !!error && styles.inputError,
+        ]}
+      >
         {prefix ? <Text style={styles.prefix}>{prefix}</Text> : null}
         <TextInput
           ref={ref}
@@ -195,8 +228,9 @@ export const createStyles = (c: ThemeColors) =>
       borderColor: c.border,
       paddingHorizontal: 14,
     },
-    inputFocused: { borderColor: c.accent },
-    inputError: { borderColor: c.red },
+    // Focused / error: a 2 px edge, with 1 px less padding so the text doesn't shift.
+    inputFocused: { borderColor: c.accent, borderWidth: 2, paddingHorizontal: 13, marginVertical: -1 },
+    inputError: { borderColor: c.red, borderWidth: 2, paddingHorizontal: 13, marginVertical: -1 },
     prefix: { color: c.textMuted, fontSize: 16, fontWeight: '700' },
     input: { flex: 1, color: c.text, fontSize: 16, paddingVertical: 13 },
     fieldError: { color: c.red, fontSize: 12, marginTop: 6 },
