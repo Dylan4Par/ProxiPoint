@@ -2,7 +2,7 @@
  * Basemap tiles shared by every map in the app (Explore Map and the Leaflet maps in Create Drop),
  * so they all look the same.
  *
- * Stadia Maps (Alidade Smooth / Alidade Smooth Dark) when EXPO_PUBLIC_STADIA_API_KEY is set: put
+ * Stadia Maps (OSM Bright in light mode, Alidade Smooth Dark in dark) when EXPO_PUBLIC_STADIA_API_KEY is set: put
  * it in proxipoint-mobile/.env.local (never committed), then rebuild. Without a key, Esri's
  * Light / Dark Gray Canvas as before (base plus a separate street-name layer), which is only
  * licensed for development, so a missing key never leaves a blank map.
@@ -33,7 +33,7 @@ export function tileSetup(stadiaKey: string): TileSetup {
       provider: 'stadia',
       urls: {
         dark: { base: stadia('alidade_smooth_dark'), labels: '' },
-        light: { base: stadia('alidade_smooth'), labels: '' },
+        light: { base: stadia('osm_bright'), labels: '' }, // colourful: parks, water, main roads
       },
       attribution: '© Stadia Maps © OpenMapTiles © OpenStreetMap',
       attributionHtml:
