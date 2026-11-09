@@ -1,5 +1,5 @@
 import { zoomForRadius } from './boundaryTiers';
-import { MAP_TILE_MAX_ZOOM, MAP_TILE_URLS } from './mapTileUrls';
+import { MAP_ATTRIBUTION_HTML, MAP_TILE_MAX_ZOOM, MAP_TILE_URLS } from './mapTileUrls';
 
 export const LEAFLET_STYLESHEET = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
 export const LEAFLET_SCRIPT = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
@@ -11,7 +11,7 @@ export const MAP_CENTER_MESSAGE = 'proxipoint-map-center';
 
 /**
  * Local vector tiles from `pmtiles serve` (Protomaps), from EXPO_PUBLIC_OFFLINE_TILES_URL.
- * No longer used by default: the Leaflet maps use the same Esri tiles as Explore Map so every map
+ * No longer used by default: the Leaflet maps use the same hosted tiles as Explore Map so every map
  * looks the same. Pass it as `offlineTileUrl` to a map document to opt back in.
  */
 export const OFFLINE_TILE_URL: string = process.env.EXPO_PUBLIC_OFFLINE_TILES_URL ?? '';
@@ -22,7 +22,7 @@ export interface MapDocumentCenter {
 }
 
 export interface MapDocumentOptions {
-  /** z/x/y .mvt URL for offline vector tiles. Left out = the app's shared Esri tiles. */
+  /** z/x/y .mvt URL for offline vector tiles. Left out = the app's shared hosted tiles. */
   offlineTileUrl?: string;
   /** Day or night map style. Default dark. */
   theme?: 'dark' | 'light';
@@ -34,11 +34,12 @@ export const MAP_BACKGROUND = { dark: '#0a1120', light: '#e9eef5' } as const;
 /** Leaflet code for the app's shared basemap (same tiles as Explore Map) in this theme. */
 function hostedTilesScript(theme: 'dark' | 'light', variable: string): string {
   const urls = MAP_TILE_URLS[theme];
-  const opts = `{ attribution: 'Tiles &copy; Esri', maxNativeZoom: ${MAP_TILE_MAX_ZOOM}, maxZoom: 19 }`;
+  const opts = `{ attribution: '${MAP_ATTRIBUTION_HTML.replace(/'/g, "\\'")}', maxNativeZoom: ${MAP_TILE_MAX_ZOOM}, maxZoom: 19 }`;
+  // Esri: base plus a street-name layer. Stadia: names are in the base tiles.
+  const layers = [urls.base, urls.labels].filter(Boolean).map((url) => `L.tileLayer('${url}', ${opts})`);
   return `
     ${variable} = L.layerGroup([
-      L.tileLayer('${urls.base}', ${opts}),
-      L.tileLayer('${urls.labels}', ${opts})
+      ${layers.join(',\n      ')}
     ]).addTo(map);`;
 }
 

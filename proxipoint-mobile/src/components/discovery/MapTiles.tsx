@@ -5,12 +5,8 @@ import { MAP_TILE_URLS } from '../../lib/mapTileUrls';
 export { wideLayersFor } from '../../lib/mapTileLayers';
 
 /**
- * Real street map under the Discover pins: Esri's grey "Canvas" basemap plus its street-name
- * layer, drawn as tiles inside the map's world so pan, pinch-zoom and the pins all stay in step.
- *
- * Esri's terms allow this for development and testing. Before release, either sign up for an
- * ArcGIS Location Platform key (append `?token=KEY` below) or swap TILE_URLS for another
- * provider you're licensed to use (Stadia, MapTiler, Mapbox raster tiles…).
+ * Real street map under the Discover pins (lib/mapTileUrls: Stadia Maps with a key, else Esri),
+ * drawn as tiles inside the map's world so pan, pinch-zoom and the pins all stay in step.
  */
 const TILE_URLS = MAP_TILE_URLS;
 
@@ -93,7 +89,7 @@ function tilesFor(
       tiles.push({
         key: `${mode}-${zoom}-${tx}-${ty}`,
         base: fill(urls.base),
-        labels: fill(urls.labels),
+        labels: urls.labels ? fill(urls.labels) : '',
         // A hair of overlap so no seams show between tiles.
         left: nw.x - 0.5,
         top: nw.y - 0.5,
@@ -159,7 +155,8 @@ export const MapTiles: React.FC<{
       {wide.map((tile) => <TileImage key={`w-${tile.key}`} uri={tile.base} tile={tile} />)}
       {tiles.map((tile) => <TileImage key={`b-${tile.key}`} uri={tile.base} tile={tile} />)}
       <View style={[styles.tintLayer, { backgroundColor: tint }]} />
-      {tiles.map((tile) => <TileImage key={`l-${tile.key}`} uri={tile.labels} tile={tile} />)}
+      {/* Esri's street names sit above the tint; Stadia's are already in the base tiles. */}
+      {tiles.map((tile) => (tile.labels ? <TileImage key={`l-${tile.key}`} uri={tile.labels} tile={tile} /> : null))}
     </View>
   );
 });
