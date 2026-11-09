@@ -5,6 +5,8 @@ import { INTEREST_TAG_LIMIT } from '../../lib/myProfile';
 import { INTEREST_RADIUS_METERS } from '../../lib/nearbyInterest';
 import { formatRadiusIn, useUnits } from '../../lib/units';
 import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
+import { ChipRows } from '../common/ChipRows';
+import { chipWidth } from '../../lib/chipRows';
 import { bestHashtagFor, canonicalTag, searchHashtags } from '../../lib/hashtags';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
@@ -104,17 +106,15 @@ export const MyTagsTile: React.FC<{
       </View>
 
       {tags.length ? (
-        // One row that scrolls sideways, newest #tag first.
-        <ScrollView
+        // Up to 3 rows that scroll sideways together, newest #tag first (top left).
+        <ChipRows
           ref={rowRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chips}
-          keyboardShouldPersistTaps="handled"
+          items={tags}
+          keyOf={(tag) => tag}
+          widthOf={(tag) => chipWidth(tag + (nearbyCounts[tag] ?? ''), 50)}
           testID="profile-tags-list"
-        >
-          {tags.map((tag) => (
-            <View key={tag} style={styles.chip}>
+          renderItem={(tag) => (
+            <View style={styles.chip}>
               <Text style={styles.chipText}>{tag}</Text>
               {nearbyCounts[tag] ? (
                 <Text style={styles.chipCount} accessibilityLabel={`${nearbyCounts[tag]} people nearby`}>
@@ -130,8 +130,8 @@ export const MyTagsTile: React.FC<{
                 <X size={13} color={c.accent} strokeWidth={2.5} />
               </TouchableOpacity>
             </View>
-          ))}
-        </ScrollView>
+          )}
+        />
       ) : (
         <Text style={styles.empty}>No #tags yet.</Text>
       )}
@@ -240,7 +240,6 @@ const createStyles = (c: ThemeColors) =>
     visibilityCopy: { flex: 1, gap: 1 },
     visibilityLabel: { color: c.text, fontSize: 14, fontWeight: '700' },
     hint: { flex: 1, color: c.textMuted, fontSize: 12, lineHeight: 17 },
-    chips: { flexDirection: 'row', gap: 8, paddingRight: 4 },
     count: { color: c.textMuted, fontSize: 12, fontWeight: '600', marginTop: -4 },
     countFull: { color: c.amber },
     chip: {

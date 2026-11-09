@@ -3,6 +3,8 @@ import { StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import { Globe, Lock, Plus } from 'lucide-react-native';
 import { CategoryBadge } from '../discovery/CategoryBadge';
 import { useChannels } from '../../lib/channels';
+import { chipWidth } from '../../lib/chipRows';
+import { ChipRows } from '../common/ChipRows';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 
 /**
@@ -48,10 +50,14 @@ export const MyChannelsTile: React.FC<{
       </View>
 
       {joined.length ? (
-        <View style={styles.chips}>
-          {joined.map((channel) => (
+        // Up to 3 rows that scroll sideways together.
+        <ChipRows
+          items={joined}
+          keyOf={(channel) => channel.id}
+          widthOf={(channel) => chipWidth(channel.name, 46)}
+          testID="profile-channels-list"
+          renderItem={(channel) => (
             <TouchableOpacity
-              key={channel.id}
               style={styles.chip}
               onPress={() => onOpenChannel(channel.id)}
               accessibilityRole="button"
@@ -63,8 +69,8 @@ export const MyChannelsTile: React.FC<{
                 {channel.name}
               </Text>
             </TouchableOpacity>
-          ))}
-        </View>
+          )}
+        />
       ) : (
         <Text style={styles.empty}>No channels yet.</Text>
       )}
@@ -96,12 +102,11 @@ const createStyles = (c: ThemeColors) =>
     visibilityCopy: { flex: 1, gap: 1 },
     visibilityLabel: { color: c.text, fontSize: 14, fontWeight: '700' },
     hint: { flex: 1, color: c.textMuted, fontSize: 12, lineHeight: 17 },
-    chips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
     chip: {
       flexDirection: 'row',
       alignItems: 'center',
       gap: 6,
-      maxWidth: '100%',
+      maxWidth: 260,
       paddingLeft: 4,
       paddingRight: 12,
       paddingVertical: 4,
