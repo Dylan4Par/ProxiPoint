@@ -40,10 +40,29 @@ export function useKeyboardHeight(): number {
  * Works the same on Android (including edge-to-edge, where the screen no longer shrinks for
  * the keyboard) and iOS. Pure JavaScript, so no rebuild is needed.
  */
-export const KeyboardAwareScrollView = forwardRef<ScrollView, ScrollViewProps>(
-  ({ children, contentContainerStyle, onScroll, onTouchEnd, scrollEventThrottle, ...rest }, ref) => {
+export type KeyboardAwareScrollViewProps = ScrollViewProps & {
+  /**
+   * Also bring this much of what's under the focused field into view (e.g. a password checklist
+   * and the checkbox below it), as long as the field itself stays on screen. Default 0.
+   */
+  revealBelow?: number;
+  /**
+   * Height of anything pinned just above the keyboard (e.g. a button bar that rides up with it),
+   * so fields are kept clear of that too. Default 0.
+   */
+  keyboardOffset?: number;
+};
+
+/** Closest the focused field's top may be pushed to the top of the scroll area by revealBelow. */
+const TOP_MARGIN = 12;
+
+export const KeyboardAwareScrollView = forwardRef<ScrollView, KeyboardAwareScrollViewProps>(
+  ({ children, contentContainerStyle, onScroll, onTouchEnd, scrollEventThrottle, revealBelow = 0, keyboardOffset = 0, ...rest }, ref) => {
     const inner = useRef<ScrollView>(null);
     useImperativeHandle(ref, () => inner.current as ScrollView);
+    // Read inside the keyboard listeners, which are set up once.
+    const reveal = useRef({ below: revealBelow, offset: keyboardOffset });
+    reveal.current = { below: revealBelow, offset: keyboardOffset };
     const scrollY = useRef(0);
     const keyboardTop = useRef<number | null>(null);
     const [keyboardHeight, setKeyboardHeight] = useState(0);
@@ -55,12 +74,30 @@ export const KeyboardAwareScrollView = forwardRef<ScrollView, ScrollViewProps>(
         measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
       } | null;
       if (top == null || !input?.measureInWindow || !inner.current) return;
+      const { below, offset } = reveal.current;
+      const visibleBottom = top - offset;
       input.measureInWindow((_x, y, _w, h) => {
         // Multiline fields: keep the whole box in view, but never push its top off screen.
-        const overlap = y + Math.min(h, 160) + GAP - top;
-        if (overlap > 0) {
-          inner.current?.scrollTo({ y: scrollY.current + overlap, animated: true });
+        const fieldOverlap = y + Math.min(h, 160) + GAP - visibleBottom;
+        const scrollBy = (amount: number) => {
+          if (amount > 0) inner.current?.scrollTo({ y: scrollY.current + amount, animated: true });
+        };
+        if (!below) {
+          scrollBy(fieldOverlap);
+          return;
         }
+        // Show what's below the field too, but stop before the field's own top leaves the scroll area.
+        const wanted = Math.max(fieldOverlap, y + h + below + GAP - visibleBottom);
+        const scroller = inner.current?.getNativeScrollRef?.() as unknown as {
+          measureInWindow?: (cb: (x: number, y: number, w: number, h: number) => void) => void;
+        } | null;
+        if (!scroller?.measureInWindow) {
+          scrollBy(fieldOverlap);
+          return;
+        }
+        scroller.measureInWindow((_sx, scrollTop) => {
+          scrollBy(Math.max(fieldOverlap, Math.min(wanted, y - scrollTop - TOP_MARGIN)));
+        });
       });
     }, []);
 

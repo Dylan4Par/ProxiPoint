@@ -11,6 +11,7 @@ import {
   isValidPassword,
   passwordChecks,
   passwordStrength,
+  type PasswordStrength,
 } from '../../lib/authForm';
 import { AuthError as ApiError, requestPasswordReset, signIn, signUp, usingLocalAuth } from '../../services/authApi';
 import { useAuthStore } from '../../stores/useAuthStore';
@@ -24,6 +25,16 @@ import { OnboardingScreen } from './OnboardingScreen';
 type Page = 'welcome' | 'signUp' | 'signIn' | 'forgot';
 
 const messageFor = (error: unknown) => authErrorMessage(error instanceof ApiError ? error.code : 'unknown');
+
+/** Sign-up: how much under the field you're typing in to keep in view (checklist + checkbox). */
+const SIGN_UP_REVEAL_BELOW = 190;
+
+/** Password strength shown as Weak / Fair / Strong with a 3-step bar. */
+const STRENGTH_LABEL: Record<PasswordStrength, string> = { weak: 'Weak', okay: 'Fair', strong: 'Strong' };
+const STRENGTH_STEPS: Record<PasswordStrength, number> = { weak: 1, okay: 2, strong: 3 };
+function strengthColor(strength: PasswordStrength, c: ThemeColors): string {
+  return strength === 'weak' ? c.amber : strength === 'okay' ? c.accent : c.green;
+}
 
 export const AuthFlow: React.FC = () => {
   const status = useAuthStore((s) => s.status);
@@ -147,6 +158,8 @@ const SignUpPage: React.FC<{
     <AuthPage
       testID="auth-sign-up"
       onBack={onBack}
+      // While typing, keep the password checklist and the agree checkbox in view too.
+      revealBelow={SIGN_UP_REVEAL_BELOW}
       footer={
         <View style={styles.formButtons}>
           <AuthButton label="Create account" onPress={() => void submit()} disabled={!canSubmit} busy={busy} testID="sign-up-submit" />
@@ -199,16 +212,36 @@ const SignUpPage: React.FC<{
               </View>
             ))}
             {strength ? (
-              <Text style={styles.strength}>
-                Strength: <Text style={strength === 'weak' ? styles.weak : styles.good}>{strength}</Text>
-              </Text>
+              // An overall rating, set apart from the checklist: a 3-step bar and Weak / Fair / Strong.
+              <View
+                style={styles.strengthRow}
+                accessible
+                accessibilityLabel={`Password strength: ${STRENGTH_LABEL[strength]}`}
+                testID="sign-up-strength"
+              >
+                <Text style={styles.strength}>Strength</Text>
+                <View style={styles.meter}>
+                  {[1, 2, 3].map((step) => (
+                    <View
+                      key={step}
+                      style={[
+                        styles.meterStep,
+                        step <= STRENGTH_STEPS[strength] && { backgroundColor: strengthColor(strength, c) },
+                      ]}
+                    />
+                  ))}
+                </View>
+                <Text style={[styles.strengthWord, { color: strengthColor(strength, c) }]}>{STRENGTH_LABEL[strength]}</Text>
+              </View>
             ) : null}
           </View>
         }
       />
+      {/* The whole row (box and sentence) toggles it; the three links open the documents. */}
       <TouchableOpacity
         style={styles.agreeRow}
         onPress={() => setAgreed((on) => !on)}
+        hitSlop={{ top: 6, bottom: 6, left: 8, right: 8 }}
         accessibilityRole="checkbox"
         accessibilityState={{ checked: agreed }}
         accessibilityLabel={`I'm ${MINIMUM_AGE} or older and agree to the Terms of Service, Privacy Policy and Community Guidelines`}
@@ -422,13 +455,15 @@ const createStyles = (c: ThemeColors) =>
     checkDotOk: { backgroundColor: c.green, borderColor: c.green },
     checkText: { color: c.textMuted, fontSize: 13 },
     checkTextOk: { color: c.textBody },
-    strength: { color: c.textMuted, fontSize: 13, marginTop: 2 },
-    weak: { color: c.amber, fontWeight: '700' },
-    good: { color: c.green, fontWeight: '700' },
-    agreeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 4, paddingVertical: 4 },
+    strengthRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 8 },
+    strength: { color: c.textMuted, fontSize: 13 },
+    meter: { flexDirection: 'row', gap: 4 },
+    meterStep: { width: 28, height: 6, borderRadius: 3, backgroundColor: c.borderStrong },
+    strengthWord: { fontSize: 13, fontWeight: '800' },
+    agreeRow: { flexDirection: 'row', alignItems: 'flex-start', gap: 12, marginTop: 4, paddingVertical: 8 },
     box: {
-      width: 22,
-      height: 22,
+      width: 24,
+      height: 24,
       borderRadius: 6,
       borderWidth: 1.5,
       borderColor: c.borderStrong,
