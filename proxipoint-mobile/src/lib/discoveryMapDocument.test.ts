@@ -22,16 +22,16 @@ test('preview script draws a glowing cyan radial perimeter and flies to the anch
   assert.equal(zoomForRadius(8000), 12);
 });
 
-test('map document uses the same Esri canvas tiles as Explore Map, per theme', () => {
+test('map document uses the same tiles as Explore Map, per theme', () => {
   const html = buildDiscoveryMapDocument({ latitude: 40.0179, longitude: -105.2789 });
   assert.match(html, /40\.0179/);
   assert.match(html, /-105\.2789/);
   // Dark by default: base and labels.
   assert.ok(html.includes(MAP_TILE_URLS.dark.base));
-  assert.ok(html.includes(MAP_TILE_URLS.dark.labels));
+  if (MAP_TILE_URLS.dark.labels) assert.ok(html.includes(MAP_TILE_URLS.dark.labels));
   assert.ok(!html.includes('protomaps'), 'no vector tiles unless asked for');
   const light = buildDiscoveryMapDocument({ latitude: 40, longitude: -105 }, { theme: 'light' });
-  assert.ok(light.includes(MAP_TILE_URLS.light.base) && light.includes(MAP_TILE_URLS.light.labels));
+  assert.ok(light.includes(MAP_TILE_URLS.light.base) && (!MAP_TILE_URLS.light.labels || light.includes(MAP_TILE_URLS.light.labels)));
   assert.match(html, /leaflet@1\.9\.4/);
   assert.match(html, /setPreviewGeofence/);
   assert.match(html, /geofencePulse/);

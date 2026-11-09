@@ -4,3 +4,6 @@
 
 expo-env.d.ts
 # @end expo-cli
+
+# Local secrets (e.g. EXPO_PUBLIC_STADIA_API_KEY); Expo reads these along with .env
+.env*.local

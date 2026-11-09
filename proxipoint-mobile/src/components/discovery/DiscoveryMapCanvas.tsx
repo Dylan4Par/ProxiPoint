@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
+import { MAP_ATTRIBUTION } from '../../lib/mapTileUrls';
 import { useExploreTagMode } from '../../lib/exploreTagMode';
 import {
   View,
@@ -1199,7 +1200,7 @@ export const DiscoveryMapCanvas: React.FC<{
 
       {/* Map credit (required by the tile provider) */}
       <Text style={[styles.attribution, { bottom: 6 + coveredBottom }]} pointerEvents="none">
-        © Esri
+        {MAP_ATTRIBUTION}
       </Text>
 
       {/* Recenter (shared with Create Drop's Select on map) */}
@@ -1696,7 +1697,7 @@ const createStyles = (c: ThemeColors) =>
   },
   /* Sits left of the recenter button: its 14px inset + 38px width + an 8px gap. */
   dropBtn: { right: 60 },
-  /* Full-width strip along the map's bottom edge (above the © Esri line) that centers the button. */
+  /* Full-width strip along the map's bottom edge (above the map credit line) that centers the button. */
   searchAreaRow: {
     position: 'absolute',
     left: 0,
