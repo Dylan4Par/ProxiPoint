@@ -508,6 +508,9 @@ export const DiscoveryMapCanvas: React.FC<{
     if (gesture.current.mode === 'none') flushBounds();
     // Settled (not mid-gesture): the map tiles are picked again for what's on screen.
     if (gesture.current.mode === 'none') followTiles({ minX, maxX, minY, maxY }, z);
+    // Mid-pinch: switch to the next tile level as soon as the zoom reaches it (a few times a second
+    // at most), so the tiles aren't stretched until labels look huge and then snap on release.
+    else if (gesture.current.mode === 'pinch') followTiles({ minX, maxX, minY, maxY }, z, true);
     // Far from the area's center (or zoomed well out)? Offer "Search this area".
     const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, areaRangeRef.current);
     if (offer !== offerAreaRef.current) {
@@ -531,13 +534,19 @@ export const DiscoveryMapCanvas: React.FC<{
     zoom: 1,
   });
   const tileViewRef = useRef(tileView);
-  const followTiles = (box: WorldBox, z: number) => {
+  const lastPinchTiles = useRef(0);
+  const followTiles = (box: WorldBox, z: number, levelChangeOnly = false) => {
     const view = roundView(box, Math.max(10, (box.maxX - box.minX) / 10));
     const prev = tileViewRef.current;
     const sameLevel = tileLevelFor(prev.zoom, viewPlace.latitude) === tileLevelFor(z, viewPlace.latitude);
     const sameView =
       prev.view.minX === view.minX && prev.view.maxX === view.maxX && prev.view.minY === view.minY && prev.view.maxY === view.maxY;
-    if (sameLevel && sameView) return;
+    if (sameLevel && (sameView || levelChangeOnly)) return;
+    if (levelChangeOnly) {
+      const now = Date.now();
+      if (now - lastPinchTiles.current < 200) return; // the release picks up anything skipped
+      lastPinchTiles.current = now;
+    }
     tileViewRef.current = { view, zoom: z };
     setTileView(tileViewRef.current);
   };
