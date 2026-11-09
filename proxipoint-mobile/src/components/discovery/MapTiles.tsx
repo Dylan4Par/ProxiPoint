@@ -61,8 +61,9 @@ const TileImage = memo(
     return (
       <Image
         source={{ uri: source.uri }}
-        // Saved tiles appear at once; only new downloads fade in.
-        fadeDuration={source.fresh ? 150 : 0}
+        // No fade: a new level's tiles fading in over the old level showed both at once (a blurry
+        // double image at each zoom step). The old level stays underneath until these have drawn.
+        fadeDuration={0}
         onLoad={() => onReady?.(tile.key)}
         // A saved file that won't draw: drop it and use the web address.
         onError={() => {
