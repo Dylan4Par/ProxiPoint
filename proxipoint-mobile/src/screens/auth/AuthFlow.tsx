@@ -72,9 +72,9 @@ export const AuthFlow: React.FC = () => {
 // ---- Welcome --------------------------------------------------------------------------------
 
 const VALUE_LINES = [
-  { Icon: MapPin, text: 'Discover and host events happening around you' },
-  { Icon: MessagesSquare, text: 'Channels for your town, your crew, and your interests' },
-  { Icon: Lock, text: 'You choose what’s shared, and who sees it' },
+  { Icon: MapPin, title: 'Discover & Host', text: 'Events pinned to real places around you' },
+  { Icon: MessagesSquare, title: 'Local Channels', text: 'Connect with your town, crew, and shared scenes' },
+  { Icon: Lock, title: 'Complete Control', text: 'You decide what’s shared and who sees it' },
 ];
 
 /** Welcome subtitle: one shade stronger than the usual muted text, for bright screens. */
@@ -111,15 +111,19 @@ const WelcomePage: React.FC<{ onSignUp: () => void; onSignIn: () => void }> = ({
         </Text>
       </View>
       <View style={styles.values}>
-        {VALUE_LINES.map(({ Icon, text }) => (
-          <View key={text} style={styles.valueRow}>
+        {VALUE_LINES.map(({ Icon, title, text }) => (
+          // Read as one item: "Discover & Host. Events pinned to real places around you".
+          <View key={title} style={styles.valueRow} accessible accessibilityLabel={`${title}. ${text}`}>
             <View style={styles.valueIcon}>
               <Icon size={22} color={c.accent} strokeWidth={2.2} />
             </View>
-            {/* "balanced" evens out the two lines when a line wraps (Android). */}
-            <Text style={styles.valueText} textBreakStrategy="balanced">
-              {text}
-            </Text>
+            {/* A bold title, and a short line under it. "balanced" evens out a wrapped line (Android). */}
+            <View style={styles.valueCopy}>
+              <Text style={styles.valueTitle}>{title}</Text>
+              <Text style={styles.valueText} textBreakStrategy="balanced">
+                {text}
+              </Text>
+            </View>
           </View>
         ))}
       </View>
@@ -450,7 +454,9 @@ const createStyles = (c: ThemeColors) =>
       alignItems: 'center',
       justifyContent: 'center',
     },
-    valueText: { flex: 1, color: c.textBody, fontSize: 15, lineHeight: 21 },
+    valueCopy: { flex: 1, gap: 2 },
+    valueTitle: { color: c.text, fontSize: 16, fontWeight: '800', lineHeight: 21 },
+    valueText: { color: c.textSecondary, fontSize: 14.5, lineHeight: 20 },
     welcomeButtons: { gap: 10, marginBottom: 6 },
     formButtons: { gap: 2 },
     checks: { marginTop: 10, gap: 6 },
