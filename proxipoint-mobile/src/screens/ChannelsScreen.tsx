@@ -18,7 +18,6 @@ import {
   addComment,
   POST_PHOTO_LIMIT,
   addPost,
-  answerHeadsUp,
   canSeePoint,
   approveRequest,
   claimChannel,
@@ -80,7 +79,7 @@ import {
   repliesAllowed,
   topEmojis,
 } from '../lib/postReactions';
-import { POST_KINDS, asksStillHappening, defaultPinHours, kindInfo, pinChoices, type PostKind } from '../lib/postKinds';
+import { POST_KINDS, defaultPinHours, kindInfo, pinChoices, type PostKind } from '../lib/postKinds';
 import { useTheme, useThemedStyles, type ThemeColors } from '../theme/ThemeContext';
 
 export type ChannelsSegment = 'feed' | 'alerts' | 'manage' | 'campaigns';
@@ -1776,40 +1775,6 @@ const PostCard: React.FC<{
           ) : null}
         </View>
       ) : null}
-      {asksStillHappening(post, now) || post.myAnswer ? (
-        <View style={styles.stillRow} testID={`post-still-${post.id}`}>
-          {post.myAnswer ? (
-            <Text style={styles.stillText}>
-              {post.myAnswer === 'yes' ? 'You said it’s still happening' : 'You said it’s over'}
-              {post.confirmations ? ` · ${post.confirmations} confirmed` : ''}
-            </Text>
-          ) : (
-            <>
-              <Text style={styles.stillText}>
-                Still happening?{post.confirmations ? ` · ${post.confirmations} said yes` : ''}
-              </Text>
-              <TouchableOpacity
-                style={styles.stillBtn}
-                onPress={() => answerHeadsUp(post.id, true)}
-                accessibilityRole="button"
-                accessibilityLabel="Yes, still happening"
-                testID={`post-still-yes-${post.id}`}
-              >
-                <Text style={styles.stillBtnText}>Yes</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.stillBtn}
-                onPress={() => answerHeadsUp(post.id, false)}
-                accessibilityRole="button"
-                accessibilityLabel="It's over"
-                testID={`post-still-over-${post.id}`}
-              >
-                <Text style={styles.stillBtnText}>It’s over</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      ) : null}
       <View style={styles.postFooter}>
         <PostReactions post={post} mine={mine} />
         {/* Replies: only where the poster and the channel allow them (old replies still count). */}
@@ -2701,27 +2666,6 @@ const createStyles = (c: ThemeColors) =>
       borderColor: c.border,
     },
     onMapText: { color: c.textMuted, fontSize: 11, fontWeight: '700' },
-    stillRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-      flexWrap: 'wrap',
-      gap: 8,
-      paddingHorizontal: 10,
-      paddingVertical: 8,
-      borderRadius: 10,
-      backgroundColor: c.amberTint,
-      borderWidth: 1,
-      borderColor: c.amberBorder,
-    },
-    stillText: { flex: 1, color: c.textBody, fontSize: 12, fontWeight: '700' },
-    stillBtn: {
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 10,
-      borderWidth: 1,
-      borderColor: c.amber,
-    },
-    stillBtnText: { color: c.amber, fontSize: 12, fontWeight: '800' },
     accessPill: {
       flexDirection: 'row',
       alignItems: 'center',
