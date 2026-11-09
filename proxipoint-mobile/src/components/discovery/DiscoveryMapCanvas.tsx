@@ -508,8 +508,9 @@ export const DiscoveryMapCanvas: React.FC<{
     if (gesture.current.mode === 'none') flushBounds();
     // Settled (not mid-gesture): the map tiles are picked again for what's on screen.
     if (gesture.current.mode === 'none') followTiles({ minX, maxX, minY, maxY }, z);
-    // Mid-pinch: switch to the next tile level as soon as the zoom reaches it (a few times a second
-    // at most), so the tiles aren't stretched until labels look huge and then snap on release.
+    // Mid-pinch (a few times a second at most): switch to the next tile level as soon as the zoom
+    // reaches it, and cover more as the view grows past the tiles, so they're never stretched until
+    // labels look huge, and a zoom-out never shows a small patch of tiles on a blank map.
     else if (gesture.current.mode === 'pinch') followTiles({ minX, maxX, minY, maxY }, z, true);
     // Far from the area's center (or zoomed well out)? Offer "Search this area".
     const offer = shouldOfferAreaSearch(screenCenterWorld(offsetX, offsetY, z), viewSize.current.width / z, areaRangeRef.current);
@@ -535,14 +536,19 @@ export const DiscoveryMapCanvas: React.FC<{
   });
   const tileViewRef = useRef(tileView);
   const lastPinchTiles = useRef(0);
-  const followTiles = (box: WorldBox, z: number, levelChangeOnly = false) => {
+  const followTiles = (box: WorldBox, z: number, pinching = false) => {
     const view = roundView(box, Math.max(10, (box.maxX - box.minX) / 10));
     const prev = tileViewRef.current;
     const sameLevel = tileLevelFor(prev.zoom, viewPlace.latitude) === tileLevelFor(z, viewPlace.latitude);
     const sameView =
       prev.view.minX === view.minX && prev.view.maxX === view.maxX && prev.view.minY === view.minY && prev.view.maxY === view.maxY;
-    if (sameLevel && (sameView || levelChangeOnly)) return;
-    if (levelChangeOnly) {
+    // The tiles cover the last planned view plus a 30% margin (lib/tileGrid): is this view inside it?
+    const padX = (prev.view.maxX - prev.view.minX) * 0.3;
+    const padY = (prev.view.maxY - prev.view.minY) * 0.3;
+    const covered =
+      box.minX >= prev.view.minX - padX && box.maxX <= prev.view.maxX + padX && box.minY >= prev.view.minY - padY && box.maxY <= prev.view.maxY + padY;
+    if (sameLevel && (sameView || (pinching && covered))) return;
+    if (pinching) {
       const now = Date.now();
       if (now - lastPinchTiles.current < 200) return; // the release picks up anything skipped
       lastPinchTiles.current = now;
