@@ -18,6 +18,13 @@ const CONCURRENT = 8;
 
 let dir: Directory | null = null;
 let fileCount = 0;
+/**
+ * Names of the tiles saved on the phone, read once from the folder. Checking a file on disk for
+ * every tile as it came on screen ran on the same thread as the pinch and made zooming stutter.
+ */
+const saved = new Set<string>();
+/** File URIs already worked out, by file name. */
+const uris = new Map<string, string>();
 
 /** The tile folder, created (and emptied when stale or too big) on first use. */
 function tileDir(): Directory | null {
@@ -27,8 +34,10 @@ function tileDir(): Directory | null {
     const stamp = new File(root, '.created');
     const born = root.exists && stamp.exists ? Number(stamp.textSync()) : NaN;
     const stale = !Number.isFinite(born) || Date.now() - born > MAX_AGE_MS;
-    const count = root.exists ? root.list().length : 0;
+    const entries = root.exists ? root.list() : [];
+    const count = entries.length;
     if (root.exists && (stale || count > MAX_FILES)) root.delete();
+    else for (const e of entries) if (e instanceof File) saved.add(e.name);
     if (!root.exists) {
       root.create({ intermediates: true });
       stamp.create();
@@ -48,12 +57,18 @@ function tileDir(): Directory | null {
 export function cachedTileUri(url: string): string | null {
   const d = tileDir();
   if (!d) return null;
-  try {
-    const file = new File(d, tileFileName(url));
-    return file.exists ? file.uri : null;
-  } catch {
-    return null;
+  const name = tileFileName(url);
+  if (!saved.has(name)) return null;
+  let uri = uris.get(name);
+  if (!uri) {
+    try {
+      uri = new File(d, name).uri;
+    } catch {
+      return null;
+    }
+    uris.set(name, uri);
   }
+  return uri;
 }
 
 const inFlight = new Map<string, Promise<string | null>>();
@@ -83,10 +98,13 @@ export function loadTile(url: string, urgent = false): Promise<string | null> {
     const enqueue = urgent ? queue.unshift.bind(queue) : queue.push.bind(queue);
     enqueue(async () => {
       try {
-        const file = new File(d, tileFileName(url));
-        const saved = await File.downloadFileAsync(url, file, { idempotent: true });
+        const name = tileFileName(url);
+        const file = new File(d, name);
+        const done = await File.downloadFileAsync(url, file, { idempotent: true });
         fileCount += 1;
-        resolve(saved.uri);
+        saved.add(name);
+        uris.set(name, done.uri);
+        resolve(done.uri);
       } catch {
         resolve(null);
       } finally {
@@ -105,8 +123,11 @@ export function loadTile(url: string, urgent = false): Promise<string | null> {
 export function forgetTile(url: string): void {
   const d = tileDir();
   if (!d) return;
+  const name = tileFileName(url);
+  saved.delete(name);
+  uris.delete(name);
   try {
-    const file = new File(d, tileFileName(url));
+    const file = new File(d, name);
     if (file.exists) file.delete();
   } catch {
     // nothing to do

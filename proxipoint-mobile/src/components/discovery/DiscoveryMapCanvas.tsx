@@ -491,7 +491,9 @@ export const DiscoveryMapCanvas: React.FC<{
   /** Visible area in world coordinates, so the card list matches the pins on screen. */
   const calculateBounds = (offsetX: number, offsetY: number, z = currentZoom.current) => {
     const step = zoomStep(z);
-    if (step !== clusterStepRef.current) {
+    // Pins are grouped again only once the pinch ends: re-grouping every ~15% of zoom mid-pinch
+    // re-drew every pin while the fingers were moving, which froze the zoom for a moment.
+    if (gesture.current.mode !== 'pinch' && step !== clusterStepRef.current) {
       clusterStepRef.current = step;
       setClusterStep(step);
     }
@@ -1067,7 +1069,8 @@ export const DiscoveryMapCanvas: React.FC<{
       onPanResponderTerminate: () => {
         gesture.current.mode = 'none';
         setMapTouching(false);
-        flushBounds();
+        // Settle as on release (cards, pin groups and tiles catch up with the map).
+        calculateBounds(currentPan.current.x, currentPan.current.y);
       },
     })
   ).current;
