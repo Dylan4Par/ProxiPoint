@@ -10,7 +10,18 @@ const REFRESH_MS = 10 * 60 * 1000;
 const SETTLE_MS = 800;
 
 /**
- * Loads upcoming events from the backend around the place you're exploring, and keeps them
+ * One load covers EVENTS_RADIUS_M (100 km) around its center. Discover's farthest choice is 30 miles
+ * (about 48 km), so a second load is needed once Discover's center is more than ~50 km from the map's.
+ */
+function farApart(lat1: number, lon1: number, lat2: number, lon2: number): boolean {
+  const dy = (lat2 - lat1) * 111320;
+  const dx = (lon2 - lon1) * 111320 * Math.cos((lat1 * Math.PI) / 180);
+  return Math.hypot(dx, dy) > 50000;
+}
+
+/**
+ * Loads upcoming events from the backend around the place you're exploring (and Discover's place
+ * when it's elsewhere), and keeps them
  * fresh: on start, when you look somewhere else (~1 km or more), every 10 minutes, and when the
  * app comes back to the foreground. Does nothing unless EXPO_PUBLIC_EVENTS_URL is set.
  */
@@ -19,6 +30,9 @@ export function useRemoteEvents() {
   // Rounded to ~1 km so panning a little doesn't reload.
   const lat = useDiscoveryStore((s) => Math.round(s.viewPlace.latitude * 100) / 100);
   const lon = useDiscoveryStore((s) => Math.round(s.viewPlace.longitude * 100) / 100);
+  // Discover's feed can be somewhere else (Near me while the map explores another city).
+  const dLat = useDiscoveryStore((s) => Math.round(s.discoverPlace.latitude * 100) / 100);
+  const dLon = useDiscoveryStore((s) => Math.round(s.discoverPlace.longitude * 100) / 100);
 
   useEffect(() => {
     if (!EVENTS_URL) return;
@@ -32,8 +46,14 @@ export function useRemoteEvents() {
       setRemoteEventsStatus('loading');
       try {
         const now = new Date();
-        const events = await fetchEvents({ tenantId, near: { latitude: lat, longitude: lon }, now, signal: current.signal });
+        const centers = [{ latitude: lat, longitude: lon }];
+        if (farApart(lat, lon, dLat, dLon)) centers.push({ latitude: dLat, longitude: dLon });
+        const batches = await Promise.all(
+          centers.map((near) => fetchEvents({ tenantId, near, now, signal: current.signal })),
+        );
         if (current.signal.aborted) return;
+        const seen = new Set<string>();
+        const events = batches.flat().filter((e) => (seen.has(e.id) ? false : (seen.add(e.id), true)));
         setRemoteEvents(events.map((e) => remoteEventToNode(e, now)), now.toISOString());
       } catch (error) {
         if ((error as { name?: string })?.name === 'AbortError') return;
@@ -53,5 +73,5 @@ export function useRemoteEvents() {
       sub.remove();
       controller?.abort();
     };
-  }, [tenantId, lat, lon]);
+  }, [tenantId, lat, lon, dLat, dLon]);
 }

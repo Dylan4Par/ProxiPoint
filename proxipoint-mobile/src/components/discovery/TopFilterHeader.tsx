@@ -194,6 +194,8 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
   };
   const nodes = useDiscoveryStore((st) => st.nodes);
   const viewPlace = useDiscoveryStore((st) => st.viewPlace);
+  // Discover counts around its own place (Near me by default).
+  const discoverPlace = useDiscoveryStore((st) => st.discoverPlace);
   // Live count for the button, with the same filters as the page (only worked out while open):
   // Discover's feed, or what Explore Map's pins and list show.
   const eventCount = !tagModalOpen
@@ -203,7 +205,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
           nodes as never,
           Date.now(),
           discoverFeedAllows({
-            center: { latitude: viewPlace.latitude, longitude: viewPlace.longitude },
+            center: { latitude: discoverPlace.latitude, longitude: discoverPlace.longitude },
             rangeMeters,
             selectedTag,
             liveOnly,
@@ -455,7 +457,7 @@ export const TopFilterHeader: React.FC<TopFilterHeaderProps> = ({
         </TouchableWithoutFeedback>
         {rangeMenu ? (
           <View style={[styles.rangeMenu, { top: rangeMenu.y, left: rangeMenu.x }]} accessibilityRole="menu" testID="filter-range-menu">
-            <Text style={styles.rangeMenuTitle}>From the middle of the area</Text>
+            <Text style={styles.rangeMenuTitle}>{discoverPlace.kind === 'near' ? 'From where you are' : 'From the middle of the area'}</Text>
             {ranges.map((option) => {
               const on = rangeMeters === option.meters;
               return (

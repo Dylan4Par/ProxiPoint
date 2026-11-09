@@ -21,7 +21,7 @@ import { MAP_TOUR, MAP_TOUR_KEY } from '../lib/tour';
 import { useDiscoveryStore } from '../stores/useDiscoveryStore';
 import { useAuthStore } from '../stores/useAuthStore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { getUnits, setUnits } from '../lib/units';
+import { getUnits, nearestReach, setUnits } from '../lib/units';
 import { ProfileScreen } from './ProfileScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { HostProfileScreen } from './HostProfileScreen';
@@ -135,6 +135,9 @@ export const DiscoverScreen: React.FC = () => {
   const syncMyPoint = useDiscoveryStore((state) => state.syncMyPoint);
   const viewPlace = useDiscoveryStore((state) => state.viewPlace);
   const setViewPlace = useDiscoveryStore((state) => state.setViewPlace);
+  // Discover's feed has its own place (Near me by default); Explore Map keeps viewPlace.
+  const discoverPlace = useDiscoveryStore((state) => state.discoverPlace);
+  const setDiscoverPlace = useDiscoveryStore((state) => state.setDiscoverPlace);
   const setSelfCoordinates = useDiscoveryStore((state) => state.setSelfCoordinates);
   const selfCoordinates = useDiscoveryStore((state) => state.selfCoordinates);
   const soloChipTag = useDiscoveryStore((state) => state.soloChipTag);
@@ -230,7 +233,8 @@ export const DiscoverScreen: React.FC = () => {
   useEffect(() => {
     setMyInterestMembership(null);
   }, []);
-  const [cityPickerOpen, setCityPickerOpen] = useState(false);
+  // Which page's place the city picker changes (Discover and Explore Map each have their own).
+  const [cityPickerFor, setCityPickerFor] = useState<'map' | 'discover' | null>(null);
   const [gpsPlace, setGpsPlace] = useState<CityPlace | null>(null);
 
   // Tracking off: you're "at" your home city and Discover opens there.
@@ -280,8 +284,33 @@ export const DiscoverScreen: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [defaultArea.name]);
 
+  // Near me: Discover follows where you are (GPS while tracking, else your home city). It moves
+  // once you've gone ~200 m, so the feed doesn't reshuffle on every GPS tick.
+  useEffect(() => {
+    if (discoverPlace.kind !== 'near') return;
+    const moved = Math.hypot(
+      (selfCoordinates.latitude - discoverPlace.latitude) * 111320,
+      (selfCoordinates.longitude - discoverPlace.longitude) * 111320 * Math.cos((selfCoordinates.latitude * Math.PI) / 180),
+    );
+    const near = profile.trackLocation && gpsPlace ? gpsPlace : home;
+    if (moved < 200 && discoverPlace.name === near.name) return;
+    setDiscoverPlace({ name: near.name, region: near.region, latitude: selfCoordinates.latitude, longitude: selfCoordinates.longitude, kind: 'near' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [discoverPlace.kind, selfCoordinates.latitude, selfCoordinates.longitude, gpsPlace?.name, home.name, profile.trackLocation]);
+
+  const discoverNearMe = () => {
+    setCityPickerFor(null);
+    const near = profile.trackLocation && gpsPlace ? gpsPlace : home;
+    setDiscoverPlace({ name: near.name, region: near.region, latitude: selfCoordinates.latitude, longitude: selfCoordinates.longitude, kind: 'near' });
+  };
+
   const pickCity = (place: CityPlace, kind: PickKind) => {
-    setCityPickerOpen(false);
+    const forDiscover = cityPickerFor === 'discover';
+    setCityPickerFor(null);
+    if (forDiscover) {
+      setDiscoverPlace({ ...place, kind: kind === 'home' ? 'home' : 'search' });
+      return;
+    }
     setDetailId(null);
     if (kind === 'gps') {
       setSelfCoordinates({ latitude: place.latitude, longitude: place.longitude });
@@ -329,7 +358,10 @@ export const DiscoverScreen: React.FC = () => {
         const meters = reach == null ? undefined : reach === 'any' ? null : Number(reach);
         setSettings((current) => ({
           ...current,
-          ...(meters === null || (typeof meters === 'number' && Number.isFinite(meters) && meters > 0) ? { defaultReachMeters: meters } : {}),
+          // A reach saved from an older list of choices (1 or 3 miles) moves to the nearest one now offered.
+          ...(meters === null || (typeof meters === 'number' && Number.isFinite(meters) && meters > 0)
+            ? { defaultReachMeters: nearestReach(meters, current.units) }
+            : {}),
           ...(isMapStyle(style) ? { mapStyle: style } : {}),
         }));
       })
@@ -610,7 +642,25 @@ export const DiscoverScreen: React.FC = () => {
     setJustDroppedId(null);
   };
 
-  // City · dates row, shared by Explore Map and Discover (same area, same dates, same sheet).
+  // City · dates row. Explore Map shows the city it's looking at; Discover its own place (Near me
+  // by default). Both share the dates.
+  const datesChip = (
+    <TouchableOpacity
+      ref={tourTarget('map-date-chip')}
+      style={[styles.dateChip, timeWindow.custom && styles.dateChipOn]}
+      onPress={() => setFiltersOpen(true)}
+      accessibilityRole="button"
+      accessibilityLabel={`Showing ${timeWindowLabel(timeWindow) ?? 'Calendar dates'}. Change dates`}
+      testID="discover-date-window"
+    >
+      <CalendarDays size={13} color={c.accent} strokeWidth={2.5} />
+      <Text style={styles.datePillText} numberOfLines={1}>
+        {timeWindowLabel(timeWindow) ??
+          formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
+      </Text>
+      <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
+    </TouchableOpacity>
+  );
   const exploreTopRow = (
     <>
       <CityPill
@@ -618,26 +668,25 @@ export const DiscoverScreen: React.FC = () => {
         label={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
         exploring={viewPlace.kind === 'search'}
         tracking={Boolean(profile.trackLocation)}
-        onPress={() => setCityPickerOpen(true)}
+        onPress={() => setCityPickerFor('map')}
         onReturn={returnHome}
       />
-      {/* Dates, like Discover's: opens the When sheet, which has the quick
-          ranges and Pick dates (the Calendar). Next 3 days there puts it back. */}
-      <TouchableOpacity
-        ref={tourTarget('map-date-chip')}
-        style={[styles.dateChip, timeWindow.custom && styles.dateChipOn]}
-        onPress={() => setFiltersOpen(true)}
-        accessibilityRole="button"
-        accessibilityLabel={`Showing ${timeWindowLabel(timeWindow) ?? 'Calendar dates'}. Change dates`}
-        testID="discover-date-window"
-      >
-        <CalendarDays size={13} color={c.accent} strokeWidth={2.5} />
-        <Text style={styles.datePillText} numberOfLines={1}>
-          {timeWindowLabel(timeWindow) ??
-            formatRange({ start: new Date(timeWindow.start), end: new Date(timeWindow.end) })}
-        </Text>
-        <ChevronDown size={14} color={c.accent} strokeWidth={2.5} />
-      </TouchableOpacity>
+      {datesChip}
+    </>
+  );
+  const discoverNear = discoverPlace.kind === 'near';
+  const discoverLabel = discoverNear ? 'Near me' : discoverPlace.name ? cityLabel(discoverPlace) : cityLabel(home);
+  const discoverTopRow = (
+    <>
+      <CityPill
+        inline
+        label={discoverLabel}
+        exploring={discoverPlace.kind === 'search'}
+        tracking={discoverNear}
+        onPress={() => setCityPickerFor('discover')}
+        onReturn={discoverNearMe}
+      />
+      {datesChip}
     </>
   );
 
@@ -657,10 +706,10 @@ export const DiscoverScreen: React.FC = () => {
               embedded
               liveOnly={liveOnly}
               onToggleLiveOnly={() => setLiveOnly((on) => !on)}
-              topRow={exploreTopRow}
+              topRow={discoverTopRow}
             />
           }
-          placeLabel={viewPlace.name ? cityLabel(viewPlace) : cityLabel(home)}
+          placeLabel={discoverLabel}
           onOpenPoint={openHostPoint}
           onToggleRsvp={(id) => toggleRsvp(id)}
           onOpenChannel={(id) => {
@@ -676,8 +725,8 @@ export const DiscoverScreen: React.FC = () => {
             if (fit?.length) setMapFit({ points: fit, key: Date.now() });
           }}
           onOpenSettings={() => openSettings()}
-          // Same area picker as the map's city pill, so Discover and the map stay on one place.
-          onPickLocation={() => setCityPickerOpen(true)}
+          // Discover's own place picker (Near me, home, or a city); Explore Map keeps its own city.
+          onPickLocation={() => setCityPickerFor('discover')}
           onShowTagOnMap={showTagOnMap}
           searchRequest={searchRequest}
           onOpenProfile={openProfile}
@@ -1133,11 +1182,14 @@ export const DiscoverScreen: React.FC = () => {
       ) : null}
 
       <CityPickerSheet
-        visible={cityPickerOpen}
+        visible={cityPickerFor != null}
         title="See Points in…"
         home={home}
         onPick={pickCity}
-        onClose={() => setCityPickerOpen(false)}
+        onClose={() => setCityPickerFor(null)}
+        // Discover's picker offers Near me; Explore Map's keeps "Use my current location".
+        onNearMe={cityPickerFor === 'discover' ? discoverNearMe : undefined}
+        nearMeActive={cityPickerFor === 'discover' && discoverNear}
       />
 
       {/* First-run tour, above everything else on this screen. */}
