@@ -1,7 +1,8 @@
-import React, { memo, useMemo } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import { Image, StyleSheet, View } from 'react-native';
 import { toCanvasCoordinates } from '../../stores/useDiscoveryStore';
 import { MAP_TILE_URLS } from '../../lib/mapTileUrls';
+import { cachedTileUri, forgetTile, loadTile } from '../../lib/tileCache';
 export { wideLayersFor } from '../../lib/mapTileLayers';
 
 /**
@@ -104,17 +105,43 @@ function tilesFor(
 }
 
 /**
- * One tile. React Native's Image keeps downloaded images on the phone (Android: its disk cache;
- * iOS: `force-cache` uses a saved copy whenever there is one), so a reopened area mostly
- * costs no new download.
+ * One tile, drawn from its saved file on the phone (lib/tileCache): downloaded once, then reused
+ * when you pan back, zoom, or reopen the map. Until it's saved it shows nothing (the layer below
+ * shows through); if it can't be saved, the web address is used instead.
  */
-const TileImage = ({ uri, tile }: { uri: string; tile: Tile }) => (
-  <Image
-    source={{ uri, cache: 'force-cache' }}
-    fadeDuration={150}
-    style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
-  />
-);
+const TileImage = memo(({ uri, tile, urgent = false }: { uri: string; tile: Tile; urgent?: boolean }) => {
+  const [source, setSource] = useState<{ uri: string; fresh: boolean } | null>(() => {
+    const saved = cachedTileUri(uri);
+    return saved ? { uri: saved, fresh: false } : null;
+  });
+  useEffect(() => {
+    if (source) return;
+    let alive = true;
+    void loadTile(uri, urgent).then((saved) => {
+      if (alive) setSource({ uri: saved ?? uri, fresh: true });
+    });
+    return () => {
+      alive = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [uri]);
+  if (!source) return null;
+  return (
+    <Image
+      source={{ uri: source.uri }}
+      // Saved tiles appear at once; only new downloads fade in.
+      fadeDuration={source.fresh ? 150 : 0}
+      // A saved file that won't draw: drop it and use the web address.
+      onError={() => {
+        if (source.uri === uri) return;
+        forgetTile(uri);
+        setSource({ uri, fresh: true });
+      }}
+      style={[styles.tile, { left: tile.left, top: tile.top, width: tile.width, height: tile.height }]}
+    />
+  );
+});
+TileImage.displayName = 'TileImage';
 
 export const MapTiles: React.FC<{
   latitude: number;
@@ -165,10 +192,10 @@ export const MapTiles: React.FC<{
       {outer.map((tile) => <TileImage key={`o-${tile.key}`} uri={tile.base} tile={tile} />)}
       {far.map((tile) => <TileImage key={`f-${tile.key}`} uri={tile.base} tile={tile} />)}
       {wide.map((tile) => <TileImage key={`w-${tile.key}`} uri={tile.base} tile={tile} />)}
-      {tiles.map((tile) => <TileImage key={`b-${tile.key}`} uri={tile.base} tile={tile} />)}
+      {tiles.map((tile) => <TileImage key={`b-${tile.key}`} uri={tile.base} tile={tile} urgent />)}
       <View style={[styles.tintLayer, { backgroundColor: tint }]} />
       {/* Esri's street names sit above the tint; Stadia's are already in the base tiles. */}
-      {tiles.map((tile) => (tile.labels ? <TileImage key={`l-${tile.key}`} uri={tile.labels} tile={tile} /> : null))}
+      {tiles.map((tile) => (tile.labels ? <TileImage key={`l-${tile.key}`} uri={tile.labels} tile={tile} urgent /> : null))}
     </View>
   );
 });
