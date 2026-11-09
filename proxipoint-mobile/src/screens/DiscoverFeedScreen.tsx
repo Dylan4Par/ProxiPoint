@@ -120,7 +120,8 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const nodes = useDiscoveryStore((state) => state.nodes) as unknown as Record<string, DiscoveryNode>;
-  const viewPlace = useDiscoveryStore((state) => state.viewPlace);
+  // Discover's own place: Near me by default, or a city picked here (Explore Map has its own).
+  const viewPlace = useDiscoveryStore((state) => state.discoverPlace);
   const headerTags = useDiscoveryStore((state) => state.tags) as string[];
   const channels = useChannels();
   const now = useBoosts(); // ticks every 30s, so "live" and "starts in" stay current
@@ -479,7 +480,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
                 <Text style={styles.emptyText}>
                   {venueFocus
                     ? `Nothing coming up at ${venueFocus.name} right now. Its venue page has the last 30 days.`
-                    : `No Points match “${query.trim()}”${rangeMeters == null ? '' : ` within ${rangeLabel} of ${placeLabel || 'here'}`}.`}
+                    : `No Points match “${query.trim()}”${rangeMeters == null ? '' : ` within ${rangeLabel} of ${viewPlace.kind === 'near' ? 'you' : placeLabel || 'here'}`}.`}
                 </Text>
                 {rangeMeters != null && !venueFocus ? (
                   <TouchableOpacity onPress={() => setRangeMeters(null)} accessibilityRole="button" style={styles.widenBtn}>

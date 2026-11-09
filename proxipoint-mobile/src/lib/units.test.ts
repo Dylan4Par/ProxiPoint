@@ -22,8 +22,8 @@ test('radius labels and search ranges', () => {
   assert.equal(formatRadiusIn(500, 'metric'), '500 m');
   assert.equal(formatRadiusIn(5000, 'imperial'), '3 mi');
   assert.equal(formatRadiusIn(800, 'imperial'), '0.5 mi');
-  assert.deepEqual(searchRanges('imperial').map((r) => r.label), ['1 mi', '3 mi', '5 mi', '15 mi', 'Any']);
-  assert.deepEqual(searchRanges('metric').map((r) => r.label), ['1 km', '5 km', '10 km', '25 km', 'Any']);
+  assert.deepEqual(searchRanges('imperial').map((r) => r.label), ['2 mi', '5 mi', '15 mi', '30 mi', 'Any']);
+  assert.deepEqual(searchRanges('metric').map((r) => r.label), ['3 km', '10 km', '25 km', '50 km', 'Any']);
 });
 
 test('default from the phone region', () => {
@@ -42,8 +42,8 @@ test('formatDistance follows the setting', () => {
 });
 
 test('ranges in words for the distance menu', () => {
-  assert.deepEqual(searchRanges('imperial').map((r) => formatRangeWords(r.meters, 'imperial')), ['1 mile', '3 miles', '5 miles', '15 miles', 'Any distance']);
-  assert.deepEqual(searchRanges('metric').map((r) => formatRangeWords(r.meters, 'metric')), ['1 km', '5 km', '10 km', '25 km', 'Any distance']);
+  assert.deepEqual(searchRanges('imperial').map((r) => formatRangeWords(r.meters, 'imperial')), ['2 miles', '5 miles', '15 miles', '30 miles', 'Any distance']);
+  assert.deepEqual(searchRanges('metric').map((r) => formatRangeWords(r.meters, 'metric')), ['3 km', '10 km', '25 km', '50 km', 'Any distance']);
 });
 
 test('distances in words for Discover cards', () => {

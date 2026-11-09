@@ -147,6 +147,19 @@ export interface ViewPlace {
   kind: 'gps' | 'home' | 'search';
 }
 
+/**
+ * The place Discover's feed is centered on, apart from Explore Map's viewPlace.
+ * near = around where you are (GPS, or your home city when GPS isn't available); home = your home
+ * city; search = a city you looked up.
+ */
+export interface DiscoverPlace {
+  name: string;
+  region?: string;
+  latitude: number;
+  longitude: number;
+  kind: 'near' | 'home' | 'search';
+}
+
 export interface ViewportBounds {
   minX: number;
   maxX: number;
@@ -165,6 +178,8 @@ export interface DiscoveryState {
    * The map is drawn around it, so pins are placed relative to this, not to you.
    */
   viewPlace: ViewPlace;
+  /** Where Discover's feed is centered (Near me by default); Explore Map uses viewPlace. */
+  discoverPlace: DiscoverPlace;
   searchRadiusMeters: number;
   batteryPct: number;
   isSocketConnected: boolean;
@@ -188,6 +203,7 @@ export interface DiscoveryState {
   setSelfCoordinates: (coords: { latitude: number; longitude: number }) => void;
   /** Show Discover around another place (re-draws every pin around it). */
   setViewPlace: (place: ViewPlace) => void;
+  setDiscoverPlace: (place: DiscoverPlace) => void;
   setViewportBounds: (bounds: ViewportBounds) => void;
   setSelectedNodeId: (id: string | null) => void;
   setSelectedEventId: (id: string) => void;
@@ -765,6 +781,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
   wsEndpoint: 'ws://10.0.2.2:8080/api/v1/ingest',
   selfCoordinates: DEFAULT_SELF,
   viewPlace: { name: '', latitude: DEFAULT_SELF.latitude, longitude: DEFAULT_SELF.longitude, kind: 'home' },
+  discoverPlace: { name: '', latitude: DEFAULT_SELF.latitude, longitude: DEFAULT_SELF.longitude, kind: 'near' },
   searchRadiusMeters: 500,
   batteryPct: 87,
 
@@ -816,6 +833,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       viewPlace: place,
       nodes: placeNodes(state.nodes, state.selfCoordinates, place),
     })),
+  setDiscoverPlace: (place) => set({ discoverPlace: place }),
   setViewportBounds: (bounds) => set({ viewportBounds: bounds }),
   setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEventId: id || FIRST_SEED_ID }),
   setSelectedEventId: (id) => set({ selectedNodeId: id, selectedEventId: id }),

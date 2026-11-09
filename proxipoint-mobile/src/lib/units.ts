@@ -87,8 +87,8 @@ export function formatRangeWords(meters: number | null, units: DistanceUnits): s
 export function searchRanges(units: DistanceUnits): Array<{ label: string; meters: number | null }> {
   const meters =
     units === 'imperial'
-      ? [1, 3, 5, 15].map((miles) => Math.round(miles * METERS_PER_MILE))
-      : [1000, 5000, 10000, 25000];
+      ? [2, 5, 15, 30].map((miles) => Math.round(miles * METERS_PER_MILE))
+      : [3000, 10000, 25000, 50000];
   return [...meters.map((m) => ({ label: formatRadiusIn(m, units), meters: m as number | null })), { label: 'Any', meters: null }];
 }
 

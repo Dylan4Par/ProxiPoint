@@ -86,7 +86,14 @@ export const CityPickerSheet: React.FC<{
   home?: CityPlace | null;
   onPick: (place: CityPlace, kind: PickKind) => void;
   onClose: () => void;
-}> = ({ visible, title, home = null, onPick, onClose }) => {
+  /**
+   * Discover: a "Near me" row (around where you are, following you) instead of "Use my current
+   * location" (a one-off GPS city, as Explore Map uses).
+   */
+  onNearMe?: () => void;
+  /** Discover is on Near me now (the row shows a check). */
+  nearMeActive?: boolean;
+}> = ({ visible, title, home = null, onPick, onClose, onNearMe, nearMeActive = false }) => {
   const styles = useThemedStyles(createStyles);
   const { colors: c } = useTheme();
   const insets = useSafeAreaInsets();
@@ -204,14 +211,28 @@ export const CityPickerSheet: React.FC<{
                 </>
               ) : (
                 <>
-                  <Row
-                    Icon={Navigation}
-                    label="Use my current location"
-                    hint="Uses your phone’s GPS"
-                    onPress={useMyLocation}
-                    busy={busy === 'gps'}
-                    accent
-                  />
+                  {onNearMe ? (
+                    <Row
+                      Icon={Navigation}
+                      label={nearMeActive ? 'Near me ✓' : 'Near me'}
+                      hint="Points around where you are"
+                      onPress={() => {
+                        setQuery('');
+                        setError('');
+                        onNearMe();
+                      }}
+                      accent
+                    />
+                  ) : (
+                    <Row
+                      Icon={Navigation}
+                      label="Use my current location"
+                      hint="Uses your phone’s GPS"
+                      onPress={useMyLocation}
+                      busy={busy === 'gps'}
+                      accent
+                    />
+                  )}
                   {home ? (
                     <Row Icon={Home} label={`Home · ${cityLabel(home)}`} onPress={() => pick(home, 'home')} />
                   ) : null}
