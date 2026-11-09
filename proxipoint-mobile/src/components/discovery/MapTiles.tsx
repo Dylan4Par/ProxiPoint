@@ -132,7 +132,7 @@ export const MapTiles: React.FC<{
    * Tiles of one level inside a container scaled up by `unit` (world units per layout unit), so each
    * tile is laid out at ~256 px and the scale does the rest.
    */
-  const group = (tiles: GridTile[], layer: 'base' | 'labels', prefix: string, ready?: (key: string) => void) => {
+  const group = (tiles: GridTile[], layer: 'base' | 'labels', ready?: (key: string) => void) => {
     const template = urls[layer];
     if (!template || !tiles.length) return null;
     const unit = Math.max(1e-6, tiles[0].width / TILE_LAYOUT);
@@ -143,28 +143,30 @@ export const MapTiles: React.FC<{
     const y1 = Math.max(...tiles.map((t) => t.top + t.height)) / unit;
     const origin = { x: x0, y: y0 };
     return (
+      // One container per level, and one key per tile, so a tile already on screen is never
+      // unmounted and re-read when the tiles are picked again (that was the flicker on zoom).
       <View
-        key={`${prefix}-${layer}-${tiles[0].z}`}
+        key={`${layer}-${tiles[0].z}`}
         style={[styles.group, { left: x0 * unit, top: y0 * unit, width: x1 - x0, height: y1 - y0, transform: [{ scale: unit }] }]}
       >
         {tiles.map((t) => (
-          <TileImage key={`${prefix}-${layer}-${t.key}`} uri={tileUrl(template, t)} tile={t} unit={unit} origin={origin} onReady={ready} />
+          <TileImage key={`${layer}-${t.key}`} uri={tileUrl(template, t)} tile={t} unit={unit} origin={origin} onReady={ready} />
         ))}
       </View>
     );
   };
-  // The previous set can mix levels only while a zoom change loads; group it by level.
-  const keepLevels = [...new Set(keep.map((t) => t.z))];
+  // Every level on screen: the previous complete set's levels underneath, the current level on top.
+  // The current level also keeps its old tiles at the edges until the new ones have drawn.
+  const levels = [...new Set(keep.map((t) => t.z).filter((z) => z !== level)), level];
+  const tilesAt = (z: number) => (z === level ? [...want, ...keep.filter((t) => t.z === z)] : keep.filter((t) => t.z === z));
 
   return (
     <View style={styles.layer} pointerEvents="none">
-      {/* The last complete set, under the new one while it loads (another zoom level, or edges). */}
-      {keepLevels.map((z) => group(keep.filter((t) => t.z === z), 'base', 'u'))}
-      {group(want, 'base', 'w', urls.labels ? undefined : onReady)}
+      {levels.map((z) => group(tilesAt(z), 'base', urls.labels ? undefined : onReady))}
       {/* The tint, also laid out small and scaled up (one huge view can fail to draw too). */}
       <View style={[styles.tintLayer, { backgroundColor: tint, transform: [{ scale: (2 * TINT_REACH) / TINT_LAYOUT }] }]} />
       {/* Esri's street names sit above the tint; Stadia's are already in the base tiles. */}
-      {urls.labels ? group(want, 'labels', 'w', onReady) : null}
+      {urls.labels ? group(want, 'labels', onReady) : null}
     </View>
   );
 });
