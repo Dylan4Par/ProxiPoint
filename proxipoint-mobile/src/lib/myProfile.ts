@@ -34,8 +34,8 @@ export interface MyProfile {
   trackLocation: boolean;
 }
 
-/** Most #tags you can follow. */
-export const INTEREST_TAG_LIMIT = 10;
+/** Most #tags you can follow (the server allows up to 30). */
+export const INTEREST_TAG_LIMIT = 25;
 
 export const DEFAULT_PROFILE: MyProfile = {
   displayName: 'Ranger-F0A5ACCF',
