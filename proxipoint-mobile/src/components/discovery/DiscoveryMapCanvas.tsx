@@ -49,6 +49,12 @@ const CANVAS_HEIGHT = height * 0.52;
 const BEACON_WORLD_X = 480;
 const BEACON_WORLD_Y = 480;
 const WORLD_OFFSET = 200; // top: -200, left: -200
+/**
+ * Padding around the world's own box (world units), so the box stays large on screen even fully
+ * zoomed out (70 miles: 1400 units shrink to ~11 px, and Android then skips drawing the view and
+ * everything in it). 60,000 units is about 133 km each way, past the widest view.
+ */
+const WORLD_PAD = 60000;
 
 // Exact offset needed to place (BEACON_WORLD_X, BEACON_WORLD_Y) at (width / 2, CANVAS_HEIGHT / 2)
 const CENTER_OFFSET_X = width / 2 - (BEACON_WORLD_X - WORLD_OFFSET);
@@ -1067,15 +1073,20 @@ export const DiscoveryMapCanvas: React.FC<{
       }}
       onTouchCancel={() => setMapTouching(false)}
     >
+      {/* The world. Its own box is padded by WORLD_PAD on every side (the content sits in the
+          inner view at the same spot as before): Android skips drawing a view whose own box is
+          tiny on screen, and fully zoomed out a 1400-unit box is only ~11 px, so the whole map
+          (tiles and pins) vanished. Scaling about the padded corner keeps every position the same. */}
       <Animated.View
         style={[
           styles.interactiveWorld,
           {
-            transformOrigin: [0, 0, 0],
+            transformOrigin: [WORLD_PAD, WORLD_PAD, 0],
             transform: [{ translateX: pan.x }, { translateY: pan.y }, { scale: zoom }],
           },
         ]}
       >
+        <View style={styles.worldContent} pointerEvents="box-none">
         {/* Faint grid: only seen if the map tiles can't load (offline) */}
         <View style={styles.gridLineH1} />
         <View style={styles.gridLineH2} />
@@ -1180,6 +1191,7 @@ export const DiscoveryMapCanvas: React.FC<{
             onSelect={setSelectedNodeId}
           />
         ))}
+        </View>
       </Animated.View>
 
       {/* A grouped post bubble: choose which post */}
@@ -1452,12 +1464,14 @@ const createStyles = (c: ThemeColors) =>
     position: 'relative',
   },
   interactiveWorld: {
-    width: 1400,
-    height: 1400,
+    width: 1400 + 2 * WORLD_PAD,
+    height: 1400 + 2 * WORLD_PAD,
     position: 'absolute',
-    top: -WORLD_OFFSET,
-    left: -WORLD_OFFSET,
+    top: -WORLD_OFFSET - WORLD_PAD,
+    left: -WORLD_OFFSET - WORLD_PAD,
   },
+  // The 1400-unit world, where it always was (same coordinates for tiles and pins).
+  worldContent: { position: 'absolute', left: WORLD_PAD, top: WORLD_PAD, width: 1400, height: 1400 },
   gridLineH1: { position: 'absolute', top: 300, left: 0, right: 0, height: 1, backgroundColor: c.border },
   gridLineH2: { position: 'absolute', top: 600, left: 0, right: 0, height: 1, backgroundColor: c.border },
   gridLineH3: { position: 'absolute', top: 900, left: 0, right: 0, height: 1, backgroundColor: c.border },
