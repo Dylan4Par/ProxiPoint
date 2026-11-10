@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, PanResponder, Platform, Share, StyleSheet, Text, TouchableOpacity, View, useWindowDimensions } from 'react-native';
 import { Check, Flame, Share2, Sparkles } from 'lucide-react-native';
 import { BoostBolt } from '../discovery/BoostBolt';
+import { BoostOmbre } from '../discovery/BoostOmbre';
 import { FadedPhoto, PHOTO_CONTENT_RATIO } from '../discovery/FadedPhoto';
 import { LiveBadge } from '../drops/LiveBadge';
 import type { DeckMode, PriorityPick } from '../../lib/recommend';
@@ -198,6 +199,8 @@ export const RecommendationDeck: React.FC<{
             {photo ? (
               <FadedPhoto uri={photo} style={[styles.photo, { width: photoWidth }]} testID="activity-rec-photo" />
             ) : null}
+            {/* Boosted: a light-to-darker orange wash, left to right, under the details. */}
+            {pick.boosted ? <BoostOmbre /> : null}
             {/* #tag · venue, and the title under them. */}
             <View style={styles.main}>
               <View style={styles.copy}>
