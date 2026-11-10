@@ -68,20 +68,25 @@ export const FadedPhoto: React.FC<{ uri: string; style?: StyleProp<ViewStyle>; t
         if (!box || Math.abs(box.width - width) > 0.5 || Math.abs(box.height - height) > 0.5) setBox({ width, height });
       }}
     >
-      <Image
-        source={{ uri }}
-        style={
-          placed
-            ? { position: 'absolute', left: placed.left, top: placed.top, width: placed.width, height: placed.height }
-            : [StyleSheet.absoluteFill, { opacity: fallback ? 1 : 0 }]
-        }
-        resizeMode="cover"
-        onLoad={(e) => {
-          const src = (e.nativeEvent as { source?: { width?: number; height?: number } }).source;
-          setLoaded({ uri, size: src?.width && src?.height ? { width: src.width, height: src.height } : 'unknown' });
-        }}
-        onError={() => setLoaded({ uri, size: 'unknown' })}
-      />
+      {/* The photo stops EDGE_INSET short of the box's right edge, where the fade is already solid:
+          drawn right up to it, a hairline of photo showed at the edge (the box's edge falls between
+          pixels and the fade's last pixel was only partly covering it). */}
+      <View style={styles.photoClip}>
+        <Image
+          source={{ uri }}
+          style={
+            placed
+              ? { position: 'absolute', left: placed.left, top: placed.top, width: placed.width, height: placed.height }
+              : [StyleSheet.absoluteFill, { opacity: fallback ? 1 : 0 }]
+          }
+          resizeMode="cover"
+          onLoad={(e) => {
+            const src = (e.nativeEvent as { source?: { width?: number; height?: number } }).source;
+            setLoaded({ uri, size: src?.width && src?.height ? { width: src.width, height: src.height } : 'unknown' });
+          }}
+          onError={() => setLoaded({ uri, size: 'unknown' })}
+        />
+      </View>
       {/* Sized to the measured box: an SVG sized only by "100%" can fall back to 300 × 150. */}
       <Svg style={StyleSheet.absoluteFill} width={box?.width ?? '100%'} height={box?.height ?? '100%'}>
         <Defs>
@@ -97,7 +102,11 @@ export const FadedPhoto: React.FC<{ uri: string; style?: StyleProp<ViewStyle>; t
   );
 };
 
+/** Points at the box's right edge with no photo under the (solid) end of the fade. */
+const EDGE_INSET = 2;
+
 const styles = StyleSheet.create({
   // The photo can be drawn wider than its box (zoomed to fill around its focus point).
   clip: { overflow: 'hidden' },
+  photoClip: { position: 'absolute', top: 0, bottom: 0, left: 0, right: EDGE_INSET, overflow: 'hidden' },
 });
