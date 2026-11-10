@@ -1,7 +1,8 @@
-import React, { useId } from 'react';
+import React, { useId, useState } from 'react';
 import { Image, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
 import { useTheme } from '../../theme/ThemeContext';
+import { placePhoto, type PhotoPlacement } from '../../lib/photoFit';
 
 /** Photo strength over its left side (1 = full strength). */
 export const PHOTO_OPACITY = 1;
@@ -12,6 +13,11 @@ export const PHOTO_FADE = 0.42;
  * (about 1% photo at the first letter), so no text sits on the photo itself.
  */
 export const PHOTO_CONTENT_RATIO = 92 / 98;
+/**
+ * Where the photo's middle goes, as a share of its box's width: the middle of the part you can
+ * see (the clear left side plus the start of the fade), not the box's middle, which is in the fade.
+ */
+export const PHOTO_FOCUS_X = (1 - PHOTO_FADE) * 0.6;
 
 /**
  * Stops for the cover over the photo: even (1 - PHOTO_OPACITY) up to the fade, then an eased
@@ -40,12 +46,44 @@ export const FadedPhoto: React.FC<{ uri: string; style?: StyleProp<ViewStyle>; t
   const { colors: c } = useTheme();
   // SVG ids must be plain names; useId gives ":r1:"-style ones.
   const fadeId = `faded-photo-${useId().replace(/[^a-zA-Z0-9]/g, '')}`;
+  // The box's size and the photo's own size, to center the photo on the visible part and zoom
+  // in just enough to leave no gap (lib/photoFit). Until both are known the photo is hidden, so
+  // it doesn't jump; if the photo's size never comes, it falls back to a plain centered cover.
+  const [box, setBox] = useState<{ width: number; height: number } | null>(null);
+  // Kept with its photo's address, so a card that switches photos (the deck) waits for the new one.
+  const [loaded, setLoaded] = useState<{ uri: string; size: { width: number; height: number } | 'unknown' } | null>(null);
+  const natural = loaded && loaded.uri === uri ? loaded.size : null;
+  const placed: PhotoPlacement | null =
+    box && natural && natural !== 'unknown' ? placePhoto(box, natural, PHOTO_FOCUS_X) : null;
+  const fallback = natural === 'unknown' || (box != null && natural != null && !placed);
   return (
     // The photo is fully opaque and a gradient in the card's own color covers it. Same look as
     // fading the photo itself, without an SVG mask (unreliable on some Android versions).
-    <View style={style} pointerEvents="none" testID={testID}>
-      <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
-      <Svg style={StyleSheet.absoluteFill} width="100%" height="100%">
+    <View
+      style={[style, styles.clip]}
+      pointerEvents="none"
+      testID={testID}
+      onLayout={(e) => {
+        const { width, height } = e.nativeEvent.layout;
+        if (!box || Math.abs(box.width - width) > 0.5 || Math.abs(box.height - height) > 0.5) setBox({ width, height });
+      }}
+    >
+      <Image
+        source={{ uri }}
+        style={
+          placed
+            ? { position: 'absolute', left: placed.left, top: placed.top, width: placed.width, height: placed.height }
+            : [StyleSheet.absoluteFill, { opacity: fallback ? 1 : 0 }]
+        }
+        resizeMode="cover"
+        onLoad={(e) => {
+          const src = (e.nativeEvent as { source?: { width?: number; height?: number } }).source;
+          setLoaded({ uri, size: src?.width && src?.height ? { width: src.width, height: src.height } : 'unknown' });
+        }}
+        onError={() => setLoaded({ uri, size: 'unknown' })}
+      />
+      {/* Sized to the measured box: an SVG sized only by "100%" can fall back to 300 × 150. */}
+      <Svg style={StyleSheet.absoluteFill} width={box?.width ?? '100%'} height={box?.height ?? '100%'}>
         <Defs>
           <LinearGradient id={fadeId} x1="0" y1="0" x2="1" y2="0">
             {FADE_STOPS.map((st) => (
@@ -58,3 +96,8 @@ export const FadedPhoto: React.FC<{ uri: string; style?: StyleProp<ViewStyle>; t
     </View>
   );
 };
+
+const styles = StyleSheet.create({
+  // The photo can be drawn wider than its box (zoomed to fill around its focus point).
+  clip: { overflow: 'hidden' },
+});
