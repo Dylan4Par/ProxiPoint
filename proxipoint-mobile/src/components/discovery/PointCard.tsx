@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Car, Check, PersonStanding } from 'lucide-react-native';
 import { BoostBolt } from './BoostBolt';
+import { BoostOmbre } from './BoostOmbre';
 import { FadedPhoto } from './FadedPhoto';
 import { distanceLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
@@ -114,6 +115,8 @@ export const PointCard: React.FC<{
     >
       {/* Drawn first, so everything else sits on top. */}
       {photo ? <FadedPhoto uri={photo} style={styles.photoWrap} testID="point-card-photo" /> : null}
+      {/* Boosted: a light-to-darker orange wash, left to right, under the details. */}
+      {boosted ? <BoostOmbre /> : null}
       {city ? (
         <View style={styles.city} pointerEvents="none">
           <Text style={styles.cityText} numberOfLines={1} testID="point-card-city">
