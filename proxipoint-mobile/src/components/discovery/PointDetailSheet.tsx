@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
   Animated,
+  BackHandler,
   useWindowDimensions,
   Easing,
   Image,
@@ -40,6 +41,7 @@ import {
 import * as Calendar from 'expo-calendar';
 import { LiveBadge } from '../drops/LiveBadge';
 import { PhotoViewer } from '../common/PhotoViewer';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ReportSheet, type ReportTarget } from '../safety/ReportSheet';
 import { hostOf } from '../../lib/moderation';
 import { useNavBarHeight } from './BottomNavBar';
@@ -64,6 +66,10 @@ const NAV_BAR_HEIGHT = 72;
 const SHEET_TOP_RATIO = 0.36;
 /** Dragged down this far (px) by the top edge, the details close. */
 const SHEET_CLOSE_DRAG = 90;
+/** Dragged this far (px) up (or down when full screen), the sheet switches size. */
+const SHEET_RESIZE_DRAG = 50;
+/** Or flicked at least this fast. */
+const SHEET_FLICK = 0.7;
 const MAX_TAGS = 3;
 
 /** Up to 3 hashtags, main (first) one first, from `tags` (array or text) or the single `tag`. */
@@ -256,25 +262,89 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   const drag = useRef(new Animated.Value(0)).current;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+
+  // Full screen: the sheet's top edge moves from a third of the way down (map showing) up to just
+  // under the status bar, over the map and the filters. Drag the handle up (or tap it) to expand,
+  // drag it down (or tap it, or Back) to return; from the normal size, dragging down closes.
+  // The top edge itself moves (JS-driven, it changes the sheet's size), so the content's bottom
+  // stays above the nav bar at either size.
+  const insets = useSafeAreaInsets();
+  const collapsedTop = screenHeight * SHEET_TOP_RATIO;
+  const expandedTop = insets.top + 6;
+  const tops = useRef({ collapsed: collapsedTop, expanded: expandedTop });
+  tops.current = { collapsed: collapsedTop, expanded: expandedTop };
+  const [expanded, setExpanded] = useState(false);
+  const expandedRef = useRef(false);
+  const top = useRef(new Animated.Value(collapsedTop)).current;
+  const setSize = (next: boolean, animate = true) => {
+    expandedRef.current = next;
+    setExpanded(next);
+    const to = next ? tops.current.expanded : tops.current.collapsed;
+    if (animate) Animated.spring(top, { toValue: to, useNativeDriver: false, bounciness: 2, speed: 16 }).start();
+    else top.setValue(to);
+  };
+  const setSizeRef = useRef(setSize);
+  setSizeRef.current = setSize;
+  // Rotation (or the insets arriving): keep the edge where it belongs.
+  useEffect(() => {
+    top.setValue(expandedRef.current ? expandedTop : collapsedTop);
+  }, [collapsedTop, expandedTop, top]);
+
   const dragResponder = useRef(
     PanResponder.create({
-      // Only a downward drag takes over, so taps still reach the close / report buttons.
-      onMoveShouldSetPanResponder: (_e, g) => g.dy > 6 && Math.abs(g.dy) > Math.abs(g.dx),
-      onPanResponderMove: (_e, g) => drag.setValue(Math.max(0, g.dy)),
+      // Only an up / down drag takes over, so taps still reach the handle and the buttons.
+      onMoveShouldSetPanResponder: (_e, g) => Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx),
+      onPanResponderMove: (_e, g) => {
+        const t = tops.current;
+        if (expandedRef.current) {
+          // Full screen: the top edge follows the finger down (not above the top).
+          top.setValue(Math.max(t.expanded, t.expanded + g.dy));
+        } else if (g.dy < 0) {
+          // Normal size, dragging up: the top edge follows toward full screen.
+          drag.setValue(0);
+          top.setValue(Math.max(t.expanded, t.collapsed + g.dy));
+        } else {
+          // Normal size, dragging down: the sheet slides down to close.
+          top.setValue(t.collapsed);
+          drag.setValue(g.dy);
+        }
+      },
       onPanResponderRelease: (_e, g) => {
-        if (g.dy > SHEET_CLOSE_DRAG || g.vy > 1) {
+        if (expandedRef.current) {
+          setSizeRef.current(!(g.dy > SHEET_RESIZE_DRAG || g.vy > SHEET_FLICK));
+          return;
+        }
+        if (g.dy < -SHEET_RESIZE_DRAG || g.vy < -SHEET_FLICK) {
+          setSizeRef.current(true);
+        } else if (g.dy > SHEET_CLOSE_DRAG || g.vy > 1) {
           Animated.timing(drag, { toValue: screenHeightRef.current, duration: 180, useNativeDriver: true }).start(() => {
             onCloseRef.current();
           });
         } else {
+          setSizeRef.current(false);
           Animated.spring(drag, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
         }
       },
-      onPanResponderTerminate: () => Animated.spring(drag, { toValue: 0, useNativeDriver: true }).start(),
+      onPanResponderTerminate: () => {
+        setSizeRef.current(expandedRef.current);
+        Animated.spring(drag, { toValue: 0, useNativeDriver: true }).start();
+      },
     }),
   ).current;
+
+  // Android back: full screen → normal size (then Back works as before).
+  useEffect(() => {
+    if (!expanded) return;
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      setSizeRef.current(false);
+      return true;
+    });
+    return () => sub.remove();
+  }, [expanded]);
   const sheetRef = useRef<View | null>(null);
   const reportTop = () => {
+    // Full screen hides the map, so the map keeps centering above the normal-size sheet.
+    if (expandedRef.current) return;
     sheetRef.current?.measureInWindow((_x, y) => {
       if (Number.isFinite(y)) onTopChange?.(y);
     });
@@ -323,6 +393,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
     if (!node) return;
     slide.setValue(0);
     drag.setValue(0);
+    // Each Point opens at the normal size, with the map showing.
+    setSize(false, false);
     Animated.timing(slide, {
       toValue: 1,
       duration: 260,
@@ -410,12 +482,13 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   };
 
   return (
+    // Outer: where the sheet's top edge is (normal or full screen; JS-driven, it sets the size).
+    // Inner: the slide-in and drag-to-close (native-driven).
+    <Animated.View style={[styles.sheetFrame, { bottom: navBarHeight, top }]} pointerEvents="box-none">
     <Animated.View
       ref={sheetRef as never}
       style={[
         styles.sheet,
-        { bottom: navBarHeight },
-        { top: screenHeight * SHEET_TOP_RATIO },
         {
           opacity: slide,
           transform: [
@@ -427,11 +500,12 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
     >
       <View style={styles.handleRow} {...dragResponder.panHandlers}>
         <TouchableOpacity
-          onPress={onClose}
+          onPress={() => setSize(!expandedRef.current)}
           style={styles.handleHit}
           accessibilityRole="button"
-          accessibilityLabel="Close details"
-          accessibilityHint="Or drag down to close"
+          accessibilityLabel={expanded ? 'Show the map' : 'Expand to full screen'}
+          accessibilityHint={expanded ? 'Or drag down' : 'Or drag up. Drag down to close'}
+          testID="point-detail-handle"
         >
           <View style={styles.handle} />
         </TouchableOpacity>
@@ -749,6 +823,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
         {notice ? <Text style={styles.notice}>{notice}</Text> : null}
       </ScrollView>
     </Animated.View>
+    </Animated.View>
   );
 };
 
@@ -776,12 +851,16 @@ const IconButton: React.FC<{ Icon: LucideIcon; label: string; onPress: () => voi
 
 const createStyles = (c: ThemeColors) =>
   StyleSheet.create({
-  sheet: {
+  // Where the sheet sits; its top edge moves between normal and full screen.
+  sheetFrame: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: NAV_BAR_HEIGHT,
     zIndex: 30,
+  },
+  sheet: {
+    flex: 1,
     backgroundColor: c.sheet,
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
