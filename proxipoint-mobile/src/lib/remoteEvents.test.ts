@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { LOCALRADAR_HANDLE } from './aggregated';
+import { LOCALRADAR_HANDLE, listedByLabel, viaTag } from './aggregated';
 import { isRemoteNodeId, mergeRemoteNodes, parseEventsResponse, photoFields, remoteEventToNode, timingStatus, type ApiEvent } from './remoteEvents';
 
 const scraped: ApiEvent = {
@@ -171,4 +171,18 @@ test('stock and collection photos are not shown as the event\'s cover; the icon 
   // A photo of the event itself (another provider, e.g. the host's upload) still shows.
   const own = remoteEventToNode({ ...scraped, cover_photo: { provider: 'host', url: 'https://assets.example/me.jpg' } });
   assert.equal(own.coverPhotoUri, 'https://assets.example/me.jpg');
+});
+
+test('an event listed by another listings account keeps its lister and name', () => {
+  const node = remoteEventToNode({ ...scraped, host_handle: 'boulderdowntown', host_name: 'BoulderDowntown.com' });
+  assert.equal(node.source, 'external');
+  assert.equal(node.host, '@boulderdowntown');
+  assert.equal(node.hostName, 'BoulderDowntown.com');
+  assert.equal(viaTag(node), 'via BoulderDowntown.com');
+  assert.equal(listedByLabel(node), '@BoulderDowntown.com');
+  // @LocalRadar's own events still read as before.
+  const radar = remoteEventToNode({ ...scraped, host_handle: 'localradar', host_name: 'LocalRadar' });
+  assert.equal(radar.host, LOCALRADAR_HANDLE);
+  assert.equal(viaTag(radar), 'via LocalRadar');
+  assert.equal(listedByLabel(radar), LOCALRADAR_HANDLE);
 });

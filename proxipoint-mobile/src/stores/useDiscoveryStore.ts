@@ -77,8 +77,13 @@ export interface DiscoveryNode {
   origin?: 'local';
   /** Up to 3 hashtags, main one first (e.g. ['#LiveMusic', '#Jazz']). `tag` is the main one. */
   tags?: string[];
-  /** Host handle, e.g. '@rustyanchor' (used by Report → Block). @LocalRadar for aggregated events. */
+  /**
+   * Host handle, e.g. '@rustyanchor' (used by Report → Block). For aggregated events, the
+   * listings account: @LocalRadar or another (e.g. '@boulderdowntown').
+   */
   host?: string;
+  /** The host's display name from the server, e.g. 'BoulderDowntown.com' for @boulderdowntown. */
+  hostName?: string;
   /**
    * 'user': posted on ProxiPoint. 'external': gathered from a public source and listed by
    * @LocalRadar (is_aggregated in PostgreSQL). Missing = 'user'. See lib/aggregated.ts.

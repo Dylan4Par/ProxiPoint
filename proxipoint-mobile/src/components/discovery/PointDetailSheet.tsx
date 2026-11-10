@@ -51,7 +51,7 @@ import { useDiscoveryStore } from '../../stores/useDiscoveryStore';
 import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeContext';
 import { formatDistance } from '../../lib/discoverFeed';
 import { useUnits } from '../../lib/units';
-import { LOCALRADAR_HANDLE } from '../../lib/aggregated';
+import { listedByLabel, listerHandle } from '../../lib/aggregated';
 import { isGhostVenue } from '../../lib/hostProfiles';
 import { venueInfo } from '../../lib/venues';
 import { showsTravelTime } from '../../lib/pointCard';
@@ -99,7 +99,9 @@ interface NodeView {
   isRsvpd: boolean;
   description: string;
   host: string | null;
-  /** Gathered from a public source and listed by @LocalRadar (not posted by the venue). */
+  /** The host's display name, when the server sends one (e.g. 'BoulderDowntown.com'). */
+  hostName: string | null;
+  /** Gathered from a public source and listed by @LocalRadar or another listings account (not by the venue). */
   aggregated: boolean;
   /** The venue's page handle, when known. */
   venueHandle: string | null;
@@ -172,6 +174,7 @@ function readNode(node: unknown): NodeView {
     isRsvpd: n.isRsvpd === true,
     description: str(n.description),
     host: hostValue || null,
+    hostName: str(n.hostName) || null,
     aggregated: n.source === 'external',
     venueHandle: str(n.venueHandle) || null,
     venueId: str(n.venueId) || null,
@@ -527,14 +530,15 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
               <View style={styles.listedBlock} testID="point-detail-listed">
                 <TouchableOpacity
                   style={styles.hostRow}
-                  onPress={() => onOpenHost?.(LOCALRADAR_HANDLE)}
+                  onPress={() => onOpenHost?.(listerHandle(view))}
                   disabled={!onOpenHost}
                   accessibilityRole="link"
-                  accessibilityLabel={`Listed by ${LOCALRADAR_HANDLE}. View profile`}
+                  accessibilityLabel={`Listed by ${listedByLabel(view)}. View profile`}
                 >
                   <Radar size={12} color={c.textMuted} strokeWidth={2.5} />
                   <Text style={styles.host}> Listed by </Text>
-                  <Text style={styles.hostLink}>{LOCALRADAR_HANDLE}</Text>
+                  {/* @LocalRadar, or another listings account by name (e.g. @BoulderDowntown.com). */}
+                  <Text style={styles.hostLink}>{listedByLabel(view)}</Text>
                 </TouchableOpacity>
                 {venueLine}
               </View>

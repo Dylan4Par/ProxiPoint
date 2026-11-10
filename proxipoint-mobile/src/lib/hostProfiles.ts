@@ -321,8 +321,27 @@ function ghostVenue(handle: string, venueName: string, followers = 0): HostProfi
 /** Sample venues whose events are aggregated: their pages start unclaimed. */
 const GHOST_VENUE_HANDLES = new Set(['@rustyanchor', '@meeplecafe', '@laughinggoat']);
 
+/**
+ * BoulderDowntown.com's listings: events from the Downtown Boulder calendar, each linked to its
+ * page there. A listings account like @LocalRadar (handles can't hold the ".com").
+ */
+const BOULDERDOWNTOWN: HostProfile = {
+  handle: '@boulderdowntown',
+  kind: 'system',
+  displayName: 'BoulderDowntown.com',
+  bio: 'Listings from the Downtown Boulder events calendar (boulderdowntown.com), each linked to its page there.',
+  followers: 0,
+  following: 0,
+  pointsHosted: 0,
+  joined: 'November 2026',
+  verified: true,
+  recaps: [],
+  contact: { visibility: 'private' },
+};
+
 const ALL_PROFILES: HostProfile[] = [
   LOCALRADAR,
+  BOULDERDOWNTOWN,
   ...PROFILES.map((profile) =>
     GHOST_VENUE_HANDLES.has(profile.handle) ? ghostVenue(profile.handle, profile.displayName, profile.followers) : profile,
   ),  // Des Moines demo organizers (demoDesMoines.ts).
