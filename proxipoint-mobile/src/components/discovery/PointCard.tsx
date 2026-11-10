@@ -6,7 +6,7 @@ import { BoostOmbre } from './BoostOmbre';
 import { FadedPhoto } from './FadedPhoto';
 import { distanceLabel, pointTiming, showsTravelTime, type TimingKind } from '../../lib/pointCard';
 import { formatDistanceWordsIn, getUnits, useUnits } from '../../lib/units';
-import { AGGREGATED_TAG, isAggregated } from '../../lib/aggregated';
+import { isAggregated, viaTag } from '../../lib/aggregated';
 import type { DiscoveryNode } from '../../stores/useDiscoveryStore';
 import type { ExtraPillKind } from '../../lib/cardExtraPill';
 import { nearestCityLabel } from '../../lib/mapArea';
@@ -143,7 +143,7 @@ export const PointCard: React.FC<{
             <Text style={styles.venue} numberOfLines={1}>
               {where}
               {/* Listed by @LocalRadar from a public source, not posted by the venue. */}
-              {isAggregated(node) ? <Text style={styles.via}>{where ? ' · ' : ''}{AGGREGATED_TAG}</Text> : null}
+              {isAggregated(node) ? <Text style={styles.via}>{where ? ' · ' : ''}{viaTag(node)}</Text> : null}
             </Text>
           ) : null}
         </View>

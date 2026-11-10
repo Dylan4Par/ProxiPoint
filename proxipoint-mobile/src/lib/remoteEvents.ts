@@ -30,6 +30,8 @@ export interface ApiEvent {
   status: string;
   source: string;
   host_handle?: string;
+  /** The poster's / lister's display name (e.g. "BoulderDowntown.com" for @boulderdowntown). */
+  host_name?: string;
   url?: string;
   tags: string[];
   venue?: ApiEventVenue;
@@ -135,8 +137,17 @@ export function remoteEventToNode(ev: ApiEvent, now = new Date()): DiscoveryNode
     description: ev.description ?? '',
     url: ev.url || null,
     venue: venueName,
-    // Aggregated events are always listed by @LocalRadar, never by the venue.
-    host: source === 'external' ? LOCALRADAR_HANDLE : ev.host_handle ? `@${ev.host_handle}` : undefined,
+    // Aggregated events are listed by @LocalRadar or another listings account (e.g.
+    // @boulderdowntown), never by the venue.
+    host:
+      source === 'external'
+        ? ev.host_handle && ev.host_handle.toLowerCase() !== 'localradar'
+          ? `@${ev.host_handle}`
+          : LOCALRADAR_HANDLE
+        : ev.host_handle
+          ? `@${ev.host_handle}`
+          : undefined,
+    hostName: ev.host_name || undefined,
     source,
     venueHandle: ev.venue ? (ev.venue.handle ? `@${ev.venue.handle}` : venueHandleFor(venueName)) : undefined,
     venueId: ev.venue?.id || undefined,

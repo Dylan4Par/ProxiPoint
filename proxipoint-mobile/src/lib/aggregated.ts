@@ -13,6 +13,43 @@
 export const LOCALRADAR_HANDLE = '@LocalRadar';
 export const LOCALRADAR_NAME = 'LocalRadar';
 
+/**
+ * Who listed a gathered event: @LocalRadar, or another listings account (e.g. @boulderdowntown,
+ * shown by its display name "BoulderDowntown.com", since handles can't hold a site name).
+ */
+export interface Lister {
+  host?: string | null;
+  hostName?: string | null;
+}
+
+/** The lister's handle ('@LocalRadar' unless another listings account listed it). */
+export function listerHandle(node: Lister | null | undefined): string {
+  const handle = node?.host?.trim();
+  return handle && handle.toLowerCase() !== LOCALRADAR_HANDLE.toLowerCase() ? handle : LOCALRADAR_HANDLE;
+}
+
+/** The lister's name for "via …" and "Listed by …": its display name, else its handle. */
+export function listerName(node: Lister | null | undefined): string {
+  const handle = listerHandle(node);
+  if (handle === LOCALRADAR_HANDLE) return LOCALRADAR_NAME;
+  return node?.hostName?.trim() || handle;
+}
+
+/**
+ * After "Listed by" on the details: '@LocalRadar', or the listings account's name as an @-label
+ * ('@BoulderDowntown.com'); tapping it opens the account's page by its real handle.
+ */
+export function listedByLabel(node: Lister | null | undefined): string {
+  const name = listerName(node);
+  if (name === LOCALRADAR_NAME) return LOCALRADAR_HANDLE;
+  return name.startsWith('@') ? name : `@${name}`;
+}
+
+/** "via LocalRadar" / "via BoulderDowntown.com" on cards. */
+export function viaTag(node: Lister | null | undefined): string {
+  return `via ${listerName(node)}`;
+}
+
 /** 'user': posted by someone on ProxiPoint. 'external': gathered from a public source. */
 export type PointSource = 'user' | 'external';
 
