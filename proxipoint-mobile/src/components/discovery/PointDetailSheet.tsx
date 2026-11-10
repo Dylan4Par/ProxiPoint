@@ -15,6 +15,7 @@ import {
   View,
 } from 'react-native';
 import {
+  Camera,
   TriangleAlert,
   CalendarClock,
   CalendarPlus,
@@ -38,6 +39,7 @@ import {
 } from 'lucide-react-native';
 import * as Calendar from 'expo-calendar';
 import { LiveBadge } from '../drops/LiveBadge';
+import { PhotoViewer } from '../common/PhotoViewer';
 import { ReportSheet, type ReportTarget } from '../safety/ReportSheet';
 import { hostOf } from '../../lib/moderation';
 import { useNavBarHeight } from './BottomNavBar';
@@ -278,6 +280,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
     });
   };
   const [notice, setNotice] = useState('');
+  // Full-screen photo viewer (camera button or tap on the photo).
+  const [photoOpen, setPhotoOpen] = useState(false);
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const reportedRef = useRef(false);
   const view = node ? readNode(node) : null;
@@ -471,7 +475,33 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {view.photoUri ? (
-          <Image source={{ uri: view.photoUri }} style={styles.cover} resizeMode="cover" />
+          // Tap the photo (or its camera button) to see it full screen: pinch, pan, double-tap.
+          <TouchableOpacity
+            activeOpacity={0.9}
+            onPress={() => setPhotoOpen(true)}
+            accessibilityRole="imagebutton"
+            accessibilityLabel="View photo full screen"
+            testID="point-detail-photo"
+          >
+            <Image source={{ uri: view.photoUri }} style={styles.cover} resizeMode="cover" />
+            <View style={styles.coverCamera} pointerEvents="none">
+              <Camera size={16} color="#ffffff" strokeWidth={2.5} />
+            </View>
+          </TouchableOpacity>
+        ) : null}
+        {view.photoUri ? (
+          <PhotoViewer
+            visible={photoOpen}
+            onClose={() => setPhotoOpen(false)}
+            photos={[
+              {
+                uri: view.photoUri,
+                credit: view.photoCredit
+                  ? `Photo: ${view.photoCredit.photographer}${view.photoCredit.provider ? ` on ${view.photoCredit.provider}` : ''}`
+                  : null,
+              },
+            ]}
+          />
         ) : null}
         {view.photoUri && view.photoCredit ? (
           // Photo credit: the photographer, and "on Pexels/Unsplash" with a link when it's from there
@@ -768,6 +798,20 @@ const createStyles = (c: ThemeColors) =>
   reportBtn: { position: 'absolute', left: 16, top: 12, padding: 4 },
   content: { paddingHorizontal: 16, paddingBottom: 24, gap: 12 },
   cover: { width: '100%', aspectRatio: 16 / 9, borderRadius: 16, backgroundColor: c.base },
+  // Camera button on the photo's lower right: opens it full screen.
+  coverCamera: {
+    position: 'absolute',
+    right: 10,
+    bottom: 10,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: 'rgba(0, 0, 0, 0.55)',
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.35)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   photoCredit: { color: c.textMuted, fontSize: 11, marginTop: -6, textAlign: 'right' },
   photoCreditLink: { color: c.textMuted, fontWeight: '700', textDecorationLine: 'underline' },
   titleRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
