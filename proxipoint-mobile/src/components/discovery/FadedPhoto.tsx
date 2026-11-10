@@ -75,9 +75,17 @@ export const FadedPhoto: React.FC<{ uri: string; style?: StyleProp<ViewStyle>; t
         <Image
           source={{ uri }}
           style={
+            // BLEED past every edge: the box's edges fall between pixels, and a photo ending exactly
+            // on them could be rounded a pixel short, leaving a thin line under it. The box trims it.
             placed
-              ? { position: 'absolute', left: placed.left, top: placed.top, width: placed.width, height: placed.height }
-              : [StyleSheet.absoluteFill, { opacity: fallback ? 1 : 0 }]
+              ? {
+                  position: 'absolute',
+                  left: placed.left - BLEED,
+                  top: placed.top - BLEED,
+                  width: placed.width + 2 * BLEED,
+                  height: placed.height + 2 * BLEED,
+                }
+              : [styles.fallback, { opacity: fallback ? 1 : 0 }]
           }
           resizeMode="cover"
           onLoad={(e) => {
@@ -104,9 +112,13 @@ export const FadedPhoto: React.FC<{ uri: string; style?: StyleProp<ViewStyle>; t
 
 /** Points at the box's right edge with no photo under the (solid) end of the fade. */
 const EDGE_INSET = 2;
+/** How far the photo is drawn past the box's other edges (trimmed by the box), so no gap shows. */
+const BLEED = 1;
 
 const styles = StyleSheet.create({
   // The photo can be drawn wider than its box (zoomed to fill around its focus point).
   clip: { overflow: 'hidden' },
   photoClip: { position: 'absolute', top: 0, bottom: 0, left: 0, right: EDGE_INSET, overflow: 'hidden' },
+  // Before the photo's size is known (or if it never is): plain cover, also bled past the edges.
+  fallback: { position: 'absolute', top: -BLEED, bottom: -BLEED, left: -BLEED, right: -BLEED },
 });
