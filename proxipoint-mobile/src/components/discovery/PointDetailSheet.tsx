@@ -16,7 +16,7 @@ import {
   View,
 } from 'react-native';
 import {
-  Camera,
+  Images,
   TriangleAlert,
   CalendarClock,
   CalendarPlus,
@@ -349,7 +349,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
     });
   };
   const [notice, setNotice] = useState('');
-  // Full-screen photo viewer (camera button or tap on the photo).
+  // Full-screen photo viewer (photos button or tap on the photo).
   const [photoOpen, setPhotoOpen] = useState(false);
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const reportedRef = useRef(false);
@@ -546,7 +546,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
         {view.photoUri ? (
-          // Tap the photo (or its camera button) to see it full screen: pinch, pan, double-tap.
+          // Tap the photo (or its photos button) to see it full screen: pinch, pan, double-tap.
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => setPhotoOpen(true)}
@@ -555,8 +555,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
             testID="point-detail-photo"
           >
             <Image source={{ uri: view.photoUri }} style={styles.cover} resizeMode="cover" />
-            <View style={styles.coverCamera} pointerEvents="none">
-              <Camera size={16} color="#ffffff" strokeWidth={2.5} />
+            <View style={styles.coverPhotos} pointerEvents="none">
+              <Images size={16} color="#ffffff" strokeWidth={2.25} />
             </View>
           </TouchableOpacity>
         ) : null}
@@ -874,8 +874,8 @@ const createStyles = (c: ThemeColors) =>
   reportBtn: { position: 'absolute', left: 16, top: 12, padding: 4 },
   content: { paddingHorizontal: 16, paddingBottom: 24, gap: 12 },
   cover: { width: '100%', aspectRatio: 16 / 9, borderRadius: 16, backgroundColor: c.base },
-  // Camera button on the photo's lower right: opens it full screen.
-  coverCamera: {
+  // Photos button on the photo's lower right: opens it full screen.
+  coverPhotos: {
     position: 'absolute',
     right: 10,
     bottom: 10,
