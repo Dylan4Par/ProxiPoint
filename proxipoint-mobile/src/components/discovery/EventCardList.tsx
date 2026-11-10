@@ -34,8 +34,8 @@ const COLLAPSED_HEIGHT = 64;
 
 /**
  * collapsed: just the header bar. half: cards under the map (default).
- * full: the list fills the whole area under the filter chips and shows every Point, not just
- * the ones in view on the map.
+ * full: the list fills the whole area under the filter chips, showing the same Points as the half
+ * list (what's in view on the map, with the same filters), just with more room.
  */
 type DrawerMode = 'collapsed' | 'half' | 'full';
 
@@ -88,11 +88,11 @@ export const EventCardList: React.FC<{
   const isExpanded = mode !== 'collapsed';
   const isFull = mode === 'full';
 
-  // Half: what's in view on the map (the store limits it). Full: every Point.
+  // Half and full: what's in view on the map (the store limits it), so expanding the list keeps
+  // what you were looking at. (The full list used to switch to every Point in the metro, sorted
+  // from you, which brought in other towns and looked like the filters had reset.)
   // Both use the order picked in Filter & sort (closest by default); Boosted Points lead.
-  const source: DiscoveryNode[] = isFull
-    ? (Object.values(allNodes || {}) as DiscoveryNode[]).sort((a, b) => (a.distanceMeters ?? 0) - (b.distanceMeters ?? 0))
-    : getVisibleNodes();
+  const source: DiscoveryNode[] = getVisibleNodes();
   const visibleNodes = sortPoints(
     source.filter((node) => matchesDiscoverFilters(node, { selectedTag: null, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter })),
     sort,
@@ -234,7 +234,9 @@ export const EventCardList: React.FC<{
   }, [isFull, onFullChange]);
 
   useEffect(() => {
-    onCoverChange?.(heightFor(mode));
+    // The full list hides the map, so it reports the half list's height: the map's "in view" (and
+    // so this list) stays what you were looking at, instead of shrinking to the strip still showing.
+    onCoverChange?.(heightFor(mode === 'full' ? 'half' : mode));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, halfHeight, fullHeight, onCoverChange]);
 
@@ -344,7 +346,7 @@ export const EventCardList: React.FC<{
             {isFull ? (
               <>
                 <Text style={styles.collapsedTag} numberOfLines={1}>
-                  {viewPlace.name ? `ALL POINTS · ${viewPlace.name.toUpperCase()} AREA` : 'ALL POINTS NEARBY'}
+                  {viewPlace.name ? `ON THE MAP · ${viewPlace.name.toUpperCase()} AREA` : 'ON THE MAP'}
                 </Text>
                 <Text numberOfLines={1} style={styles.collapsedTitle}>
                   {shownNodes.length} {shownNodes.length === 1 ? 'Point' : 'Points'}
@@ -413,14 +415,14 @@ export const EventCardList: React.FC<{
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyTitle}>
                 {isFull
-                  ? 'NO POINTS MATCH THESE FILTERS'
+                  ? 'NO POINTS IN VIEW'
                   : liveOnly
                     ? 'NOTHING LIVE IN SECTOR'
                     : 'NO VIEWABLE EVENTS IN SECTOR'}
               </Text>
               <Text style={styles.emptySubtitle}>
                 {isFull
-                  ? 'Try another #tag, or turn off Live Now'
+                  ? 'Back on the map, drag or zoom out to see more'
                   : liveOnly
                     ? 'Drag the map, or turn off Live Now to see upcoming Points'
                     : 'Drag the map to scan adjacent sectors'}
