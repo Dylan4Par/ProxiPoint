@@ -33,8 +33,8 @@ export interface InboundProximityAlert {
 
 export const useProximitySocket = () => {
   const socketRef = useRef<WebSocket | null>(null);
-  const heartbeatTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const reconnectTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tenantId = useDiscoveryStore((state) => state.tenantId);
   const deviceId = useDiscoveryStore((state) => state.deviceId);

@@ -5,3 +5,7 @@ web-build/
 *.log
 .DS_Store
 coverage/
+
+# Python
+__pycache__/
+*.pyc
