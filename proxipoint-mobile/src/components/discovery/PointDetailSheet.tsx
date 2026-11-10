@@ -56,7 +56,6 @@ import { useTheme, useThemedStyles, type ThemeColors } from '../../theme/ThemeCo
 import { formatDistance } from '../../lib/discoverFeed';
 import { useUnits } from '../../lib/units';
 import { listedByLabel, listerHandle } from '../../lib/aggregated';
-import { isGhostVenue } from '../../lib/hostProfiles';
 import { venueInfo } from '../../lib/venues';
 import { showsTravelTime } from '../../lib/pointCard';
 import type { VenueTarget } from '../../screens/VenueHubScreen';
@@ -355,11 +354,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
   const [reporting, setReporting] = useState<ReportTarget | null>(null);
   const reportedRef = useRef(false);
   const view = node ? readNode(node) : null;
-  const venueGhost = view?.venueClaimStatus
-    ? view.venueClaimStatus === 'ghost'
-    : Boolean(view?.venueHandle && isGhostVenue(view.venueHandle));
   const venueMeta = view?.venue ? venueInfo({ name: view.venue, kind: 'venue' }) : null;
-  // The venue line: a place (pin, its kind, claimed or not), never styled like an @handle.
+  // The venue line: a place (pin and its kind), never styled like an @handle.
   const venueLine =
     view?.venue && !view.privacyRegion && view.latitude != null && view.longitude != null ? (
       <TouchableOpacity
@@ -370,7 +366,7 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
         disabled={!onOpenVenue}
         hitSlop={{ top: 6, bottom: 6, left: 4, right: 8 }}
         accessibilityRole="link"
-        accessibilityLabel={`At ${view.venue}${venueMeta ? `, ${venueMeta.label}` : ''}${venueGhost ? ', unclaimed' : ''}. Open venue page`}
+        accessibilityLabel={`At ${view.venue}${venueMeta ? `, ${venueMeta.label}` : ''}. Open venue page`}
         testID="point-detail-venue-page"
       >
         <MapPin size={13} color={c.violet} strokeWidth={2.5} />
@@ -379,7 +375,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
         </Text>
         <Text style={styles.venueMetaText} numberOfLines={1}>
           {[venueMeta?.publicSpace ? 'Public space' : venueMeta?.kind !== 'venue' ? venueMeta?.label : null,
-            view.venueClaimStatus === 'pending' ? 'Claim in review' : venueGhost ? 'Unclaimed' : null]
+            // A venue's claim status (Unclaimed / Claim in review) shows on its own page, not here.
+            ]
             .filter(Boolean)
             .map((part) => ` · ${part}`)
             .join('')}
