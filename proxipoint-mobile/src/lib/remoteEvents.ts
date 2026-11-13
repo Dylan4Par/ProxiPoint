@@ -170,9 +170,12 @@ export function remoteEventToNode(ev: ApiEvent, now = new Date()): DiscoveryNode
       ev.location.precision === 'exact'
         ? null
         : { level: ev.location.precision, regionName: ev.location.region_name ?? '' },
-    // A cover photo only when it's the event's own: stock and collection photos (by tag or
-    // category) aren't of this event, so the category icon stands in for them.
-    ...photoFields(isStockPhoto(ev.cover_photo) ? undefined : ev.cover_photo),
+    // The event's own cover photo, or, for a listed event (gathered from a public source), a photo
+    // from our collection by its tag or category, so it isn't just an icon. Those aren't of this
+    // event, so the details call them a representative photo. Events people post keep the
+    // category icon until they add a photo of their own.
+    ...photoFields(isStockPhoto(ev.cover_photo) && source !== 'external' ? undefined : ev.cover_photo),
+    coverPhotoIsStock: source === 'external' && isStockPhoto(ev.cover_photo),
     facts: eventFacts(ev.details),
     startsAt: start.toISOString(),
     endsAt: end.toISOString(),
@@ -189,7 +192,7 @@ export function isStockPhoto(photo: ApiEvent['cover_photo']): boolean {
 
 const httpsUrl = (v: unknown): string | null => (isStr(v) && v.startsWith('https://') ? v : null);
 
-const CREDITED_SOURCES: Record<string, string> = { pexels: 'Pexels', unsplash: 'Unsplash' };
+const CREDITED_SOURCES: Record<string, string> = { pexels: 'Pexels', unsplash: 'Unsplash', pixabay: 'Pixabay' };
 
 /**
  * Cover photo, its large version, and the credit.
