@@ -107,6 +107,8 @@ export interface DiscoveryNode {
   coverPhotoLargeUri?: string | null;
   /** Credit for a stock photo (Pexels requires showing it, with a link back). */
   photoCredit?: PhotoCredit | null;
+  /** The cover is a representative photo (by the event's tag or category), not of the event itself. */
+  coverPhotoIsStock?: boolean;
   /** Key facts of a gathered event: price, age limit, door rules, a one-line hook. */
   facts?: EventFacts | null;
   /** Other people who tapped "I'm here" (live Points only; a count, never names). */
