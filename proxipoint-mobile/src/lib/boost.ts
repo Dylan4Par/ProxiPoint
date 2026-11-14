@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { SHOW_SAMPLE_POINTS } from './samples';
 
 /**
  * Boosts: a paid 4-hour spotlight for a Point. While boosted, the Point gets a gold pin with a
@@ -162,7 +163,8 @@ const SAMPLE_BOOSTS: Array<{ pointId: string; minutesLeft: number }> = [
   { pointId: 'pt-fc-truck-rally', minutesLeft: 160 },
   { pointId: 'pt-fc-game-cafe', minutesLeft: 185 },
 ];
-SAMPLE_BOOSTS.forEach(({ pointId, minutesLeft }) => {
+// Only with the sample Points (lib/samples.ts): a Boost on a Point that isn't there would still count.
+(SHOW_SAMPLE_POINTS ? SAMPLE_BOOSTS : []).forEach(({ pointId, minutesLeft }) => {
   const endsAt = Date.now() + minutesLeft * 60 * 1000;
   boosts.set(pointId, {
     pointId,

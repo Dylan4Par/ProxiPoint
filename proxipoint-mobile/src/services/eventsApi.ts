@@ -1,7 +1,7 @@
 /**
  * Upcoming events from the backend: GET {EXPO_PUBLIC_EVENTS_URL}/{tenant_id} (ingest-core's
- * public, read-only list; no sign-in). Unset = off, and Discover shows only the samples and
- * your own Points.
+ * public, read-only list; no sign-in). Unset = off, and Discover shows only your own Points
+ * (plus the samples, if lib/samples.ts turns them on).
  *
  *   EXPO_PUBLIC_EVENTS_URL=https://api.callsignsolutions.com/api/v1/events
  */
