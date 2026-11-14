@@ -16,7 +16,7 @@ const base: ApiEvent = {
   location: { latitude: 40.0192, longitude: -105.2767, precision: 'exact' },
 };
 
-test('backend events join the samples, get distances, and a refresh replaces them', () => {
+test('backend events join the map, get distances, and a refresh replaces them', () => {
   const store = useDiscoveryStore;
   const before = Object.keys(store.getState().nodes).length;
 

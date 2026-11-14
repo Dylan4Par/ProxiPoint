@@ -9,6 +9,7 @@ import { mergeRemoteNodes, timingStatus } from '../lib/remoteEvents';
 // 30 more sample Points around the default area and 10 in Fort Collins.
 import { MORE_SEED_POINTS } from './seedPointsMore';
 import { DSM_SEED_POINTS } from '../lib/demoDesMoines';
+import { SHOW_SAMPLE_POINTS } from '../lib/samples';
 import type {
   BeaconDraft,
   BeaconDuration,
@@ -685,7 +686,9 @@ function buildSeedNodes(self = DEFAULT_SELF, now = new Date()): Record<string, D
   return nodes;
 }
 
-const INITIAL_SEED_NODES = buildSeedNodes();
+// Sample Points only when SHOW_SAMPLE_POINTS is on (lib/samples.ts); otherwise the map starts
+// empty and fills with real events.
+const INITIAL_SEED_NODES = SHOW_SAMPLE_POINTS ? buildSeedNodes() : {};
 
 /** Re-place every node: map position around `view`, distance and ETA from `self`. */
 function placeNodes(
@@ -709,7 +712,10 @@ function placeNodes(
   });
   return next;
 }
-const FIRST_SEED_ID = SEED_POINTS[0].id;
+/** What the selection falls back to: the first Point there is, or none. */
+function firstNodeId(nodes: Record<string, DiscoveryNode>): string {
+  return Object.keys(nodes)[0] ?? '';
+}
 
 /** "#LiveMusic" and "livemusic" match; "All" matches everything. */
 function normalizeTag(tag: string): string {
@@ -795,8 +801,8 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
 
   viewportBounds: { minX: 0, maxX: 1400, minY: 0, maxY: 1400 },
   nodes: INITIAL_SEED_NODES,
-  selectedNodeId: FIRST_SEED_ID,
-  selectedEventId: FIRST_SEED_ID,
+  selectedNodeId: firstNodeId(INITIAL_SEED_NODES) || null,
+  selectedEventId: firstNodeId(INITIAL_SEED_NODES),
   activeTab: 'Nearby',
   selectedTag: 'All',
   // The filter chips: 'All' plus up to MAX_ACTIVE_TAGS active #tags.
@@ -818,7 +824,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
       return {
         nodes,
         remoteEvents: { status: 'ok', count: incoming.length, loadedAt, error: null },
-        ...(keepSelection ? {} : { selectedNodeId: FIRST_SEED_ID, selectedEventId: FIRST_SEED_ID }),
+        ...(keepSelection ? {} : { selectedNodeId: firstNodeId(nodes) || null, selectedEventId: firstNodeId(nodes) }),
       };
     }),
   setRemoteEventsStatus: (status, error) =>
@@ -840,7 +846,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
     })),
   setDiscoverPlace: (place) => set({ discoverPlace: place }),
   setViewportBounds: (bounds) => set({ viewportBounds: bounds }),
-  setSelectedNodeId: (id) => set({ selectedNodeId: id, selectedEventId: id || FIRST_SEED_ID }),
+  setSelectedNodeId: (id) => set((state) => ({ selectedNodeId: id, selectedEventId: id || state.selectedEventId })),
   setSelectedEventId: (id) => set({ selectedNodeId: id, selectedEventId: id }),
   setActiveTab: (tab) => set({ activeTab: tab }),
   setSelectedTag: (tag) => set({ selectedTag: tag }),
@@ -938,7 +944,7 @@ export const useDiscoveryStore = create<DiscoveryState>((set, get) => ({
         return {
           nodes: rest,
           selectedNodeId: wasSelected ? null : state.selectedNodeId,
-          selectedEventId: wasSelected ? FIRST_SEED_ID : state.selectedEventId,
+          selectedEventId: wasSelected ? firstNodeId(rest) : state.selectedEventId,
         };
       }
 
