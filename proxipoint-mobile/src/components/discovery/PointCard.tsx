@@ -85,6 +85,8 @@ export const PointCard: React.FC<{
   const timing = pointTiming(node, now);
   // City, top right ("Boulder, CO"); the closest listed city within about 15 mi.
   const city = nearestCityLabel(node, CITY_LIST);
+  // The #tag line shows only when there's a tag or a Boost bolt to put on it.
+  const hasTagRow = Boolean(tag) || boosted;
   const distance = distanceOnly
     ? formatDistanceWordsIn(distanceMeters ?? node.distanceMeters, getUnits())
     : distanceLabel(distanceMeters ?? node.distanceMeters, distanceMeters == null ? node.eta : null);
@@ -126,17 +128,20 @@ export const PointCard: React.FC<{
       ) : null}
       <View style={styles.top}>
         <View style={styles.copy}>
-          <View style={[styles.tagRow, city ? styles.tagRowWithCity : null]}>
-            {tag ? (
-              <Text style={styles.tag} numberOfLines={1}>
-                {tag}
-              </Text>
-            ) : null}
-            {boosted ? (
-              <BoostBolt onPress={onWhyBoosted} accessibilityLabel={onWhyBoosted ? 'Boosted. Why am I seeing this?' : 'Boosted'} />
-            ) : null}
-          </View>
-          <Text style={styles.title} numberOfLines={1}>
+          {hasTagRow ? (
+            <View style={[styles.tagRow, city ? styles.clearOfCity : null]}>
+              {tag ? (
+                <Text style={styles.tag} numberOfLines={1}>
+                  {tag}
+                </Text>
+              ) : null}
+              {boosted ? (
+                <BoostBolt onPress={onWhyBoosted} accessibilityLabel={onWhyBoosted ? 'Boosted. Why am I seeing this?' : 'Boosted'} />
+              ) : null}
+            </View>
+          ) : null}
+          {/* With no #tag line the title is the first line, so it keeps clear of the city instead. */}
+          <Text style={[styles.title, city && !hasTagRow ? styles.clearOfCity : null]} numberOfLines={1}>
             {node.title}
           </Text>
           {where || isAggregated(node) ? (
@@ -238,8 +243,8 @@ const createStyles = (c: ThemeColors) =>
     top: { flexDirection: 'row', alignItems: 'center', gap: 12 },
     copy: { flex: 1, minWidth: 0, gap: 1 },
     tagRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
-    // Leaves room for the city in the card's top-right corner.
-    tagRowWithCity: { paddingRight: 100 },
+    // Leaves room for the city in the card's top-right corner (on the card's first line).
+    clearOfCity: { paddingRight: 100 },
     city: { position: 'absolute', top: 9, right: 12, maxWidth: 118, zIndex: 1 },
     cityText: {
       // Full text color, a size up and heavy.
