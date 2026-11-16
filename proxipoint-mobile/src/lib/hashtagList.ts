@@ -321,6 +321,14 @@ export const HASHTAG_LIST: HashtagEntry[] = [
     'radius': 'neighborhood'
   },
   {
+    'id': 'race-day',
+    'tag': '#RaceDay',
+    'category': 'sports-fitness',
+    'description': '5Ks, 10Ks, fun runs and charity walks',
+    'icon': 'Footprints',
+    'radius': 'metro'
+  },
+  {
     'id': 'yoga',
     'tag': '#Yoga',
     'category': 'sports-fitness',
