@@ -1481,6 +1481,14 @@ export const HASHTAG_LIST: HashtagEntry[] = [
     'radius': 'local'
   },
   {
+    'id': 'lecture',
+    'tag': '#Lecture',
+    'category': 'arts-culture',
+    'description': 'Arts & Culture',
+    'icon': 'Mic',
+    'radius': 'local'
+  },
+  {
     'id': 'vintage-market',
     'tag': '#VintageMarket',
     'category': 'shopping-markets',
