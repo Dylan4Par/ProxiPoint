@@ -158,21 +158,33 @@ test('details become facts on the node', () => {
   assert.equal(remoteEventToNode(scraped).facts, null);
 });
 
-test('stock and collection photos are not shown as the event\'s cover; the icon stands in', () => {
+test('a listed event shows a collection or stock photo, marked as representative', () => {
   for (const provider of ['catalog', 'pexels']) {
     const node = remoteEventToNode({
       ...scraped,
       cover_photo: { provider, url: 'https://assets.example/a.jpg', page_url: 'https://www.pexels.com/photo/1/', photographer: 'Ann' },
     });
-    assert.equal(node.coverPhotoUri, null, provider);
-    assert.equal(node.coverPhotoLargeUri, null);
-    assert.equal(node.photoCredit, null);
+    assert.equal(node.coverPhotoUri, 'https://assets.example/a.jpg', provider);
+    assert.equal(node.coverPhotoIsStock, true);
   }
-  // A photo of the event itself (another provider, e.g. the host's upload) still shows.
-  const own = remoteEventToNode({ ...scraped, cover_photo: { provider: 'host', url: 'https://assets.example/me.jpg' } });
-  assert.equal(own.coverPhotoUri, 'https://assets.example/me.jpg');
+  // Pixabay photos in our collection are credited "on Pixabay".
+  const pix = remoteEventToNode({
+    ...scraped,
+    cover_photo: { provider: 'catalog', url: 'https://assets.example/p.jpg', photographer: 'royharryman', license: 'Pixabay', page_url: 'https://pixabay.com/photos/1/' },
+  });
+  assert.equal(pix.photoCredit?.provider, 'Pixabay');
 });
 
+test("events people post don't get a stock photo; the icon stands in until they add their own", () => {
+  const posted = { ...scraped, source: 'user', host_handle: 'nightowl' };
+  const node = remoteEventToNode({ ...posted, cover_photo: { provider: 'catalog', url: 'https://assets.example/a.jpg' } });
+  assert.equal(node.coverPhotoUri, null);
+  assert.equal(node.coverPhotoIsStock, false);
+  // A photo of the event itself (another provider, e.g. the host's upload) shows, and isn't marked.
+  const own = remoteEventToNode({ ...posted, cover_photo: { provider: 'host', url: 'https://assets.example/me.jpg' } });
+  assert.equal(own.coverPhotoUri, 'https://assets.example/me.jpg');
+  assert.equal(own.coverPhotoIsStock, false);
+});
 test('an event listed by another listings account keeps its lister and name', () => {
   const node = remoteEventToNode({ ...scraped, host_handle: 'boulderdowntown', host_name: 'BoulderDowntown.com' });
   assert.equal(node.source, 'external');

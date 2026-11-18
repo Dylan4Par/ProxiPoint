@@ -118,6 +118,8 @@ interface NodeView {
   photoUri: string | null;
   /** Stock photo credit (Pexels): shown under the photo, as Pexels requires. */
   photoCredit: { provider: string; photographer: string; photographerUrl: string | null; pageUrl: string | null } | null;
+  /** A representative photo (by tag or category), not of this event. */
+  photoIsStock: boolean;
   startsAt: Date | null;
   endsAt: Date | null;
   maxAttendance: number | null;
@@ -188,6 +190,7 @@ function readNode(node: unknown): NodeView {
     venueClaimStatus: str(n.venueClaimStatus) || null,
     photoUri: str(n.coverPhotoLargeUri) || str(n.coverPhotoUri) || str(n.photoUri) || str(n.imageUrl) || null,
     photoCredit: readPhotoCredit(n.photoCredit),
+    photoIsStock: n.coverPhotoIsStock === true,
     facts: readFacts(n.facts),
     startsAt: date(n.startsAt),
     endsAt: date(n.endsAt),
@@ -567,17 +570,27 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
             photos={[
               {
                 uri: view.photoUri,
-                credit: view.photoCredit
-                  ? `Photo: ${view.photoCredit.photographer}${view.photoCredit.provider ? ` on ${view.photoCredit.provider}` : ''}`
-                  : null,
+                credit:
+                  [
+                    view.photoIsStock ? 'Representative photo' : null,
+                    view.photoCredit
+                      ? `Photo: ${view.photoCredit.photographer}${view.photoCredit.provider ? ` on ${view.photoCredit.provider}` : ''}`
+                      : null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || null,
               },
             ]}
           />
         ) : null}
-        {view.photoUri && view.photoCredit ? (
-          // Photo credit: the photographer, and "on Pexels/Unsplash" with a link when it's from there
-          // (required for Pexels). Our own photos without a photographer show no credit.
+        {view.photoUri && (view.photoCredit || view.photoIsStock) ? (
+          // "Representative photo" when it's from our collection by tag or category (not of this
+          // event), then the credit: the photographer, and "on Pexels/Pixabay" with a link when it's
+          // from there (required for Pexels). Our own photos without a photographer show no credit.
           <Text style={styles.photoCredit} testID="point-detail-photo-credit">
+            {view.photoIsStock ? `Representative photo${view.photoCredit ? ' · ' : ''}` : ''}
+            {view.photoCredit ? (
+              <>
             Photo:{' '}
             <Text
               style={styles.photoCreditLink}
@@ -596,6 +609,8 @@ export const PointDetailSheet: React.FC<PointDetailSheetProps> = ({
                 >
                   {view.photoCredit.provider}
                 </Text>
+              </>
+            ) : null}
               </>
             ) : null}
           </Text>

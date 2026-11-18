@@ -108,6 +108,8 @@ export interface DiscoveryNode {
   coverPhotoLargeUri?: string | null;
   /** Credit for a stock photo (Pexels requires showing it, with a link back). */
   photoCredit?: PhotoCredit | null;
+  /** The cover is a representative photo (by the event's tag or category), not of the event itself. */
+  coverPhotoIsStock?: boolean;
   /** Key facts of a gathered event: price, age limit, door rules, a one-line hook. */
   facts?: EventFacts | null;
   /** Featured by ProxiPoint (admin page): listed first. Unlike a Boost it isn't paid, so it's unlabeled. */
