@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { localSpots, placeBoosts, spotsLabel, spotsWindowEnd, upNext } from './discoverSlots';
+import { featuredFirst, localSpots, placeBoosts, spotsLabel, spotsWindowEnd, upNext } from './discoverSlots';
 import { recommendChannels, type FeedNode } from './discoverFeed';
 import type { Channel } from './channels';
 
@@ -115,4 +115,14 @@ test('up next: your hosted or RSVP’d plan that is live or within 3 hours', () 
   const live = upNext([...nodes, { id: 'live-going', isRsvpd: true, startsAt: at(NOON, -1), endsAt: at(NOON, 1) }], NOON);
   assert.deepEqual([live?.node.id, live?.live, live?.more, live?.moreHosting], ['live-going', true, 2, true]);
   assert.equal(upNext([nodes[0], nodes[3]], NOON), null);
+});
+
+test('featured Points come first, unlabeled; Boosts still take their slots', () => {
+  const items = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j'].map((id) => ({ id, featured: id === 'd' || id === 'g' }));
+  const ordered = featuredFirst(items);
+  assert.deepEqual(ordered.map((i) => i.id), ['d', 'g', 'a', 'b', 'c', 'e', 'f', 'h', 'i', 'j']);
+  assert.deepEqual(items.map((i) => i.id).slice(0, 3), ['a', 'b', 'c'], 'the input is left alone');
+  const placed = placeBoosts(ordered, (i) => i.id === 'j');
+  assert.deepEqual(placed.map((p) => p.item.id).slice(0, 3), ['d', 'j', 'g'], 'the Boost moves into the 2nd slot');
+  assert.equal(placed.find((p) => p.item.id === 'd')?.boosted, false, 'featured is not labeled Boosted');
 });

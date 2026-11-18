@@ -58,6 +58,8 @@ export interface ApiEvent {
     avg_color?: string;
     license?: string;
   };
+  /** Featured by ProxiPoint on the admin page: placed first (no label; it isn't paid). */
+  featured?: boolean;
 }
 
 /** Remote nodes' ids start with this, so a refresh replaces them without touching local ones. */
@@ -174,6 +176,7 @@ export function remoteEventToNode(ev: ApiEvent, now = new Date()): DiscoveryNode
     // category) aren't of this event, so the category icon stands in for them.
     ...photoFields(isStockPhoto(ev.cover_photo) ? undefined : ev.cover_photo),
     facts: eventFacts(ev.details),
+    featured: ev.featured === true,
     startsAt: start.toISOString(),
     endsAt: end.toISOString(),
     x: 0,

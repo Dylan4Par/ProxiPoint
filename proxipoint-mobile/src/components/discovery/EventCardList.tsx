@@ -91,14 +91,15 @@ export const EventCardList: React.FC<{
   // Half and full: what's in view on the map (the store limits it), so expanding the list keeps
   // what you were looking at. (The full list used to switch to every Point in the metro, sorted
   // from you, which brought in other towns and looked like the filters had reset.)
-  // Both use the order picked in Filter & sort (closest by default); Boosted Points lead.
+  // Both use the order picked in Filter & sort (closest by default); Boosted Points lead, then
+  // ones ProxiPoint featured.
   const source: DiscoveryNode[] = getVisibleNodes();
   const visibleNodes = sortPoints(
     source.filter((node) => matchesDiscoverFilters(node, { selectedTag: null, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter })),
     sort,
   )
-    .map((node, index) => ({ node, index, boosted: isBoosted(node.id, boostClock) }))
-    .sort((a, b) => Number(b.boosted) - Number(a.boosted) || a.index - b.index)
+    .map((node, index) => ({ node, index, boosted: isBoosted(node.id, boostClock), featured: Boolean(node.featured) }))
+    .sort((a, b) => Number(b.boosted) - Number(a.boosted) || Number(b.featured) - Number(a.featured) || a.index - b.index)
     .map((entry) => entry.node);
 
   // What the cards show. Building the cards is the costly part, so while the map moves the list

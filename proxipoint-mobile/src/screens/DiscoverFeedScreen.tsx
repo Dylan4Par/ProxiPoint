@@ -5,7 +5,7 @@ import { CategoryBadge } from '../components/discovery/CategoryBadge';
 import { PointCard } from '../components/discovery/PointCard';
 import { searchRanges, useUnits } from '../lib/units';
 import { getHiddenBoosts, hideBoost, isBoosted, useBoosts } from '../lib/boost';
-import { matchesInterests, placeBoosts, upNextPlans, type PlanRole } from '../lib/discoverSlots';
+import { featuredFirst, matchesInterests, placeBoosts, upNextPlans, type PlanRole } from '../lib/discoverSlots';
 import { deckPicks, type RecNode } from '../lib/recommend';
 import { RecommendationDeck } from '../components/activity/RecommendationDeck';
 import { inTimeWindow, timeWindowLabel, useTimeWindow } from '../lib/timeWindow';
@@ -195,7 +195,7 @@ export const DiscoverFeedScreen: React.FC<DiscoverFeedScreenProps> = ({
   // one card per business venue with something on today (discoverSlots.ts).
   const hiddenBoosts = getHiddenBoosts();
   const nearbyPlaced = useMemo(
-    () => placeBoosts(nearby as DiscoveryNode[], (node) => isBoosted(node.id, now), { interestTags, hidden: hiddenBoosts }),
+    () => placeBoosts(featuredFirst(nearby as DiscoveryNode[]), (node) => isBoosted(node.id, now), { interestTags, hidden: hiddenBoosts }),
     [nearby, now, interestTags, hiddenBoosts],
   );
   // FEATURED RECOMMENDATIONS (where Tonight at Local Spots used to be): Boosted Points nearby,

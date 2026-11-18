@@ -11,6 +11,17 @@
  *   ones first (labeled), then live, then soonest.
  */
 
+/**
+ * Featured Points (picked by ProxiPoint on the admin page) first, everything else in its own
+ * order. Not a Boost: nobody paid, so it takes no labeled slot and shows no label.
+ */
+export function featuredFirst<T extends { featured?: boolean }>(items: T[]): T[] {
+  return items
+    .map((item, index) => ({ item, index }))
+    .sort((a, b) => Number(Boolean(b.item.featured)) - Number(Boolean(a.item.featured)) || a.index - b.index)
+    .map(({ item }) => item);
+}
+
 /** 0-based positions Boosts move into: the 2nd and 6th items. */
 export const BOOST_SLOTS = [1, 5];
 /** At most this share of a list is slotted Boosts. */
