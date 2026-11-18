@@ -186,3 +186,14 @@ test('an event listed by another listings account keeps its lister and name', ()
   assert.equal(viaTag(radar), 'via LocalRadar');
   assert.equal(listedByLabel(radar), LOCALRADAR_HANDLE);
 });
+
+test('a featured event (admin page) is marked featured; others are not', () => {
+  const now = new Date('2026-11-18T12:00:00Z');
+  const base = {
+    id: 'f1', title: 'Pumpkin Pie 5K', starts_at: '2026-11-21T16:00:00Z', ends_at: '2026-11-21T18:00:00Z',
+    status: 'scheduled', source: 'external', tags: ['#RaceDay'],
+    location: { latitude: 39.7473, longitude: -104.9506, precision: 'exact' as const },
+  };
+  assert.equal(remoteEventToNode({ ...base, featured: true }, now).featured, true);
+  assert.equal(remoteEventToNode(base, now).featured, false);
+});

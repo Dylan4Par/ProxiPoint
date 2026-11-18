@@ -34,6 +34,11 @@ import { MapRecenterButton, mapControlPositions } from './MapControls';
 import { CARD_SHEET_RADIUS } from './EventCardList';
 import { BUBBLE_SIZE, ClusterBubble, ClusterPickSheet, mainTagOf, type ClusterMember, type MapClusterData } from './MapCluster';
 import { isBoosted, useBoosts } from '../../lib/boost';
+
+/** Draw order for pins: plain, then featured (ProxiPoint's pick), then Boosted on top. */
+function pinLayer(node: { id: string; featured?: boolean }, now: number): number {
+  return isBoosted(node.id, now) ? 2 : node.featured ? 1 : 0;
+}
 import { useChannels, useVisiblePosts, type ChannelPost } from '../../lib/channels';
 import { isPinLive } from '../../lib/postRanking';
 import { absorbIntoMarkers, clusterPins, nudgeOffMarkers } from '../../lib/postPins';
@@ -215,14 +220,14 @@ export const DiscoveryMapCanvas: React.FC<{
   const tagFilter = useMemo(() => ({ tags: chipFilterTags(chipTags, offTags), mode: exploreMode }), [chipTags, offTags, exploreMode]);
   const followed = useFollowedTagsFilter(); // Filter & sort → Show only → Include my Followed Tags
   useChannels(); // re-filter when you join or leave a channel
-  // Boosted pins are drawn last so they sit on top of nearby pins.
+  // Boosted pins are drawn last so they sit on top of nearby pins; featured ones just below them.
   const nodeList = allNodes
     .filter(
       (node) =>
         node.id === showAlwaysId ||
         matchesDiscoverFilters(node, { selectedTag: null, liveOnly, activeTab, myChannelsOnly, followedTags: followed.filter, area: viewPlace, rangeMeters, tagFilter }),
     )
-    .sort((a, b) => Number(isBoosted(a.id, boostClock)) - Number(isBoosted(b.id, boostClock)));
+    .sort((a, b) => pinLayer(a, boostClock) - pinLayer(b, boostClock));
 
   // Channel posts attached to a Point on the map, while their pin lasts, from channels you FOLLOW
   // (joining alone doesn't put a channel on your map). They sit on their Point (a badge on its pin

@@ -110,6 +110,8 @@ export interface DiscoveryNode {
   photoCredit?: PhotoCredit | null;
   /** Key facts of a gathered event: price, age limit, door rules, a one-line hook. */
   facts?: EventFacts | null;
+  /** Featured by ProxiPoint (admin page): listed first. Unlike a Boost it isn't paid, so it's unlabeled. */
+  featured?: boolean;
   /** Other people who tapped "I'm here" (live Points only; a count, never names). */
   hereCount?: number;
   /** You tapped "I'm here". Only counts while the Point is live. */
