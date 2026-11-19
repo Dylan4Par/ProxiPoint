@@ -33,3 +33,20 @@ cd overwatchcore
 go test ./...
 go run ./cmd/ingest
 ```
+
+## Events from the backend
+
+Discover and Explore Map load upcoming events from ingest-core's public list
+(`GET /api/v1/events/{tenant_id}`, no sign-in), around the place you're exploring (50 km,
+next 30 days). They refresh every 10 minutes, when you look somewhere else, and when the
+app returns to the foreground. Set in `proxipoint-mobile/.env`:
+
+```
+EXPO_PUBLIC_EVENTS_URL=https://api.callsignsolutions.com/api/v1/events
+```
+
+Leave it unset to turn this off. The sample Points (`SEED_POINTS`) still show alongside
+real events. Backend events have ids starting `ev:`; aggregated ones (`source: 'external'`)
+show "via LocalRadar". Code: `src/lib/remoteEvents.ts` (mapping, tested),
+`src/services/eventsApi.ts`, `src/hooks/useRemoteEvents.ts`. Restart Metro after changing
+`.env` (`npx expo start -c`).

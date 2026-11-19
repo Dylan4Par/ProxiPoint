@@ -15,7 +15,8 @@ export const TacticalRadarScreen: React.FC<Props> = ({
   tenantId = 'tenant-alpha',
   userId = 'Ranger-F0A5ACCF',
 }) => {
-  useProximitySocket({ tenantId, userId });
+  // The socket reads the tenant and device from the store.
+  useProximitySocket();
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
