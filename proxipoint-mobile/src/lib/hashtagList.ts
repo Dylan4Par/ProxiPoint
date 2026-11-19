@@ -1713,6 +1713,14 @@ export const HASHTAG_LIST: HashtagEntry[] = [
     'radius': 'local'
   },
   {
+    'id': 'training',
+    'tag': '#Training',
+    'category': 'tech-professional',
+    'description': 'Classes, certifications and skills workshops',
+    'icon': 'Briefcase',
+    'radius': 'local'
+  },
+  {
     'id': 'halloween',
     'tag': '#Halloween',
     'category': 'holidays-seasonal',
